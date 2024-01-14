@@ -1,0 +1,35 @@
+WHITESPACE = _{ " " | "\n" | "\r" | "\t" }
+
+dot = { "." }
+
+className = @{
+    dot ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
+}
+
+label = @{
+    (ASCII_DIGIT | ASCII_ALPHA | "-")+
+}
+
+attrName = @{ (ASCII_ALPHA | "-")+ }
+
+attrValue = @{
+    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | " ")+
+}
+
+attr = { attrName ~ ":" ~ attrValue ~ ";" }
+
+selectName = { className | label }
+
+start = _{ "{" }
+
+end = _{ "}" }
+
+variableName = { "@" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
+
+variableValue = { (ASCII_DIGIT | ASCII_ALPHA | "-")+ ~ ";" }
+
+variable = { variableName ~ ":" ~ variableValue }
+
+select = { selectName ~ start ~ (attr | variable | select)* ~ end }
+
+selects = { select* }
