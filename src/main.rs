@@ -1,3 +1,4 @@
+extern crate core;
 #[macro_use]
 extern crate pest_derive;
 
@@ -5,19 +6,12 @@ use std::fs;
 use std::io::Read;
 
 use pest::Parser;
+use crate::parser::deal_single_pairs;
 
-mod ast;
 mod parser;
-mod driver;
-mod interpreter;
-
-#[derive(Parser, Default)]
-#[grammar = "less.pest"]
-struct LessParser;
 
 fn main() {
     let file_s = fs::read_to_string("./src/test.less").expect("Not Found File!");
-    let temp = LessParser::parse(Rule::selects, &file_s).expect("Parser Error");
-
-    println!("{:#?}", temp);
+    let paris = parser::LessParser::parse(parser::Rule::selects, &file_s).expect("Parser Error");
+    deal_single_pairs(paris,"");
 }
