@@ -51,7 +51,7 @@ impl Selects {
         let mut result = String::from("");
         let mut i = 0;
         for child in &self.children {
-            result.push_str(&child.to_compress_css());
+            result.push_str(&child.to_css());
             if i != 0 {
                 result.push('\n');
             }
@@ -113,7 +113,7 @@ impl Select {
         }
     }
 
-    fn to_compress_css(&self) -> String {
+    fn to_css(&self) -> String {
         let mut result = String::from("");
         let mut parent_class_name = String::from("");
         let mut i = 0;
@@ -129,7 +129,7 @@ impl Select {
         result.push_str(&self.select_value);
         result.push('\n');
         for child in self.children.as_slice() {
-            result.push_str(&child.to_compress_css());
+            result.push_str(&child.to_css());
         }
         return result;
     }
