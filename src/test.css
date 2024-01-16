@@ -1,26 +1,30 @@
-.test {
+ .test {
   @face-width: 11;
 
   background: #fff;
 
-  .test2 {
+  
+}
+.test .test2 {
     font-size: 11px;
   }
-}
-
-.test3 {
+ .test3 {
   @face-width1: 11;
 
   background: #fff;
 
-  .test4 {
+  
+
+  
+}
+.test3 .test4 {
     font-size: 11px;
   }
-
-  .test5 {
+.test3 .test5 {
     font-size: 11px;
-    .test5 {
+    
+  }
+.test3 .test5 .test5 {
       font-size: 11px;
     }
-  }
-}
+

@@ -3,15 +3,17 @@ extern crate core;
 extern crate pest_derive;
 
 use std::fs;
-use std::io::Read;
 
 use pest::Parser;
-use crate::parser::deal_single_pairs;
+use selects::Selects;
 
 mod parser;
+
+mod selects;
 
 fn main() {
     let file_s = fs::read_to_string("./src/test.less").expect("Not Found File!");
     let paris = parser::LessParser::parse(parser::Rule::selects, &file_s).expect("Parser Error");
-    deal_single_pairs(paris,"");
+    let selects = Selects::new(paris);
+    fs::write("./src/test.css", selects.to_css()).expect("Write Error");
 }
