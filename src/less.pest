@@ -2,6 +2,14 @@ WHITESPACE = _{ " " | "\n" | "\r" | "\t" }
 
 dot = { "." }
 
+commit = _{
+    "//" ~ ASCII* ~ ( "\n" | "\r" )
+}
+
+value = _{
+    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" |  "@" | "(" | ")" | "%" | "/" | ":" | "*" | "_" | "." | ",")+
+}
+
 className = @{
     dot ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
 }
@@ -10,15 +18,19 @@ label = @{
     (ASCII_DIGIT | ASCII_ALPHA | "-")+
 }
 
+id = @{
+    "#" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
+}
+
 attrName = @{ (ASCII_ALPHA | "-")+ }
 
-attrValue = @{
-    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | " ")+
+attrValue = {
+    value
 }
 
 attr = { attrName ~ ":" ~ attrValue ~ ";" }
 
-selectName = { className | label }
+selectName = { className | label | id }
 
 start = _{ "{" }
 
@@ -26,9 +38,9 @@ end = _{ "}" }
 
 variableName = { "@" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
 
-variableValue = { (ASCII_DIGIT | ASCII_ALPHA | "-")+ ~ ";" }
+variableValue = { value }
 
-variable = { variableName ~ ":" ~ variableValue }
+variable = { variableName ~ ":" ~ variableValue  ~ ";" }
 
 select = { selectName ~ start ~ (attr | variable | select)* ~ end }
 
