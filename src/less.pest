@@ -1,13 +1,13 @@
-WHITESPACE = _{ " " | "\n" | "\r" | "\t" }
+WHITESPACE = _{ NEWLINE | " " | "\t" }
+
+COMMENT = _{
+    "//" ~ (!NEWLINE ~ ASCII)*
+}
 
 dot = { "." }
 
-commit = _{
-    "//" ~ ASCII* ~ ( "\n" | "\r" )
-}
-
 value = _{
-    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" |  "@" | "(" | ")" | "%" | "/" | ":" | "*" | "_" | "." | ",")+
+    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "(" | ")" | "%" | "/" | ":" | "*" | "_" | "." | ",")+
 }
 
 className = @{
@@ -40,8 +40,8 @@ variableName = { "@" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
 
 variableValue = { value }
 
-variable = { variableName ~ ":" ~ variableValue  ~ ";" }
+variable = { variableName ~ ":" ~ variableValue ~ ";" }
 
 select = { selectName ~ start ~ (attr | variable | select)* ~ end }
 
-selects = { select* }
+selects = { (select | variable | COMMENT)* }

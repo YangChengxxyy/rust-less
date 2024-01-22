@@ -30,7 +30,7 @@ pub fn get_attr_and_variable(pair: &Pair<Rule>) -> (Vec<Attr>, Vec<Variable>) {
         if child.as_rule() == Rule::attr {
             attr_list.push(get_attr(child));
         } else if child.as_rule() == Rule::variable {
-            variable_list.push(get_variable(child));
+            variable_list.insert(0, get_variable(child));
         }
     }
 

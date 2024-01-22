@@ -15,8 +15,8 @@ mod utils;
 
 fn main() {
     let file_s = fs::read_to_string("./src/test.less").expect("Not Found File!");
-    let paris = parser::LessParser::parse(parser::Rule::selects, &file_s).expect("Parser Error");
+    let pairs = parser::LessParser::parse(parser::Rule::selects, &file_s).expect("Parser Error");
 
-    let selects = Selects::new(paris);
+    let selects = Selects::new(pairs);
     fs::write("./src/test.css", selects.to_css()).expect("Write Error");
 }

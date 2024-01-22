@@ -1,10 +1,8 @@
-use std::ops::Index;
-
 use pest::iterators::{Pair, Pairs};
 
 use crate::{
     parser::Rule,
-    utils::{get_attr_and_variable, get_select_name},
+    utils::{get_attr_and_variable, get_select_name, get_variable},
 };
 
 #[derive(Debug)]
@@ -53,14 +51,19 @@ pub struct Select {
     pub ancestor_variable_list: Vec<Variable>,
 }
 
+#[allow(dead_code)]
 impl Selects {
-    pub fn new(paris: Pairs<Rule>) -> Self {
+    pub fn new(pairs: Pairs<Rule>) -> Self {
         let mut children = vec![];
-        for pair in paris {
+        let mut ancestor_variable_list = vec![];
+        for pair in pairs {
             if pair.as_rule() == Rule::selects {
                 for pair in pair.into_inner() {
-                    if pair.as_rule() == Rule::select {
-                        children.push(Select::new(&pair, vec![], vec![]));
+                    if pair.as_rule() == Rule::variable {
+                        ancestor_variable_list.insert(0, get_variable(pair));
+                    } else if pair.as_rule() == Rule::select {
+                        children.push(Select::new(&pair, vec![], ancestor_variable_list.clone()));
+                        ancestor_variable_list = vec![];
                     }
                 }
             }
@@ -114,11 +117,11 @@ impl Select {
 
                     let mut new_ancestor_variable_list = vec![];
                     for item in ancestor_variable_list.clone() {
-                        new_ancestor_variable_list.push(item);
+                        new_ancestor_variable_list.insert(0, item);
                     }
 
                     for item in variable_list.clone() {
-                        new_ancestor_variable_list.push(item);
+                        new_ancestor_variable_list.insert(0, item);
                     }
 
                     children.push(Select::new(&child_pair, p, new_ancestor_variable_list));
