@@ -10,18 +10,6 @@ value = _{
     (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "(" | ")" | "%" | "/" | ":" | "*" | "_" | "." | ",")+
 }
 
-className = @{
-    dot ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
-}
-
-label = @{
-    (ASCII_DIGIT | ASCII_ALPHA | "-")+
-}
-
-id = @{
-    "#" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
-}
-
 attrName = @{ (ASCII_ALPHA | "-")+ }
 
 attrValue = {
@@ -30,7 +18,47 @@ attrValue = {
 
 attr = { attrName ~ ":" ~ attrValue ~ ";" }
 
-selectName = { className | label | id }
+className = @{
+    dot ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
+}
+
+label = @{
+    "*"
+  | (ASCII_DIGIT | ASCII_ALPHA | "-")+
+}
+
+id = @{
+    "#" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
+}
+
+baseSelectName = { className | label | id }
+
+// 选择器列表
+listSelect = { baseSelectName ~ "," ~ baseSelectName }
+
+// 后代组合器
+descendantsSelect = { baseSelectName ~ WHITE_SPACE ~ baseSelectName }
+
+// 直接子代组合器
+directChildSelect = { baseSelectName ~ ">" ~ baseSelectName }
+
+// 一般兄弟组合器
+commonBroSelect = { baseSelectName ~ "~" ~ baseSelectName }
+
+// 紧邻兄弟组合器
+strictBorSelect = { baseSelectName ~ "+" ~ baseSelectName }
+
+// 紧邻兄弟组合器
+lineSelect = { baseSelectName ~ "||" ~ baseSelectName }
+
+// 伪嘞选择器
+fakeClassSelect = { baseSelectName ~ ":" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
+
+// 伪嘞选择器
+fakeSelect = { baseSelectName ~ "::" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
+
+// 选择器
+selectName = { listSelect | descendantsSelect | directChildSelect | commonBroSelect | strictBorSelect | lineSelect | fakeClassSelect | fakeSelect }
 
 start = _{ "{" }
 
