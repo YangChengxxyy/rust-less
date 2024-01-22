@@ -164,11 +164,15 @@ impl Select {
 
         let mut full_class_name = String::from("");
         let parent_class_name = self.parent_select_names.join(" ");
-        full_class_name.push_str(&parent_class_name);
-        if self.parent_select_names.len() > 0 {
-            full_class_name.push(' ');
+        if self.select_name.contains('&') && &self.select_name != "&" {
+            full_class_name.push_str(&self.select_name.replace("&", &parent_class_name));
+        } else {
+            full_class_name.push_str(&parent_class_name);
+            if self.parent_select_names.len() > 0 {
+                full_class_name.push(' ');
+            }
+            full_class_name.push_str(&self.select_name);
         }
-        full_class_name.push_str(&self.select_name);
 
         let mut value = String::from("");
 

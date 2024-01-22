@@ -5,7 +5,7 @@ COMMENT = _{
 }
 
 value = _{
-    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "(" | ")" | "%" | "/" | ":" | "*" | "_" | "." | ",")+
+    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "(" | ")" | "%" | "/" | ":" | "*" | "_" | "." | "," | "'" | "\"")+
 }
 
 attrName = @{ (ASCII_ALPHA | "-")+ }

@@ -22,12 +22,16 @@
   box-shadow: 0 0 30px 0 rgba(255, 215, 113, 0.5);
 }
 
-.beforeCannotOpenKoiModal &::after {
+.beforeCannotOpenKoiModal::after {
   box-shadow: 0 0 30px 0 rgba(255, 215, 113, 0.5);
 }
 
 .beforeCannotOpenKoiModal .a + .b {
   word-wrap: alternate;
+}
+
+.beforeCannotOpenKoiModal .a + .b::before {
+  content: '';
 }
 
 .beforeCannotOpenKoiModal .logo {
