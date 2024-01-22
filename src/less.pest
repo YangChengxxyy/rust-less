@@ -4,8 +4,6 @@ COMMENT = _{
     "//" ~ (!NEWLINE ~ ANY)*
 }
 
-dot = { "." }
-
 value = _{
     (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "(" | ")" | "%" | "/" | ":" | "*" | "_" | "." | ",")+
 }
@@ -19,7 +17,7 @@ attrValue = {
 attr = { attrName ~ ":" ~ attrValue ~ ";" }
 
 className = @{
-    dot ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
+    "." ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
 }
 
 label = @{
@@ -31,7 +29,16 @@ id = @{
     "#" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
 }
 
-baseSelectName = { className | label | id }
+parent = @{ "&" }
+
+// 伪类
+fakeClass = @{ (className | label | id | parent) ~ ":" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
+
+// 伪选择器
+fakeSelect = @{ (className | label | id | parent) ~ "::" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
+
+// 最基础的选择器
+baseSelectName = { fakeSelect | fakeClass | className | label | id | parent }
 
 // 选择器列表
 listSelect = { baseSelectName ~ "," ~ baseSelectName }
@@ -51,14 +58,26 @@ strictBorSelect = { baseSelectName ~ "+" ~ baseSelectName }
 // 紧邻兄弟组合器
 lineSelect = { baseSelectName ~ "||" ~ baseSelectName }
 
-// 伪嘞选择器
-fakeClassSelect = { baseSelectName ~ ":" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
+// 选择器集合
+componseSelectName = _{
+    listSelect
+  | descendantsSelect
+  | directChildSelect
+  | commonBroSelect
+  | strictBorSelect
+  | lineSelect
+  | baseSelectName
+}
 
-// 伪嘞选择器
-fakeSelect = { baseSelectName ~ "::" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
-
-// 选择器
-selectName = { listSelect | descendantsSelect | directChildSelect | commonBroSelect | strictBorSelect | lineSelect | fakeClassSelect | fakeSelect }
+selectName = {
+    (componseSelectName ~ "," ~ componseSelectName)
+  | (componseSelectName ~ ">" ~ componseSelectName)
+  | (componseSelectName ~ "~" ~ componseSelectName)
+  | (componseSelectName ~ "+" ~ componseSelectName)
+  | (componseSelectName ~ "||" ~ componseSelectName)
+  | (componseSelectName ~ WHITE_SPACE ~ componseSelectName)
+  | componseSelectName
+}
 
 start = _{ "{" }
 
