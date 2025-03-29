@@ -1,5 +1,9 @@
-@with: 600px;
-@with: 620px;
+@media  screen and (min-width: 600px) {
+  body {
+    background-color: red;
+  }
+}
+
 // ces
 .beforeCannotOpenKoiModal {
   width: @with;
@@ -31,7 +35,7 @@
   }
 
   .a + .b {
-    word-wrap: alternate;
+    word-wrap: break-word;
     &::before {
       content: '';
     }

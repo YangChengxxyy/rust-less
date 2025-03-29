@@ -8,6 +8,11 @@ use crate::{
 #[derive(Debug)]
 pub struct Selects {
     pub children: Vec<Select>,
+    pub media_queries: Vec<MediaQuery>,
+}
+
+pub trait ToCss {
+    fn to_css(&self) -> String;
 }
 
 /** 属性 */
@@ -31,6 +36,14 @@ impl Clone for Variable {
 }
 
 #[derive(Debug)]
+pub struct MediaQuery {
+    pub query_expression: String,
+    pub children: Vec<dyn ToCss>,
+    pub variable_list: Vec<Variable>,
+    pub span: (usize, usize),
+}
+
+#[derive(Debug)]
 /** 选择器 */
 pub struct Select {
     /** 选择器名 */
@@ -44,52 +57,128 @@ pub struct Select {
     /** 变量列表 */
     pub variable_list: Vec<Variable>,
     /** 内部的选择器 */
-    pub children: Box<Vec<Select>>,
+    pub children: Box<Vec<dyn ToCss>>,
     /** 父节点的选择器名 */
     pub parent_select_names: Vec<String>,
     /** 祖先节点的变量池 */
     pub ancestor_variable_list: Vec<Variable>,
 }
 
-#[allow(dead_code)]
+impl MediaQuery {
+    pub fn new(pair: &Pair<Rule>, ancestor_variable_list: Vec<Variable>) -> Self {
+        let mut query_expression = String::new();
+        let mut children = vec![];
+        let mut variable_list = vec![];
+        let span = (pair.as_span().start(), pair.as_span().end());
+
+        for inner_pair in pair.clone().into_inner() {
+            match inner_pair.as_rule() {
+                Rule::mediaQueryExpression => {
+                    query_expression = inner_pair.as_span().as_str().to_string();
+                }
+                Rule::select => {
+                    let mut new_ancestor_variable_list = ancestor_variable_list.clone();
+                    for item in variable_list.clone() {
+                        new_ancestor_variable_list.insert(0, item);
+                    }
+                    children.push(Select::new(&inner_pair, vec![], new_ancestor_variable_list));
+                }
+                Rule::variable => {
+                    variable_list.insert(0, get_variable(inner_pair));
+                }
+                _ => {}
+            }
+        }
+
+        MediaQuery {
+            query_expression,
+            children,
+            variable_list,
+            span,
+        }
+    }
+}
+
+impl ToCss for MediaQuery {
+    fn to_css(&self) -> String {
+        let mut result = String::from("@media ");
+        result.push_str(&self.query_expression);
+        result.push_str(" {\n");
+
+        for child in &self.children {
+            result.push_str(&child.to_css());
+        }
+
+        result.push_str("}\n");
+        result
+    }
+}
+
 impl Selects {
     pub fn new(pairs: Pairs<Rule>) -> Self {
         let mut children = vec![];
+        let mut media_queries = vec![];
         let mut ancestor_variable_list = vec![];
+
         for pair in pairs {
             if pair.as_rule() == Rule::selects {
                 for pair in pair.into_inner() {
-                    if pair.as_rule() == Rule::variable {
-                        ancestor_variable_list.insert(0, get_variable(pair));
-                    } else if pair.as_rule() == Rule::select {
-                        children.push(Select::new(&pair, vec![], ancestor_variable_list.clone()));
-                        ancestor_variable_list = vec![];
+                    match pair.as_rule() {
+                        Rule::variable => {
+                            ancestor_variable_list.insert(0, get_variable(pair));
+                        }
+                        Rule::select => {
+                            children.push(Select::new(
+                                &pair,
+                                vec![],
+                                ancestor_variable_list.clone(),
+                            ));
+                            ancestor_variable_list = vec![];
+                        }
+                        Rule::mediaQuery => {
+                            media_queries
+                                .push(MediaQuery::new(&pair, ancestor_variable_list.clone()));
+                        }
+                        _ => {}
                     }
                 }
             }
         }
 
-        Selects { children }
-    }
-
-    fn clear_value(&mut self) {
-        for child in &mut self.children {
-            child.clear_value();
+        Selects {
+            children,
+            media_queries,
         }
     }
+}
 
-    pub fn to_css(&self) -> String {
+impl ToCss for Selects {
+    // 修改 to_css 方法，包含媒体查询输出
+    fn to_css(&self) -> String {
         let mut result = String::from("");
-        let mut i = 0;
-        for child in &self.children {
+
+        // 处理普通选择器
+        for (i, child) in self.children.iter().enumerate() {
             result.push_str(&child.to_css());
             if i != 0 {
                 result.push('\n');
             }
-            i = i + 1;
         }
-        result.pop();
-        result.pop();
+
+        // 处理媒体查询
+        for media_query in &self.media_queries {
+            result.push_str(&media_query.to_css());
+            result.push('\n');
+        }
+
+        // 清理多余换行符
+        if !result.is_empty() && result.ends_with("\n\n") {
+            result.pop();
+            result.pop();
+        } else if !result.is_empty() && result.ends_with('\n') {
+            result.pop();
+        }
+
         result
     }
 }

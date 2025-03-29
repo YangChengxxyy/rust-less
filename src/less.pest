@@ -1,11 +1,18 @@
-WHITESPACE = _{ NEWLINE | " " | "\t" }
+// 媒体查询相关语法
+mediaQueryType       = { "screen" | "print" | "all" | "speech" }
+mediaQueryFeature    = { attrName ~ ":" ~ attrValue }
+mediaQueryCondition  = { "and" ~ "(" ~ mediaQueryFeature ~ ")" }
+mediaQueryExpression = { mediaQueryType ~ (mediaQueryCondition)* }
+mediaQuery           = { "@media" ~ mediaQueryExpression ~ start ~ (mediaQuery | attr | variable | select)* ~ end }
+
+WHITESPACE = _{ NEWLINE | " " | "\t" ｜ "\r" ｜ "\n" }
 
 COMMENT = _{
     "//" ~ (!NEWLINE ~ ANY)*
 }
 
 value = _{
-    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "(" | ")" | "%" | "/" | ":" | "*" | "_" | "." | "," | "'" | "\"")+
+    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "%" | "/" | ":" | "*" | "_" | "." | "," | "'" | "\"")+
 }
 
 attrName = @{ (ASCII_ALPHA | "-")+ }
@@ -29,16 +36,20 @@ id = @{
     "#" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+
 }
 
+commonLabel = @{
+    (ASCII_DIGIT | ASCII_ALPHA)+
+}
+
 parent = @{ "&" }
 
 // 伪类
-fakeClass = @{ (className | label | id | parent) ~ ":" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
+fakeClass = @{ (commonLabel | className | label | id | parent) ~ ":" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
 
 // 伪选择器
-fakeSelect = @{ (className | label | id | parent) ~ "::" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
+fakeSelect = @{ (commonLabel | className | label | id | parent) ~ "::" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
 
 // 最基础的选择器
-baseSelectName = { fakeSelect | fakeClass | className | label | id | parent }
+baseSelectName = { commonLabel | fakeSelect | fakeClass | className | label | id | parent }
 
 // 选择器列表
 listSelect = { baseSelectName ~ "," ~ baseSelectName }
@@ -59,7 +70,7 @@ strictBorSelect = { baseSelectName ~ "+" ~ baseSelectName }
 lineSelect = { baseSelectName ~ "||" ~ baseSelectName }
 
 // 选择器集合
-componseSelectName = _{
+composeSelectName = _{
     listSelect
   | descendantsSelect
   | directChildSelect
@@ -70,13 +81,13 @@ componseSelectName = _{
 }
 
 selectName = {
-    (componseSelectName ~ "," ~ componseSelectName)
-  | (componseSelectName ~ ">" ~ componseSelectName)
-  | (componseSelectName ~ "~" ~ componseSelectName)
-  | (componseSelectName ~ "+" ~ componseSelectName)
-  | (componseSelectName ~ "||" ~ componseSelectName)
-  | (componseSelectName ~ WHITE_SPACE ~ componseSelectName)
-  | componseSelectName
+    (composeSelectName ~ "," ~ composeSelectName)
+  | (composeSelectName ~ ">" ~ composeSelectName)
+  | (composeSelectName ~ "~" ~ composeSelectName)
+  | (composeSelectName ~ "+" ~ composeSelectName)
+  | (composeSelectName ~ "||" ~ composeSelectName)
+  | (composeSelectName ~ WHITE_SPACE ~ composeSelectName)
+  | composeSelectName
 }
 
 start = _{ "{" }
@@ -89,6 +100,6 @@ variableValue = { value }
 
 variable = { variableName ~ ":" ~ variableValue ~ ";" }
 
-select = { selectName ~ start ~ (attr | variable | select)* ~ end }
+select = { selectName ~ start ~ (attr | variable | select | mediaQuery)* ~ end }
 
-selects = { (select | variable | COMMENT)* }
+selects = { (mediaQuery | select | variable | attr | COMMENT)* }
