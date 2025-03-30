@@ -11,8 +11,12 @@ COMMENT = _{
     "//" ~ (!NEWLINE ~ ANY)*
 }
 
+singleValue = _{
+    ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "%" | "/" | ":" | "*" | "_" | "." | "," | "'" | "\"" | "(" | ")"
+}
+
 value = _{
-    (ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "%" | "/" | ":" | "*" | "_" | "." | "," | "'" | "\"")+
+    singleValue+ ~ singleValue*
 }
 
 attrName = @{ (ASCII_ALPHA | "-")+ }
