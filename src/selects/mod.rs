@@ -23,9 +23,10 @@ impl Selects {
         let mut children = vec![];
         let mut media_queries = vec![];
         let mut ancestor_variable_list = vec![];
+        println!("{}",pairs.len());
 
         for pair in pairs {
-            if pair.as_rule() == Rule::selects {
+            if pair.as_rule() == Rule::selects || pair.as_rule() == Rule::mediaQuery {
                 for pair in pair.into_inner() {
                     match pair.as_rule() {
                         Rule::variable => {

@@ -71,7 +71,6 @@ pub fn get_variable(pair: Pair<Rule>) -> Variable {
     return Variable(name, value);
 }
 
-// 添加到 utils.rs 中
 pub fn get_media_query_expression(pair: &Pair<Rule>) -> String {
     if pair.as_rule() != Rule::mediaQuery {
         panic!("Not a media query");

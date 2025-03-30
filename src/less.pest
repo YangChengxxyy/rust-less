@@ -102,4 +102,4 @@ variable = { variableName ~ ":" ~ variableValue ~ ";" }
 
 select = { selectName ~ start ~ (attr | variable | select | mediaQuery)* ~ end }
 
-selects = { (select | variable | mediaQuery | COMMENT)* }
+selects = { (select | variable | mediaQuery | COMMENT)+ }
