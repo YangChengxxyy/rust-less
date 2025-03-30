@@ -3,9 +3,9 @@ mediaQueryType       = { "screen" | "print" | "all" | "speech" }
 mediaQueryFeature    = { attrName ~ ":" ~ attrValue }
 mediaQueryCondition  = { "and" ~ "(" ~ mediaQueryFeature ~ ")" }
 mediaQueryExpression = { mediaQueryType ~ (mediaQueryCondition)* }
-mediaQuery           = { "@media" ~ mediaQueryExpression ~ start ~ (mediaQuery | attr | variable | select)* ~ end }
+mediaQuery           = { "@media" ~ mediaQueryExpression ~ start ~ (attr | variable | select | mediaQuery)* ~ end }
 
-WHITESPACE = _{ NEWLINE | " " | "\t" ｜ "\r" ｜ "\n" }
+WHITESPACE = _{ NEWLINE | " " | "\t" }
 
 COMMENT = _{
     "//" ~ (!NEWLINE ~ ANY)*
@@ -102,4 +102,4 @@ variable = { variableName ~ ":" ~ variableValue ~ ";" }
 
 select = { selectName ~ start ~ (attr | variable | select | mediaQuery)* ~ end }
 
-selects = { (mediaQuery | select | variable | attr | COMMENT)* }
+selects = { (select | variable | mediaQuery | COMMENT)* }
