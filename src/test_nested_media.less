@@ -1,0 +1,31 @@
+// 测试嵌套媒体查询
+@media screen and (min-width: 768px) {
+  .container {
+    width: 750px;
+  }
+  
+  // 嵌套媒体查询
+  @media (max-width: 1024px) {
+    .container {
+      width: 970px;
+    }
+    
+    .nested {
+      display: block;
+    }
+  }
+}
+
+// 多个媒体条件组合
+@media screen and (min-width: 992px), print and (orientation: landscape) {
+  body {
+    font-size: 16px;
+  }
+  
+  // 在多条件媒体查询中嵌套
+  @media (max-height: 800px) {
+    body {
+      line-height: 1.2;
+    }
+  }
+}
