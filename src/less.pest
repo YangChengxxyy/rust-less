@@ -1,8 +1,14 @@
 // 媒体查询相关语法
 mediaQueryType       = { "screen" | "print" | "all" | "speech" }
-mediaQueryFeature    = { attrName ~ ":" ~ attrValue }
-mediaQueryCondition  = { "and" ~ "(" ~ mediaQueryFeature ~ ")" }
-mediaQueryExpression = { mediaQueryType ~ (mediaQueryCondition)* }
+// 修改媒体查询特性规则，直接捕获括号内的整个内容
+mediaQueryFeature    = { (!(")" | "{") ~ ANY)* }
+// 重新定义条件规则，确保直接使用括号和内容
+mediaQueryCondition  = { "(" ~ mediaQueryFeature ~ ")" }
+// 重新定义and关键字处理
+mediaQueryAnd        = _{ "and" }
+// 更加灵活地定义媒体查询表达式，允许 and 和 条件之间有空格
+mediaQueryExpression = { mediaQueryType ~ (mediaQueryAnd ~ mediaQueryCondition)* }
+
 mediaQuery           = { "@media" ~ mediaQueryExpression ~ start ~ (attr | variable | select | mediaQuery)* ~ end }
 
 WHITESPACE = _{ NEWLINE | " " | "\t" }
