@@ -1,23 +1,21 @@
 // 媒体查询相关语法
-mediaQueryType       = { "screen" | "print" | "all" | "speech" | "only" }
+mediaQueryType = { "screen" | "print" | "all" | "speech" | "only" }
 // 修改媒体查询特性规则，直接捕获括号内的整个内容
-mediaQueryFeature    = { (!(")" | "{") ~ ANY)* }
+mediaQueryFeature = { (!(")" | "{") ~ ANY)* }
 // 重新定义条件规则，确保直接使用括号和内容
-mediaQueryCondition  = { "(" ~ mediaQueryFeature ~ ")" }
+mediaQueryCondition = { "(" ~ mediaQueryFeature ~ ")" }
 // 重新定义and关键字处理
-mediaQueryAnd        = _{ "and" }
+mediaQueryAnd = _{ "and" }
 // 重新定义or关键字处理（用于复杂嵌套媒体查询）
-mediaQueryOr         = _{ "," }
+mediaQueryOr = _{ "," }
 // 更加灵活地定义媒体查询表达式，支持直接使用条件而不需要媒体类型
-mediaQueryExpression = { 
-    (mediaQueryType ~ (mediaQueryAnd ~ mediaQueryCondition)* ~ 
-    (mediaQueryOr ~ mediaQueryType ~ (mediaQueryAnd ~ mediaQueryCondition)*)*)
-    | 
-    (mediaQueryCondition ~ (mediaQueryAnd ~ mediaQueryCondition)*) 
+mediaQueryExpression = {
+    (mediaQueryType ~ (mediaQueryAnd ~ mediaQueryCondition)* ~ (mediaQueryOr ~ mediaQueryType ~ (mediaQueryAnd ~ mediaQueryCondition)*)*)
+  | (mediaQueryCondition ~ (mediaQueryAnd ~ mediaQueryCondition)*)
 }
 
 // 媒体查询规则同时支持嵌套
-mediaQuery           = { "@media" ~ mediaQueryExpression ~ start ~ (attr | variable | select | mediaQuery)* ~ end }
+mediaQuery = { "@media" ~ mediaQueryExpression ~ start ~ (attr | variable | select | mediaQuery)* ~ end }
 
 // 修改WHITESPACE规则，使用具体的字符而不是SPACE
 WHITESPACE = _{ " " | NEWLINE | "\t" }
@@ -28,7 +26,22 @@ COMMENT = _{
 }
 
 singleValue = _{
-    ASCII_ALPHA | ASCII_DIGIT | "#" | "-" | "@" | "%" | "/" | ":" | "*" | "_" | "." | "," | "'" | "\"" | "(" | ")"
+    ASCII_ALPHA
+  | ASCII_DIGIT
+  | "#"
+  | "-"
+  | "@"
+  | "%"
+  | "/"
+  | ":"
+  | "*"
+  | "_"
+  | "."
+  | ","
+  | "'"
+  | "\""
+  | "("
+  | ")"
 }
 
 value = _{
@@ -69,7 +82,7 @@ fakeClass = @{ (commonLabel | className | label | id | parent) ~ ":" ~ (ASCII_DI
 fakeSelect = @{ (commonLabel | className | label | id | parent) ~ "::" ~ (ASCII_DIGIT | ASCII_ALPHA | "-")+ }
 
 // 最基础的选择器
-baseSelectName = { commonLabel | fakeSelect | fakeClass | className | label | id | parent }
+baseSelectName = { fakeSelect | fakeClass | className | label | id | parent | commonLabel }
 
 // 选择器列表
 listSelect = { baseSelectName ~ "," ~ baseSelectName }

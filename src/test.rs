@@ -1,16 +1,16 @@
 #[cfg(test)] // 仅在测试模式下编译
 mod tests {
+    use crate::parser::{self, LessParser, Rule};
     use pest::Parser;
-    use crate::{parser, selects::ToCss};
 
     #[test] // 定义一个测试函数
     fn media_query_test() {
-        let s = "@media  screen and (min-width: 600px) {
+        let s = "@media screen and (min-width: 600px) {
   body {
     background-color: red;
   }
 }"; // 定义测试的媒体查询字符串
-        let pairs = parser::LessParser::parse(parser::Rule::mediaQuery, s); // 解析媒体查询
+        let pairs = LessParser::parse(Rule::mediaQuery, s); // 修正：使用mediaQuery
         println!("{:#?}", pairs); // 打印解析结果
         assert!(pairs.is_ok()); // 验证解析是否成功
     }
@@ -18,7 +18,7 @@ mod tests {
     #[test]
     fn class_name_test() {
         let s = ".example-class { color: blue; }"; // 定义测试的类名选择器字符串
-        let pairs = parser::LessParser::parse(parser::Rule::select, s); // 解析类名选择器
+        let pairs = LessParser::parse(Rule::select, s); // 解析类名选择器
         println!("{:#?}", pairs); // 打印解析结果
         assert!(pairs.is_ok()); // 验证解析是否成功
     }
@@ -113,21 +113,18 @@ mod tests {
 
     #[test]
     fn nested_media_query_parse_test() {
-        let nested_media_file = std::fs::read_to_string("./src/test_nested_media.less").expect("Not Found Nested Media Test File!"); // 读取嵌套媒体查询测试文件
-        
-        match crate::parser::LessParser::parse(crate::parser::Rule::selects, &nested_media_file) {
-            Ok(pairs) => {
-                // 解析成功，验证结果
-                println!("成功解析嵌套媒体查询!");
-                let nested_selects = crate::selects::Selects::new(pairs);
-                let css_content = nested_selects.to_css();
-                
+        let nested_media_file = std::fs::read_to_string("./src/test_nested_media.less")
+            .expect("Not Found Nested Media Test File!"); // 读取嵌套媒体查询测试文件
+
+        match crate::parse_less(&nested_media_file) {
+            Ok(css_content) => {
                 // 验证生成的CSS内容不为空
                 assert!(!css_content.is_empty(), "生成的CSS内容不应为空");
-                
+
                 // 可选：将结果写入文件进行测试
-                std::fs::write("./src/test_nested_media.css", css_content).expect("Write Error for Nested Media CSS");
-            },
+                std::fs::write("./src/test_nested_media.css", css_content)
+                    .expect("Write Error for Nested Media CSS");
+            }
             Err(e) => {
                 println!("解析失败: {:?}", e);
                 assert!(false, "嵌套媒体查询解析应当成功");
@@ -137,16 +134,33 @@ mod tests {
 
     #[test]
     fn basic_less_parse_test() {
-        let file_s = std::fs::read_to_string("./src/test.less").expect("Not Found File!"); // 读取基本 LESS 测试文件
-        let pairs = crate::parser::LessParser::parse(crate::parser::Rule::selects, &file_s).expect("Parser Error"); // 解析基本 LESS 文件
-        
-        let selects = crate::selects::Selects::new(pairs);
-        let css_content = selects.to_css();
-        
-        // 验证生成的CSS内容不为空
-        assert!(!css_content.is_empty(), "生成的CSS内容不应为空");
-        
-        // 可选：将结果写入文件进行测试
-        std::fs::write("./src/test.css", css_content).expect("Write Error");
+        match crate::parse_less_file("./src/test.less") {
+            Ok(css_content) => {
+                // 验证生成的CSS内容不为空
+                assert!(!css_content.is_empty(), "生成的CSS内容不应为空");
+
+                // 可选：将结果写入文件进行测试
+                std::fs::write("./src/test.css", css_content).expect("Write Error");
+            }
+            Err(e) => {
+                println!("解析失败: {:?}", e);
+                assert!(false, "基本LESS解析应当成功");
+            }
+        }
+    }
+
+    #[test]
+    fn library_api_test() {
+        let less = ".container { @width: 80%; width: @width; .header { color: blue; } }";
+        match crate::parse_less(less) {
+            Ok(css) => {
+                assert!(css.contains(".container"));
+                assert!(css.contains("width: 80%"));
+                assert!(css.contains(".container .header"));
+            }
+            Err(e) => {
+                panic!("库API测试失败: {}", e);
+            }
+        }
     }
 }
