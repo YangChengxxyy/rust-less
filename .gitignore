@@ -1,2 +1,47 @@
 /target
 /.idea
+
+# Build artifacts
+debug_string_test
+test_*
+!test_*.rs
+!*.test
+debug_*
+comprehensive_test
+mixin_definition_test
+simple_mixin_test
+
+# Temporary files
+*.tmp
+*.temp
+*_test
+test_basic
+test_full_mixin
+*.less.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+*.code-workspace
+
+# WASM build outputs
+*.wasm
+pkg/
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Log files
+*.log

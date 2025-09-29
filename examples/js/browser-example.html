@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rust LESS 编译器 - 浏览器示例</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .demo-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+        .demo-title {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            resize: vertical;
+        }
+        .input-area {
+            margin-bottom: 15px;
+        }
+        .output-area {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            min-height: 100px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            border-color: #ffcdd2;
+        }
+        .success {
+            color: #388e3c;
+            background: #e8f5e8;
+            border-color: #c8e6c9;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .options {
+            margin-bottom: 15px;
+        }
+        .options label {
+            margin-right: 15px;
+            display: inline-flex;
+            align-items: center;
+        }
+        .options input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .loading {
+            background: #fff3e0;
+            color: #f57c00;
+            border: 1px solid #ffcc02;
+        }
+        .ready {
+            background: #e8f5e8;
+            color: #388e3c;
+            border: 1px solid #4caf50;
+        }
+        .error-status {
+            background: #ffebee;
+            color: #d32f2f;
+            border: 1px solid #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1></h1>🦀 Rust LESS 编译器 - 浏览器演示</h1>
+
+        <div id="status" class="status loading">正在加载 WebAssembly 模块...</div>
+
+        <div class="demo-section">
+            <div class="demo-title">📝 基本 LESS 编译</div>
+            <div class="input-area">
+                <textarea id="basic-input" placeholder="在此输入 LESS 代码...">@primary-color: #3498db;
+@secondary-color: #2ecc71;
+@margin: 20px;
+
+.header {
+    color: @primary-color;
+    background: lighten(@primary-color, 40%);
+    margin: @margin;
+
+    h1 {
+        color: @secondary-color;
+        font-size: 24px;
+    }
+
+    &:hover {
+        background: darken(@primary-color, 10%);
+    }
+}</textarea>
+            </div>
+            <div class="options">
+                <label>
+                    <input type="checkbox" id="compress-basic"> 压缩输出
+                </label>
+                <label>
+                    <input type="checkbox" id="sourcemap-basic"> 生成源码映射
+                </label>
+            </div>
+            <button onclick="compileBasic()">编译</button>
+            <button onclick="validateBasic()">验证语法</button>
+            <div id="basic-output" class="output-area">编译结果将在此显示...</div>
+        </div>
+
+        <div class="demo-section">
+            <div class="demo-title">🎨 样式演示</div>
+            <div class="input-area">
+                <textarea id="style-input">@base-size: 16px;
+@primary: #e74c3c;
+@secondary: #34495e;
+
+.demo-card {
+    padding: @base-size;
+    border-radius: @base-size / 4;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+
+    .title {
+        color: @primary;
+        font-size: @base-size * 1.5;
+        margin-bottom: @base-size / 2;
+    }
+
+    .content {
+        color: @secondary;
+        line-height: 1.6;
+    }
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+}</textarea>
+            </div>
+            <button onclick="compileAndApplyStyle()">编译并应用样式</button>
+            <div id="style-output" class="output-area">编译结果将在此显示...</div>
+
+            <!-- 样式演示区域 -->
+            <div id="demo-preview" style="margin-top: 20px;">
+                <div class="demo-card">
+                    <div class="title">演示卡片</div>
+                    <div class="content">这是一个使用 LESS 编译生成的样式演示。将鼠标悬停在此卡片上查看效果。</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <div class="demo-title">🔧 编译器信息</div>
+            <button onclick="showCompilerInfo()">获取版本信息</button>
+            <button onclick="showCompilerDetails()">获取详细信息</button>
+            <div id="info-output" class="output-area">编译器信息将在此显示...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        let wasmModule;
+        let compilerReady = false;
+
+        // 加载 WebAssembly 模块
+        async function initWasm() {
+            try {
+                const statusEl = document.getElementById('status');
+                statusEl.textContent = '正在初始化 WASM 模块...';
+
+                // 这里需要替换为实际的 WASM 模块路径
+                // const { compileLess, compileLessWithOptions, validateLess, getVersion, getInfo } = await import('./rust-less-wasm/index.js');
+
+                // 模拟 WASM 模块加载（实际使用时替换为真实的导入）
+                wasmModule = {
+                    compileLess: simulateCompileLess,
+                    compileLessWithOptions: simulateCompileLessWithOptions,
+                    validateLess: simulateValidateLess,
+                    getVersion: () => Promise.resolve('0.2.0'),
+                    getInfo: () => Promise.resolve('Rust LESS 编译器 v0.2.0\n用 Rust 编写的高性能 LESS 到 CSS 编译器')
+                };
+
+                compilerReady = true;
+                statusEl.className = 'status ready';
+                statusEl.textContent = '✅ WASM 模块加载完成，编译器已就绪！';
+
+                // 启用所有按钮
+                const buttons = document.querySelectorAll('button');
+                buttons.forEach(btn => btn.disabled = false);
+
+            } catch (error) {
+                console.error('WASM 加载失败:', error);
+                const statusEl = document.getElementById('status');
+                statusEl.className = 'status error-status';
+                statusEl.textContent = '❌ WASM 模块加载失败: ' + error.message;
+            }
+        }
+
+        // 模拟编译函数（实际使用时会被 WASM 模块替换）
+        function simulateCompileLess(input) {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    if (input.includes('error')) {
+                        resolve({ error: '编译错误：语法不正确' });
+                    } else {
+                        // 简单的 LESS 到 CSS 转换模拟
+                        let css = input
+                            .replace(/@[\w-]+:\s*[^;]+;/g, '') // 移除变量定义
+                            .replace(/@([\w-]+)/g, '#3498db') // 替换变量引用
+                            .replace(/\s+&/g, '') // 处理父选择器
+                            .replace(/\{\s*\n/g, ' {\n  ') // 格式化
+                            .replace(/;\s*\n/g, ';\n  ')
+                            .replace(/\n\s*\}/g, '\n}');
+                        resolve({ css });
+                    }
+                }, 100);
+            });
+        }
+
+        function simulateCompileLessWithOptions(input, options) {
+            return simulateCompileLess(input).then(result => {
+                if (result.css && options.compress) {
+                    result.css = result.css.replace(/\s+/g, ' ').replace(/;\s*}/g, '}').trim();
+                }
+                return result;
+            });
+        }
+
+        function simulateValidateLess(input) {
+            return Promise.resolve(!input.includes('error') && input.includes('{') && input.includes('}'));
+        }
+
+        // 编译函数
+        window.compileBasic = async function() {
+            if (!compilerReady) return;
+
+            const input = document.getElementById('basic-input').value;
+            const compress = document.getElementById('compress-basic').checked;
+            const sourceMap = document.getElementById('sourcemap-basic').checked;
+            const output = document.getElementById('basic-output');
+
+            output.textContent = '正在编译...';
+            output.className = 'output-area';
+
+            try {
+                const result = await wasmModule.compileLessWithOptions(input, { compress, sourceMap });
+
+                if (result.error) {
+                    output.textContent = result.error;
+                    output.className = 'output-area error';
+                } else {
+                    output.textContent = result.css;
+                    output.className = 'output-area success';
+                }
+            } catch (error) {
+                output.textContent = '编译失败: ' + error.message;
+                output.className = 'output-area error';
+            }
+        };
+
+        window.validateBasic = async function() {
+            if (!compilerReady) return;
+
+            const input = document.getElementById('basic-input').value;
+            const output = document.getElementById('basic-output');
+
+            output.textContent = '正在验证...';
+            output.className = 'output-area';
+
+            try {
+                const isValid = await wasmModule.validateLess(input);
+                output.textContent = isValid ? '✅ 语法正确' : '❌ 语法错误';
+                output.className = isValid ? 'output-area success' : 'output-area error';
+            } catch (error) {
+                output.textContent = '验证失败: ' + error.message;
+                output.className = 'output-area error';
+            }
+        };
+
+        window.compileAndApplyStyle = async function() {
+            if (!compilerReady) return;
+
+            const input = document.getElementById('style-input').value;
+            const output = document.getElementById('style-output');
+
+            output.textContent = '正在编译...';
+            output.className = 'output-area';
+
+            try {
+                const result = await wasmModule.compileLess(input);
+
+                if (result.error) {
+                    output.textContent = result.error;
+                    output.className = 'output-area error';
+                } else {
+                    output.textContent = result.css;
+                    output.className = 'output-area success';
+
+                    // 应用样式到演示区域
+                    let styleEl = document.getElementById('dynamic-style');
+                    if (!styleEl) {
+                        styleEl = document.createElement('style');
+                        styleEl.id = 'dynamic-style';
+                        document.head.appendChild(styleEl);
+                    }
+                    styleEl.textContent = result.css;
+                }
+            } catch (error) {
+                output.textContent = '编译失败: ' + error.message;
+                output.className = 'output-area error';
+            }
+        };
+
+        window.showCompilerInfo = async function() {
+            if (!compilerReady) return;
+
+            const output = document.getElementById('info-output');
+
+            try {
+                const version = await wasmModule.getVersion();
+                output.textContent = `版本: ${version}`;
+                output.className = 'output-area success';
+            } catch (error) {
+                output.textContent = '获取信息失败: ' + error.message;
+                output.className = 'output-area error';
+            }
+        };
+
+        window.showCompilerDetails = async function() {
+            if (!compilerReady) return;
+
+            const output = document.getElementById('info-output');
+
+            try {
+                const info = await wasmModule.getInfo();
+                output.textContent = info;
+                output.className = 'output-area success';
+            } catch (error) {
+                output.textContent = '获取信息失败: ' + error.message;
+                output.className = 'output-area error';
+            }
+        };
+
+        // 初始禁用所有按钮
+        document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+
+        // 初始化
+        initWasm();
+    </script>
+</body>
+</html>
