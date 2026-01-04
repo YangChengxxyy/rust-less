@@ -84,6 +84,8 @@ pub enum Statement {
     AtRule(AtRule),
     /// 注释
     Comment(Comment),
+    /// 扩展语句
+    Extend(Extend),
 }
 
 /// 变量声明: @variable: value;
@@ -445,26 +447,16 @@ impl Comment {
 pub struct Extend {
     /// Selectors to extend
     pub selectors: Vec<Selector>,
-    /// Whether to extend all occurrences
-    pub all: bool, // For :extend(.class all)
+    /// Whether to extend all instances ("all" keyword)
+    pub all: bool, // Simplified: if true, applies 'all' to all selectors (or just indicates presence)
     /// Source position
     pub position: Position,
 }
 
 impl Extend {
     /// Create a new extend directive
-    pub fn new(selectors: Vec<Selector>, position: Position) -> Self {
-        Self {
-            selectors,
-            all: false,
-            position,
-        }
-    }
-
-    /// Mark this extend as extending all occurrences
-    pub fn with_all(mut self) -> Self {
-        self.all = true;
-        self
+    pub fn new(selectors: Vec<Selector>, all: bool, position: Position) -> Self {
+        Self { selectors, all, position }
     }
 }
 
@@ -653,6 +645,8 @@ pub trait Visitor {
     fn visit_at_rule(&mut self, _at_rule: &AtRule) {}
     /// Visit a comment node
     fn visit_comment(&mut self, _comment: &Comment) {}
+    /// Visit an extend node
+    fn visit_extend(&mut self, _extend: &Extend) {}
     /// Visit an expression node
     fn visit_expression(&mut self, _expr: &Expression) {}
     /// Visit a selector node
@@ -680,6 +674,7 @@ impl Visitable for Statement {
             Statement::Import(import) => import.accept(visitor),
             Statement::AtRule(at_rule) => at_rule.accept(visitor),
             Statement::Comment(comment) => comment.accept(visitor),
+            Statement::Extend(extend) => extend.accept(visitor),
         }
     }
 }
@@ -754,6 +749,15 @@ impl Visitable for AtRule {
 impl Visitable for Comment {
     fn accept<V: Visitor>(&self, visitor: &mut V) {
         visitor.visit_comment(self);
+    }
+}
+
+impl Visitable for Extend {
+    fn accept<V: Visitor>(&self, visitor: &mut V) {
+        visitor.visit_extend(self);
+        for selector in &self.selectors {
+            selector.accept(visitor);
+        }
     }
 }
 

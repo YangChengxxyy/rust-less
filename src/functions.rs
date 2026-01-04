@@ -377,8 +377,26 @@ fn saturate_function(args: &[Expression], position: &Position) -> Result<Express
         ));
     }
 
-    // TODO: Implement actual color saturation
-    Ok(args[0].clone())
+    // Extract and convert color and percentage
+    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
+    let percentage_value = expression_to_percentage(&args[1], position)?;
+
+    // Convert RGB to HSL
+    let (h, mut s, l) = rgb_to_hsl(red, green, blue);
+
+    // Increase saturation by percentage
+    s = (s + percentage_value / 100.0).min(1.0);
+
+    // Convert back to RGB
+    let (r, g, b) = hsl_to_rgb(h, s, l);
+
+    Ok(Expression::Color {
+        red: r,
+        green: g,
+        blue: b,
+        alpha,
+        position: position.clone(),
+    })
 }
 
 fn desaturate_function(args: &[Expression], position: &Position) -> Result<Expression> {
@@ -391,8 +409,26 @@ fn desaturate_function(args: &[Expression], position: &Position) -> Result<Expre
         ));
     }
 
-    // TODO: Implement actual color desaturation
-    Ok(args[0].clone())
+    // Extract and convert color and percentage
+    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
+    let percentage_value = expression_to_percentage(&args[1], position)?;
+
+    // Convert RGB to HSL
+    let (h, mut s, l) = rgb_to_hsl(red, green, blue);
+
+    // Decrease saturation by percentage
+    s = (s - percentage_value / 100.0).max(0.0);
+
+    // Convert back to RGB
+    let (r, g, b) = hsl_to_rgb(h, s, l);
+
+    Ok(Expression::Color {
+        red: r,
+        green: g,
+        blue: b,
+        alpha,
+        position: position.clone(),
+    })
 }
 
 fn fade_function(args: &[Expression], position: &Position) -> Result<Expression> {
@@ -405,8 +441,16 @@ fn fade_function(args: &[Expression], position: &Position) -> Result<Expression>
         ));
     }
 
-    // TODO: Implement actual color fading
-    Ok(args[0].clone())
+    let (red, green, blue, _) = expression_to_color(&args[0], position)?;
+    let alpha = expression_to_percentage(&args[1], position)? / 100.0;
+
+    Ok(Expression::Color {
+        red,
+        green,
+        blue,
+        alpha: alpha.max(0.0).min(1.0),
+        position: position.clone(),
+    })
 }
 
 fn fadeout_function(args: &[Expression], position: &Position) -> Result<Expression> {
@@ -419,8 +463,16 @@ fn fadeout_function(args: &[Expression], position: &Position) -> Result<Expressi
         ));
     }
 
-    // TODO: Implement fadeout
-    Ok(args[0].clone())
+    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)? / 100.0;
+
+    Ok(Expression::Color {
+        red,
+        green,
+        blue,
+        alpha: (alpha - amount).max(0.0),
+        position: position.clone(),
+    })
 }
 
 fn fadein_function(args: &[Expression], position: &Position) -> Result<Expression> {
@@ -433,8 +485,16 @@ fn fadein_function(args: &[Expression], position: &Position) -> Result<Expressio
         ));
     }
 
-    // TODO: Implement fadein
-    Ok(args[0].clone())
+    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)? / 100.0;
+
+    Ok(Expression::Color {
+        red,
+        green,
+        blue,
+        alpha: (alpha + amount).min(1.0),
+        position: position.clone(),
+    })
 }
 
 fn spin_function(args: &[Expression], position: &Position) -> Result<Expression> {
@@ -447,8 +507,34 @@ fn spin_function(args: &[Expression], position: &Position) -> Result<Expression>
         ));
     }
 
-    // TODO: Implement color spinning (hue rotation)
-    Ok(args[0].clone())
+    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
+    
+    let angle = match &args[1] {
+        Expression::Number { value, .. } => *value,
+        _ => return Err(Error::function_error("spin", "Angle must be a number", position.line, position.column)),
+    };
+
+    // Convert RGB to HSL
+    let (mut h, s, l) = rgb_to_hsl(red, green, blue);
+
+    // Rotate hue
+    // Hue is 0.0-1.0 in our HSL implementation, but input is degrees
+    h = (h * 360.0 + angle) % 360.0;
+    if h < 0.0 {
+        h += 360.0;
+    }
+    h /= 360.0;
+
+    // Convert back to RGB
+    let (r, g, b) = hsl_to_rgb(h, s, l);
+
+    Ok(Expression::Color {
+        red: r,
+        green: g,
+        blue: b,
+        alpha,
+        position: position.clone(),
+    })
 }
 
 fn mix_function(args: &[Expression], position: &Position) -> Result<Expression> {
@@ -461,8 +547,42 @@ fn mix_function(args: &[Expression], position: &Position) -> Result<Expression> 
         ));
     }
 
-    // TODO: Implement color mixing
-    Ok(args[0].clone())
+    let (r1, g1, b1, a1) = expression_to_color(&args[0], position)?;
+    let (r2, g2, b2, a2) = expression_to_color(&args[1], position)?;
+
+    let weight = if args.len() == 3 {
+        expression_to_percentage(&args[2], position)? / 100.0
+    } else {
+        0.5
+    };
+
+    // LESS mix algorithm
+    let p = weight;
+    let w = p * 2.0 - 1.0;
+    let a = a1 - a2;
+
+    let w1 = if (w * a - -1.0).abs() < f64::EPSILON {
+        w
+    } else {
+        (w + a) / (1.0 + w * a)
+    };
+    
+    let w1 = (w1 + 1.0) / 2.0;
+    let w2 = 1.0 - w1;
+
+    let r = (r1 as f64 * w1 + r2 as f64 * w2).round() as u8;
+    let g = (g1 as f64 * w1 + g2 as f64 * w2).round() as u8;
+    let b = (b1 as f64 * w1 + b2 as f64 * w2).round() as u8;
+    
+    let alpha = a1 * p + a2 * (1.0 - p);
+
+    Ok(Expression::Color {
+        red: r,
+        green: g,
+        blue: b,
+        alpha,
+        position: position.clone(),
+    })
 }
 
 fn rgb_function(args: &[Expression], position: &Position) -> Result<Expression> {
@@ -555,12 +675,20 @@ fn hsl_function(args: &[Expression], position: &Position) -> Result<Expression> 
         ));
     }
 
-    // TODO: Implement HSL to RGB conversion
-    // For now, just return a placeholder color
+    let h = match &args[0] {
+        Expression::Number { value, .. } => (value % 360.0) / 360.0,
+        _ => return Err(Error::function_error("hsl", "Hue must be a number", position.line, position.column)),
+    };
+    
+    let s = expression_to_percentage(&args[1], position)? / 100.0;
+    let l = expression_to_percentage(&args[2], position)? / 100.0;
+
+    let (red, green, blue) = hsl_to_rgb(h, s, l);
+
     Ok(Expression::Color {
-        red: 0,
-        green: 0,
-        blue: 0,
+        red,
+        green,
+        blue,
         alpha: 1.0,
         position: position.clone(),
     })
@@ -576,13 +704,27 @@ fn hsla_function(args: &[Expression], position: &Position) -> Result<Expression>
         ));
     }
 
-    // TODO: Implement HSLA to RGB conversion
-    // For now, just return a placeholder color
+    let h = match &args[0] {
+        Expression::Number { value, .. } => (value % 360.0) / 360.0,
+        _ => return Err(Error::function_error("hsla", "Hue must be a number", position.line, position.column)),
+    };
+    
+    let s = expression_to_percentage(&args[1], position)? / 100.0;
+    let l = expression_to_percentage(&args[2], position)? / 100.0;
+    
+    let alpha = match &args[3] {
+        Expression::Number { value, .. } => *value,
+        Expression::Percentage(value, _) => value / 100.0,
+        _ => return Err(Error::function_error("hsla", "Alpha must be a number", position.line, position.column)),
+    };
+
+    let (red, green, blue) = hsl_to_rgb(h, s, l);
+
     Ok(Expression::Color {
-        red: 0,
-        green: 0,
-        blue: 0,
-        alpha: 1.0,
+        red,
+        green,
+        blue,
+        alpha,
         position: position.clone(),
     })
 }
@@ -590,51 +732,33 @@ fn hsla_function(args: &[Expression], position: &Position) -> Result<Expression>
 // String functions
 
 fn escape_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
-        return Err(Error::function_error(
-            "escape",
-            "Expected 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
-    match &args[0] {
-        Expression::String { value, .. } => {
-            Ok(Expression::Escaped(value.clone(), position.clone()))
-        }
-        _ => Ok(Expression::Escaped(args[0].to_css(), position.clone())),
-    }
+    ensure_arg_count("escape", args, 1, position)?;
+    let value = string_value(&args[0]).value;
+    Ok(Expression::Escaped(value, position.clone()))
 }
 
 fn replace_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 3 {
+    ensure_arg_count("replace", args, 3, position)?;
+
+    let input = string_value(&args[0]);
+    let pattern = string_value(&args[1]).value;
+    let replacement = string_value(&args[2]).value;
+
+    if pattern.is_empty() {
         return Err(Error::function_error(
             "replace",
-            "Expected 3 arguments",
+            "Argument 2 (pattern) must not be empty",
             position.line,
             position.column,
         ));
     }
 
-    // Extract string, pattern, and replacement
-    let string = match &args[0] {
-        Expression::String { value, .. } => value.clone(),
-        _ => args[0].to_css(),
-    };
-
-    let pattern = match &args[1] {
-        Expression::String { value, .. } => value.clone(),
-        _ => args[1].to_css(),
-    };
-
-    let replacement = match &args[2] {
-        Expression::String { value, .. } => value.clone(),
-        _ => args[2].to_css(),
-    };
-
-    let result = string.replace(&pattern, &replacement);
-    Ok(Expression::string(result, position.clone()))
+    let result = input.value.replace(&pattern, &replacement);
+    if input.quoted {
+        Ok(Expression::string(result, position.clone()))
+    } else {
+        Ok(Expression::identifier(result, position.clone()))
+    }
 }
 
 /// URL function - creates a URL expression
@@ -665,6 +789,45 @@ fn url_function(args: &[Expression], position: &Position) -> Result<Expression> 
     };
 
     Ok(Expression::Url(url_value, position.clone()))
+}
+
+struct StringValue {
+    value: String,
+    quoted: bool,
+}
+
+fn ensure_arg_count(
+    function: &str,
+    args: &[Expression],
+    expected: usize,
+    position: &Position,
+) -> Result<()> {
+    if args.len() != expected {
+        return Err(Error::function_error(
+            function,
+            format!("Expected {} argument{}, got {}", expected, if expected == 1 { "" } else { "s" }, args.len()),
+            position.line,
+            position.column,
+        ));
+    }
+    Ok(())
+}
+
+fn string_value(expr: &Expression) -> StringValue {
+    match expr {
+        Expression::String { value, quoted, .. } => StringValue {
+            value: value.clone(),
+            quoted: *quoted,
+        },
+        Expression::Escaped(value, _) | Expression::Anonymous(value, _) => StringValue {
+            value: value.clone(),
+            quoted: false,
+        },
+        _ => StringValue {
+            value: expr.to_css(),
+            quoted: false,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -1042,6 +1205,8 @@ fn expression_to_percentage(expr: &Expression, position: &Position) -> Result<f6
 
 /// Convert RGB to HSL color space
 fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
+
+
     let r = r as f64 / 255.0;
     let g = g as f64 / 255.0;
     let b = b as f64 / 255.0;

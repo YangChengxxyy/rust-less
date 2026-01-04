@@ -1,0 +1,12 @@
+// Test fixture: nested/deep.less
+// This file tests nested directory imports
+
+@import "../variables.less";
+
+@nested-color: darken(@primary-color, 10%);
+
+.nested-component {
+    color: @nested-color;
+    font-size: @font-size-base;
+    padding: @spacing-unit;
+}

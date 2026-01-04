@@ -9,7 +9,12 @@ use std::fmt;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// LESS 编译的全面错误类型
+///
+/// 每个变体都包含相关的上下文信息，如错误消息、位置信息等。
+/// 使用 `message()` 方法获取用户友好的错误描述，
+/// 使用 `line()` 和 `column()` 方法获取错误位置。
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum Error {
     /// 词法分析错误
     LexError {

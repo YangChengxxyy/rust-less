@@ -7,7 +7,10 @@ use super::Position;
 use std::fmt;
 
 /// CSS 单位类型
+///
+/// 表示 CSS 中各种度量单位，包括长度、角度、时间、频率和分辨率单位。
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum Unit {
     // 长度单位
     Px,
@@ -52,18 +55,28 @@ pub enum Unit {
     None,
 }
 
-/// Color representation with various formats
+/// 颜色表示
+///
+/// 使用 RGBA 格式表示颜色，支持各种颜色操作如亮度调整、饱和度调整等。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Color {
+    /// 红色分量 (0-255)
     pub red: u8,
+    /// 绿色分量 (0-255)
     pub green: u8,
+    /// 蓝色分量 (0-255)
     pub blue: u8,
+    /// 透明度分量 (0.0-1.0)
     pub alpha: f64,
+    /// 源代码位置信息
     pub position: Position,
 }
 
-/// Named colors commonly used in CSS
+/// CSS 命名颜色
+///
+/// 包含所有 CSS 规范定义的 147 个命名颜色。
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum NamedColor {
     Transparent,
     AliceBlue,
@@ -209,11 +222,17 @@ pub enum NamedColor {
     YellowGreen,
 }
 
-/// Numeric value with optional unit
+/// 带单位的数值类型
+///
+/// 表示 CSS 中的数值，可以带有可选的单位（如 px、em、% 等）。
+/// 支持数学运算，运算时会考虑单位兼容性。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Number {
+    /// 数值
     pub value: f64,
+    /// 单位类型
     pub unit: Unit,
+    /// 源代码位置信息
     pub position: Position,
 }
 

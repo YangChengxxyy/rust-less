@@ -1,0 +1,55 @@
+// Test fixture: main.less
+// This file imports other LESS files and uses their definitions
+
+@import "variables.less";
+@import "mixins.less";
+
+// Use imported variables
+body {
+    font-size: @font-size-base;
+    color: @primary-color;
+}
+
+// Use imported mixins
+.button {
+    .padding(16px);
+    .border-radius(@border-radius);
+
+    &:hover {
+        background-color: @secondary-color;
+    }
+}
+
+.card {
+    .padding(24px);
+    .border-radius(8px);
+
+    .card-title {
+        font-size: @font-size-large;
+        color: @primary-color;
+    }
+
+    .card-body {
+        font-size: @font-size-base;
+    }
+}
+
+// Responsive styles using imported breakpoints
+@media (max-width: @breakpoint-md) {
+    body {
+        font-size: @font-size-small;
+    }
+
+    .card {
+        .padding(16px);
+    }
+}
+
+// Use mixin with guards
+.small-text {
+    .responsive-font(12px);
+}
+
+.large-text {
+    .responsive-font(18px);
+}

@@ -1,0 +1,10 @@
+// Test fixture: circular-a.less
+// This file is part of circular import testing
+
+@import "circular-b.less";
+
+@color-a: #ff0000;
+
+.from-a {
+    color: @color-a;
+}

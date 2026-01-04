@@ -7,7 +7,11 @@ use crate::error::{Error, Result};
 use std::fmt;
 
 /// LESS 词法分析器识别的标记类型
+///
+/// 包含 LESS 语法中所有可能的标记类型，从字面量到运算符再到标点符号。
+/// 词法分析器将源代码分解为这些标记的序列，供解析器使用。
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum TokenType {
     // 字面量
     String(String),
@@ -72,18 +76,29 @@ pub enum TokenType {
     Eof,
 }
 
-/// A token with position information
+/// 带位置信息的标记
+///
+/// 表示词法分析器识别的单个标记，包含标记类型、
+/// 在源代码中的位置以及原始文本内容。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
+    /// 标记的类型
     pub token_type: TokenType,
+    /// 标记在源代码中的位置（行号和列号）
     pub position: Position,
+    /// 标记的原始文本内容
     pub lexeme: String,
 }
 
 /// Lexer for LESS source code
 pub struct Lexer {
+    /// 原始输入字符串（保留用于调试和错误报告）
+    #[allow(dead_code)]
     input: String,
-    position: usize,
+    /// Character index (not byte index) - for proper Unicode support
+    char_index: usize,
+    /// Cached characters for efficient access
+    chars: Vec<char>,
     line: usize,
     column: usize,
     current_char: Option<char>,
@@ -92,15 +107,16 @@ pub struct Lexer {
 impl Lexer {
     /// Create a new lexer for the given input
     pub fn new(input: String) -> Self {
-        let mut lexer = Self {
-            current_char: None,
+        let chars: Vec<char> = input.chars().collect();
+        let current_char = chars.first().copied();
+        Self {
             input,
-            position: 0,
+            char_index: 0,
+            chars,
             line: 1,
             column: 1,
-        };
-        lexer.current_char = lexer.input.chars().next();
-        lexer
+            current_char,
+        }
     }
 
     /// Get the current position
@@ -111,7 +127,7 @@ impl Lexer {
     /// Advance to the next character
     fn advance(&mut self) {
         if let Some(ch) = self.current_char {
-            self.position += ch.len_utf8();
+            self.char_index += 1;
             if ch == '\n' {
                 self.line += 1;
                 self.column = 1;
@@ -120,17 +136,17 @@ impl Lexer {
             }
         }
 
-        self.current_char = self.input.chars().nth(self.position);
+        self.current_char = self.chars.get(self.char_index).copied();
     }
 
     /// Peek at the next character without consuming it
     fn peek(&self) -> Option<char> {
-        self.input.chars().nth(self.position + 1)
+        self.chars.get(self.char_index + 1).copied()
     }
 
     /// Peek ahead by n characters without consuming them
     fn peek_ahead(&self, n: usize) -> Option<char> {
-        self.input.chars().nth(self.position + n)
+        self.chars.get(self.char_index + n).copied()
     }
 
     /// Skip whitespace characters
@@ -209,12 +225,22 @@ impl Lexer {
         (number, is_percentage)
     }
 
+    /// Check if a character is valid for the start of an identifier
+    fn is_identifier_start(ch: char) -> bool {
+        ch.is_alphabetic() || ch == '_' || ch >= '\u{00A0}'
+    }
+
+    /// Check if a character is valid inside an identifier
+    fn is_identifier_char(ch: char) -> bool {
+        ch.is_alphanumeric() || ch == '_' || ch == '-' || ch >= '\u{00A0}'
+    }
+
     /// Read an identifier
     fn read_identifier(&mut self) -> String {
         let mut value = String::new();
 
         while let Some(ch) = self.current_char {
-            if ch.is_alphanumeric() || ch == '_' || ch == '-' {
+            if Self::is_identifier_char(ch) {
                 value.push(ch);
                 self.advance();
             } else {
@@ -231,7 +257,7 @@ impl Lexer {
         self.advance(); // Skip #
 
         while let Some(ch) = self.current_char {
-            if ch.is_alphanumeric() || ch == '_' || ch == '-' {
+            if Self::is_identifier_char(ch) {
                 value.push(ch);
                 self.advance();
             } else {
@@ -248,7 +274,7 @@ impl Lexer {
         self.advance(); // Skip @
 
         while let Some(ch) = self.current_char {
-            if ch.is_alphanumeric() || ch == '_' || ch == '-' {
+            if Self::is_identifier_char(ch) {
                 value.push(ch);
                 self.advance();
             } else {
@@ -278,7 +304,7 @@ impl Lexer {
             if ch == '}' {
                 self.advance(); // Skip }
                 break;
-            } else if ch.is_alphanumeric() || ch == '_' || ch == '-' {
+            } else if Self::is_identifier_char(ch) {
                 value.push(ch);
                 self.advance();
             } else {
@@ -301,12 +327,13 @@ impl Lexer {
         Ok(value)
     }
 
-    /// Read a comment
+    /// Read a comment (returns full comment including markers)
     fn read_comment(&mut self) -> Result<String> {
         let mut value = String::new();
 
         if self.current_char == Some('/') && self.peek() == Some('/') {
-            // Line comment
+            // Line comment - include // marker
+            value.push_str("//");
             self.advance(); // Skip first /
             self.advance(); // Skip second /
 
@@ -319,7 +346,8 @@ impl Lexer {
                 }
             }
         } else if self.current_char == Some('/') && self.peek() == Some('*') {
-            // Block comment
+            // Block comment - include /* */ markers
+            value.push_str("/*");
             self.advance(); // Skip /
             self.advance(); // Skip *
 
@@ -327,6 +355,7 @@ impl Lexer {
                 if ch == '*' && self.peek() == Some('/') {
                     self.advance(); // Skip *
                     self.advance(); // Skip /
+                    value.push_str("*/");
                     break;
                 } else {
                     value.push(ch);
@@ -384,7 +413,7 @@ impl Lexer {
                     }
                 }
 
-                Some(ch) if ch.is_alphabetic() || ch == '_' => {
+                Some(ch) if Self::is_identifier_start(ch) => {
                     let value = self.read_identifier();
                     let lexeme = value.clone();
 
@@ -855,9 +884,22 @@ mod tests {
 
         assert_eq!(tokens.len(), 2); // comment + EOF
         if let TokenType::Comment(s) = &tokens[0].token_type {
-            assert_eq!(s, " line comment");
+            // Comment now includes the // marker
+            assert_eq!(s, "// line comment");
         } else {
             panic!("Expected comment token");
+        }
+
+        // Test block comment
+        let mut lexer2 = Lexer::new("/* block comment */".to_string());
+        let tokens2 = lexer2.tokenize().unwrap();
+
+        assert_eq!(tokens2.len(), 2); // comment + EOF
+        if let TokenType::Comment(s) = &tokens2[0].token_type {
+            // Comment now includes the /* */ markers
+            assert_eq!(s, "/* block comment */");
+        } else {
+            panic!("Expected block comment token");
         }
     }
 }
