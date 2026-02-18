@@ -1,10 +1,10 @@
 //! Extend functionality module
-//! 
+//!
 //! This module handles the Less `:extend` pseudo-class and statement functionality.
 //! It provides a registry for storing extend relationships and a collector for
 //! finding extend statements in the AST.
 
-use crate::ast::{Selector, Statement, Stylesheet, SimpleSelector};
+use crate::ast::{Selector, SimpleSelector, Statement, Stylesheet};
 use crate::parser::Parser;
 use std::collections::HashMap;
 
@@ -32,47 +32,58 @@ impl ExtendRegistry {
     /// all: Whether the 'all' keyword was used
     pub fn add_extend(&mut self, target: &Selector, extending_selectors: Vec<String>, all: bool) {
         let key = target.to_css().trim().to_string();
-        self.extends.entry(key).or_default().push((extending_selectors, all));
+        self.extends
+            .entry(key)
+            .or_default()
+            .push((extending_selectors, all));
     }
 
     /// Find selectors that extend the given selector
     /// For exact matching primarily
     pub fn find_exact_matches(&self, selector_str: &str) -> Vec<String> {
         let key = selector_str.trim();
-        
+
         let mut result = Vec::new();
-        
+
         if let Some(list) = self.extends.get(key) {
             for (extenders, _) in list {
                 result.extend(extenders.clone());
             }
         }
-        
+
         result
     }
 
     /// Find selectors that extend the given selector (partial matching)
-    /// Only returns matches if the extend has 'all' set to true
+    /// Only returns matches if the extend has 'all' set to true.
+    /// Uses structural matching to avoid false positives like .b matching .button.
+    /// Handles both:
+    /// - `.a` in `.c .a` (descendant) → `.c .b`
+    /// - `.a` in `.a:hover` (compound) → `.b:hover`
     pub fn find_partial_matches(&self, selector_str: &str) -> Vec<String> {
         let mut result = Vec::new();
-        // println!("DEBUG: find_partial_matches for '{}'", selector_str);
-        
+
         for (target, list) in &self.extends {
-            // println!("DEBUG: Checking target '{}'", target);
-            if let Some(_) = selector_str.find(target) {
-                for (extenders, all) in list {
-                    if *all {
-                        for extender in extenders {
-                             let new_selector = selector_str.replace(target, extender);
-                             if new_selector != selector_str {
-                                 result.push(new_selector);
-                             }
-                        }
+            for (extenders, all) in list {
+                if !*all {
+                    continue;
+                }
+
+                let target_trimmed = target.trim();
+                if !selector_contains_target(selector_str, target_trimmed) {
+                    continue;
+                }
+
+                for extender in extenders {
+                    let new_selector =
+                        replace_selector_target(selector_str, target_trimmed, extender);
+                    if new_selector != selector_str {
+                        result.push(new_selector);
                     }
                 }
             }
         }
-        
+
         result
     }
 
@@ -88,6 +99,7 @@ impl ExtendRegistry {
 }
 
 /// Collector to find and register extend statements
+#[derive(Default)]
 pub struct ExtendCollector {
     /// The registry being populated
     pub registry: ExtendRegistry,
@@ -96,9 +108,7 @@ pub struct ExtendCollector {
 impl ExtendCollector {
     /// Create a new collector
     pub fn new() -> Self {
-        Self {
-            registry: ExtendRegistry::new(),
-        }
+        Self::default()
     }
 
     /// Collect extends from a stylesheet
@@ -107,7 +117,7 @@ impl ExtendCollector {
             self.collect_statement(statement, &[]);
         }
     }
-    
+
     fn collect_statement(&mut self, statement: &Statement, parent_selectors: &[String]) {
         match statement {
             Statement::Rule(rule) => {
@@ -116,7 +126,7 @@ impl ExtendCollector {
 
                 // Resolve selectors for the current rule
                 let current_selectors = self.resolve_selectors(&rule.selectors, parent_selectors);
-                
+
                 // Recursively collect from nested rules
                 for nested in &rule.nested_rules {
                     self.collect_statement(nested, &current_selectors);
@@ -124,140 +134,246 @@ impl ExtendCollector {
             }
             Statement::Extend(extend) => {
                 for target in &extend.selectors {
-                    self.registry.add_extend(target, parent_selectors.to_vec(), extend.all);
+                    self.registry
+                        .add_extend(target, parent_selectors.to_vec(), extend.all);
                 }
             }
             Statement::AtRule(at_rule) => {
-                 if let Some(block) = &at_rule.block {
-                     for stmt in block {
-                         self.collect_statement(stmt, parent_selectors);
-                     }
-                 }
+                if let Some(block) = &at_rule.block {
+                    for stmt in block {
+                        self.collect_statement(stmt, parent_selectors);
+                    }
+                }
             }
             // Ignore others
             _ => {}
         }
     }
-    
+
     fn check_selector_extends(&mut self, selectors: &[Selector], parent_selectors: &[String]) {
         for selector in selectors {
-             let mut extends_found = Vec::new();
-             let mut clean_selector = selector.clone();
-             
-             for part in &mut clean_selector.parts {
-                 part.simple_selectors.retain(|simple| {
-                     if let SimpleSelector::PseudoClass { name, argument, .. } = simple {
-                         if name == "extend" {
-                             if let Some(arg) = argument {
-                                 extends_found.push(arg.clone());
-                             }
-                             return false; 
-                         }
-                     }
-                     true
-                 });
-             }
-             
-             if !extends_found.is_empty() {
-                 let clean_selectors_vec = vec![clean_selector];
-                 let resolved_list = self.resolve_selectors(&clean_selectors_vec, parent_selectors);
-                 
-                 if let Some(resolved) = resolved_list.first() {
-                     for extend_arg in extends_found {
-                         match self.parse_extend_arg(&extend_arg) {
-                             Ok((targets, all)) => {
-                                 for target in targets {
-                                     self.registry.add_extend(&target, vec![resolved.clone()], all);
-                                 }
-                             }
-                             Err(_) => {
-                                 // Failed to parse extend arg
-                             }
-                         }
-                     }
-                 }
-             }
+            let mut extends_found = Vec::new();
+            let mut clean_selector = selector.clone();
+
+            for part in &mut clean_selector.parts {
+                part.simple_selectors.retain(|simple| {
+                    if let SimpleSelector::PseudoClass { name, argument, .. } = simple {
+                        if name == "extend" {
+                            if let Some(arg) = argument {
+                                extends_found.push(arg.clone());
+                            }
+                            return false;
+                        }
+                    }
+                    true
+                });
+            }
+
+            if !extends_found.is_empty() {
+                let clean_selectors_vec = vec![clean_selector];
+                let resolved_list = self.resolve_selectors(&clean_selectors_vec, parent_selectors);
+
+                if let Some(resolved) = resolved_list.first() {
+                    for extend_arg in extends_found {
+                        match self.parse_extend_arg(&extend_arg) {
+                            Ok((targets, all)) => {
+                                for target in targets {
+                                    self.registry
+                                        .add_extend(&target, vec![resolved.clone()], all);
+                                }
+                            }
+                            Err(_) => {
+                                // Failed to parse extend arg
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
+    /// Parse extend argument string to extract target selectors and 'all' flag.
+    ///
+    /// Handles formats like:
+    /// - ".selector" -> ([.selector], false)
+    /// - ".selector all" -> ([.selector], true)
+    /// - ".a, .b all" -> ([.a, .b], true)
     fn parse_extend_arg(&self, arg: &str) -> crate::error::Result<(Vec<Selector>, bool)> {
-        // We can reuse Parser to parse selectors from string
-        // But argument might contain "all" keyword at the end
-        // Parser::parse_extend handles "all" by custom logic.
-        // Here we just have the content.
-        // E.g. ".b" or ".b all" or ".b, .c"
-        
-        // Quick hack: Wrap in dummy extend statement to use existing parser? 
-        // Or create new parser method.
-        // Creating new parser instance for the string.
-        let mut parser = Parser::from_string(arg.to_string())?;
-        
-        // We need to parse selectors until "all" or end.
-        // Parser::parse_selectors parses comma separated selectors.
-        // But "all" is not a selector.
-        // However, "all" is valid tag name.
-        // If we use parse_selectors, it might consume "all" as tag selector.
-        
-        // Manual parsing similar to parse_extend loop but simpler because we are inside parens context
-        // actually arg string is just what was inside parens.
-        
-        // Let's rely on standard selector parsing and check last simple selector?
-        // If last selector is "all" (tag), treat as keyword?
-        // But ".b all" -> ".b" (class) "all" (descendant tag).
-        // Less syntax is special here.
-        
-        // Let's implement a simplified parse logic for extend args
-        // reusing Parser public API if possible.
-        // parser.parse_selectors() returns Result<Vec<Selector>>.
-        
-        let selectors = parser.parse_selectors()?;
-        
-        // Check the last selector to see if it ends with " all"
-        // This is tricky if parsed as "all" tag.
-        
-        // Alternative: Check string suffix?
         let arg_trim = arg.trim();
-        let (arg_clean, has_all) = if arg_trim.ends_with(" all") {
-            (&arg_trim[0..arg_trim.len()-4], true)
+
+        // Check for 'all' keyword at the end (must be preceded by whitespace)
+        let (selector_str, has_all) = if let Some(stripped) = arg_trim.strip_suffix(" all") {
+            (stripped, true)
         } else {
             (arg_trim, false)
         };
-        
-        // Re-parse without "all" if found
-        let (targets, all) = if has_all {
-             let mut p2 = Parser::from_string(arg_clean.to_string())?;
-             (p2.parse_selectors()?, true)
-        } else {
-             (selectors, false)
-        };
-        
-        Ok((targets, all))
+
+        // Parse the selector string
+        let mut parser = Parser::from_string(selector_str.to_string())?;
+        let selectors = parser.parse_selectors()?;
+
+        Ok((selectors, has_all))
     }
-    
-    fn resolve_selectors(&self, selectors: &[Selector], parent_selectors: &[String]) -> Vec<String> {
+
+    fn resolve_selectors(
+        &self,
+        selectors: &[Selector],
+        parent_selectors: &[String],
+    ) -> Vec<String> {
         let mut result = Vec::new();
-        
+
         for selector in selectors {
             let selector_str = selector.to_css();
-            
+
             if parent_selectors.is_empty() {
-                 result.push(selector_str);
+                result.push(selector_str);
             } else {
-                 // If the selector has a parent reference (&), we need to replace it
-                 if selector.has_parent_reference() {
-                     for parent in parent_selectors {
-                         // Simple string replacement for &
-                         // This handles both prefix (e.g. &:hover) and inline (e.g. .a & .b)
-                         result.push(selector_str.replace('&', parent));
-                     }
-                 } else {
-                     // Standard nesting (descendant combinator)
-                     for parent in parent_selectors {
-                         result.push(format!("{} {}", parent, selector_str));
-                     }
-                 }
+                // If the selector has a parent reference (&), we need to replace it
+                if selector.has_parent_reference() {
+                    for parent in parent_selectors {
+                        // Simple string replacement for &
+                        // This handles both prefix (e.g. &:hover) and inline (e.g. .a & .b)
+                        result.push(selector_str.replace('&', parent));
+                    }
+                } else {
+                    // Standard nesting (descendant combinator)
+                    for parent in parent_selectors {
+                        result.push(format!("{} {}", parent, selector_str));
+                    }
+                }
             }
         }
         result
     }
+}
+
+/// Check if a selector string structurally contains a target selector.
+/// This checks at selector-part boundaries:
+/// - `.a` matches as a standalone compound part in `.c .a` (separated by combinators)
+/// - `.a` matches as the beginning of a compound selector like `.a:hover` or `.a.b`
+/// - `.b` does NOT match inside `.button` (not at a boundary)
+fn selector_contains_target(selector: &str, target: &str) -> bool {
+    // Split selector by combinator boundaries (space, >, +, ~)
+    for compound in split_by_combinators(selector) {
+        let compound = compound.trim();
+        if compound.is_empty() {
+            continue;
+        }
+        // Check if this compound selector starts with or equals the target
+        if compound_contains_simple(compound, target) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Check if a compound selector (like ".a:hover" or ".a.b") contains
+/// the target as a structurally valid sub-selector.
+fn compound_contains_simple(compound: &str, target: &str) -> bool {
+    if compound == target {
+        return true;
+    }
+    // Check if compound starts with target followed by a selector boundary
+    // Boundaries: '.', '#', ':', '[', or end-of-string
+    if let Some(rest) = compound.strip_prefix(target) {
+        if rest.is_empty() {
+            return true;
+        }
+        if let Some(next_char) = rest.chars().next() {
+            if next_char == '.' || next_char == '#' || next_char == ':' || next_char == '[' {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Split a selector string by combinators (space, >, +, ~)
+fn split_by_combinators(selector: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut last = 0;
+
+    let bytes = selector.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c == b' ' || c == b'>' || c == b'+' || c == b'~' {
+            let part = &selector[last..i];
+            if !part.trim().is_empty() {
+                parts.push(part.trim());
+            }
+            // Skip consecutive combinator chars and spaces
+            while i < bytes.len()
+                && (bytes[i] == b' ' || bytes[i] == b'>' || bytes[i] == b'+' || bytes[i] == b'~')
+            {
+                i += 1;
+            }
+            last = i;
+            continue;
+        }
+        i += 1;
+    }
+
+    let remaining = selector[last..].trim();
+    if !remaining.is_empty() {
+        parts.push(remaining);
+    }
+
+    parts
+}
+
+/// Replace the target selector within a full selector string, respecting structure.
+/// For each compound part that contains the target, replace the target portion.
+fn replace_selector_target(selector: &str, target: &str, replacement: &str) -> String {
+    let mut result = String::new();
+    let mut last = 0;
+
+    let bytes = selector.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c == b' ' || c == b'>' || c == b'+' || c == b'~' {
+            // Process the compound part before this combinator
+            let part = &selector[last..i];
+            let trimmed = part.trim();
+            if !trimmed.is_empty() && compound_contains_simple(trimmed, target) {
+                // Preserve any leading whitespace from the original
+                let leading = &part[..part.len() - part.trim_start().len()];
+                result.push_str(leading);
+                result.push_str(&trimmed.replacen(target, replacement, 1));
+            } else {
+                result.push_str(part);
+            }
+
+            // Copy combinators/spaces as-is
+            let comb_start = i;
+            while i < bytes.len()
+                && (bytes[i] == b' ' || bytes[i] == b'>' || bytes[i] == b'+' || bytes[i] == b'~')
+            {
+                i += 1;
+            }
+            result.push_str(&selector[comb_start..i]);
+            last = i;
+            continue;
+        }
+        i += 1;
+    }
+
+    // Process final part
+    let part = &selector[last..];
+    let trimmed = part.trim();
+    if !trimmed.is_empty() && compound_contains_simple(trimmed, target) {
+        let leading = &part[..part.len() - part.trim_start().len()];
+        result.push_str(leading);
+        result.push_str(&trimmed.replacen(target, replacement, 1));
+        // Preserve trailing whitespace
+        let trailing = &part[part.trim_end().len()..];
+        if !trailing.is_empty() {
+            // Only add if the replacement didn't already include it
+        }
+    } else {
+        result.push_str(part);
+    }
+
+    result
 }

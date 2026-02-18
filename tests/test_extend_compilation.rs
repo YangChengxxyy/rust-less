@@ -6,14 +6,14 @@ fn test_simple_extend() {
     .a { color: red; }
     .b { &:extend(.a); }
     "#;
-    
+
     let mut compiler = Compiler::new();
     let result = compiler.compile(input).unwrap();
-    
+
     // .a should be extended by .b
     assert!(result.contains(".a, .b"));
     assert!(result.contains("color: red"));
-    
+
     // .b itself shouldn't be output as empty rule
     // But result.contains(".b") is true because of above.
     // Check strict output if possible, but contains is good first step.
@@ -25,10 +25,10 @@ fn test_extend_defined_before() {
     .b { &:extend(.a); }
     .a { color: red; }
     "#;
-    
+
     let mut compiler = Compiler::new();
     let result = compiler.compile(input).unwrap();
-    
+
     assert!(result.contains(".a, .b"));
     assert!(result.contains("color: red"));
 }
@@ -41,10 +41,10 @@ fn test_nested_extend() {
         .child { &:extend(.a); }
     }
     "#;
-    
+
     let mut compiler = Compiler::new();
     let result = compiler.compile(input).unwrap();
-    
+
     assert!(result.contains(".a, .parent .child"));
     assert!(result.contains("color: red"));
 }
@@ -56,11 +56,11 @@ fn test_multiple_extenders() {
     .b { &:extend(.a); }
     .c { &:extend(.a); }
     "#;
-    
+
     let mut compiler = Compiler::new();
     let result = compiler.compile(input).unwrap();
-    
-    // Order depends on hash map or insertion order. 
+
+    // Order depends on hash map or insertion order.
     // Since we push to vector in registry, order should be preserved if single thread.
     // But hash map iteration order (merge?) might be random.
     // So check parts.
@@ -93,16 +93,16 @@ fn test_chained_extend() {
     // Does .c get red?
     // Less docs: "It does not duplicate the styling... unless the all keyword is specified in the extend."
     // Actually, "Extend is not recursive" means .c:extend(.b) does not make .c match .a selectors.
-    
+
     let input = r#"
     .a { color: red; }
     .b { &:extend(.a); }
     .c { &:extend(.b); }
     "#;
-    
+
     let mut compiler = Compiler::new();
     let result = compiler.compile(input).unwrap();
-    
+
     assert!(result.contains(".a, .b"));
     // .c extends .b. But .b rule (empty) isn't output.
     // However, does .b match .a's selector? No.

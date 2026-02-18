@@ -191,8 +191,6 @@ mod circular_imports {
 
 #[cfg(test)]
 mod css_imports {
-    use super::*;
-
     #[test]
     fn test_css_import_passthrough() {
         let less = r#"
@@ -237,6 +235,7 @@ mod css_imports {
 #[cfg(test)]
 mod compiler_options {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn test_compressed_file_output() {
@@ -271,6 +270,267 @@ mod compiler_options {
 
         let result = compiler.compile(less);
         assert!(result.is_ok(), "Failed to compile: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_compile_file_with_source_map_option() {
+        let path = fixtures_path().join("main.less");
+        let options = CompilerOptions {
+            compress: false,
+            source_map: true,
+            include_paths: vec![],
+        };
+
+        let result = compile_file_with_options(&path, options);
+        assert!(result.is_ok(), "Failed to compile: {:?}", result.err());
+        let css = result.unwrap();
+        assert!(!css.trim().is_empty(), "Expected non-empty CSS output");
+    }
+
+    #[test]
+    fn test_source_map_contains_imported_mixin_file() {
+        let path = fixtures_path().join("main.less");
+        let mut compiler = Compiler::new().with_source_map(true);
+
+        let result = compiler.compile_file(&path);
+        assert!(result.is_ok(), "Failed to compile: {:?}", result.err());
+
+        let source_map = compiler
+            .generate_source_map()
+            .expect("Expected source map JSON");
+        assert!(
+            source_map.contains("main.less"),
+            "Source map should contain main.less: {}",
+            source_map
+        );
+        assert!(
+            source_map.contains("mixins.less"),
+            "Source map should contain mixins.less for imported mixin expansions: {}",
+            source_map
+        );
+    }
+
+    #[test]
+    fn test_source_map_state_is_reset_between_compiles() {
+        let main = fixtures_path().join("main.less");
+        let deep = fixtures_path().join("nested").join("deep.less");
+        let mut compiler = Compiler::new().with_source_map(true);
+
+        compiler.compile_file(&main).unwrap();
+        let first_map = compiler.generate_source_map().unwrap();
+        assert!(
+            first_map.contains("main.less"),
+            "Expected main.less in first map"
+        );
+
+        compiler.compile_file(&deep).unwrap();
+        let second_map = compiler.generate_source_map().unwrap();
+        assert!(
+            second_map.contains("deep.less"),
+            "Expected deep.less in second map"
+        );
+        assert!(
+            !second_map.contains("main.less"),
+            "Second map should not leak sources from previous compile: {}",
+            second_map
+        );
+    }
+
+    #[test]
+    fn test_source_map_tokens_include_circular_import_files() {
+        let path = fixtures_path().join("circular-a.less");
+        let mut compiler = Compiler::new().with_source_map(true);
+
+        let css = compiler.compile_file(&path).unwrap();
+        assert!(css.contains(".from-a"), "Expected .from-a output");
+        assert!(css.contains(".from-b"), "Expected .from-b output");
+
+        let source_map = compiler.generate_source_map().unwrap();
+        let sm = sourcemap::SourceMap::from_slice(source_map.as_bytes())
+            .expect("Expected valid source map JSON");
+
+        let mut token_sources = HashSet::new();
+        for token in sm.tokens() {
+            if let Some(source) = token.get_source() {
+                token_sources.insert(source.to_string());
+            }
+        }
+
+        assert!(
+            token_sources.iter().any(|s| s.ends_with("circular-a.less")),
+            "Expected token source from circular-a.less. got: {:?}",
+            token_sources
+        );
+        assert!(
+            token_sources.iter().any(|s| s.ends_with("circular-b.less")),
+            "Expected token source from circular-b.less. got: {:?}",
+            token_sources
+        );
+    }
+
+    #[test]
+    fn test_source_map_lookup_for_imported_rule_points_to_imported_file() {
+        let path = fixtures_path().join("circular-a.less");
+        let mut compiler = Compiler::new().with_source_map(true);
+
+        let css = compiler.compile_file(&path).unwrap();
+        let source_map = compiler.generate_source_map().unwrap();
+        let sm = sourcemap::SourceMap::from_slice(source_map.as_bytes())
+            .expect("Expected valid source map JSON");
+
+        let imported_color_line = css
+            .lines()
+            .position(|line| line.contains("color: #00f;"))
+            .expect("Expected imported color line") as u32;
+
+        let token = sm
+            .lookup_token(imported_color_line, 0)
+            .expect("Expected source-map token for imported rule output");
+        let source = token
+            .get_source()
+            .expect("Expected source path for imported token");
+
+        assert!(
+            source.ends_with("circular-b.less"),
+            "Expected imported rule to map to circular-b.less, got: {}",
+            source
+        );
+    }
+
+    #[test]
+    fn test_source_map_lookup_for_bubbled_media_declaration_points_to_imported_line() {
+        let entry = fixtures_path().join("media-bubble-entry.less");
+        let imported = fixtures_path().join("media-bubble-import.less");
+        let imported_text =
+            std::fs::read_to_string(&imported).expect("Expected media-bubble-import.less");
+
+        let expected_src_line = imported_text
+            .lines()
+            .position(|line| line.contains("color: #00f;"))
+            .expect("Expected color declaration in imported fixture")
+            as u32;
+        let expected_src_col = imported_text
+            .lines()
+            .nth(expected_src_line as usize)
+            .and_then(|line| line.find("color"))
+            .expect("Expected color token column in imported fixture")
+            as u32;
+
+        let mut compiler = Compiler::new().with_source_map(true);
+        let css = compiler.compile_file(&entry).unwrap();
+
+        assert!(
+            css.contains("@media (max-width: 600px)"),
+            "Expected bubbled media query output, got: {}",
+            css
+        );
+
+        let generated_line =
+            css.lines()
+                .position(|line| line.contains("color: #00f;"))
+                .expect("Expected bubbled media declaration in generated CSS") as u32;
+
+        let source_map = compiler.generate_source_map().unwrap();
+        let sm = sourcemap::SourceMap::from_slice(source_map.as_bytes())
+            .expect("Expected valid source map JSON");
+
+        let token = sm
+            .lookup_token(generated_line, 0)
+            .expect("Expected source-map token for bubbled media declaration");
+        let source = token
+            .get_source()
+            .expect("Expected source path for bubbled media token");
+
+        assert!(
+            source.ends_with("media-bubble-import.less"),
+            "Expected bubbled media declaration to map to media-bubble-import.less, got: {}",
+            source
+        );
+        assert_eq!(
+            token.get_src_line(),
+            expected_src_line,
+            "Expected src line {} for bubbled declaration, got {}",
+            expected_src_line,
+            token.get_src_line()
+        );
+        assert_eq!(
+            token.get_src_col(),
+            expected_src_col,
+            "Expected src col {} for bubbled declaration, got {}",
+            expected_src_col,
+            token.get_src_col()
+        );
+    }
+
+    #[test]
+    fn test_source_map_lookup_for_bubbled_supports_declaration_points_to_imported_line() {
+        let entry = fixtures_path().join("supports-bubble-entry.less");
+        let imported = fixtures_path().join("supports-bubble-import.less");
+        let imported_text =
+            std::fs::read_to_string(&imported).expect("Expected supports-bubble-import.less");
+
+        let expected_src_line = imported_text
+            .lines()
+            .position(|line| line.contains("color: #0a0;"))
+            .expect("Expected color declaration in imported supports fixture")
+            as u32;
+        let expected_src_col = imported_text
+            .lines()
+            .nth(expected_src_line as usize)
+            .and_then(|line| line.find("color"))
+            .expect("Expected color token column in imported supports fixture")
+            as u32;
+
+        let mut compiler = Compiler::new().with_source_map(true);
+        let css = compiler.compile_file(&entry).unwrap();
+
+        assert!(
+            css.contains("@supports (display: grid)"),
+            "Expected bubbled supports block output, got: {}",
+            css
+        );
+        assert!(
+            css.contains(".from-support"),
+            "Expected selector to bubble into supports block, got: {}",
+            css
+        );
+
+        let generated_line = css
+            .lines()
+            .position(|line| line.contains("color:"))
+            .expect("Expected bubbled supports declaration in generated CSS")
+            as u32;
+
+        let source_map = compiler.generate_source_map().unwrap();
+        let sm = sourcemap::SourceMap::from_slice(source_map.as_bytes())
+            .expect("Expected valid source map JSON");
+
+        let token = sm
+            .lookup_token(generated_line, 0)
+            .expect("Expected source-map token for bubbled supports declaration");
+        let source = token
+            .get_source()
+            .expect("Expected source path for bubbled supports token");
+
+        assert!(
+            source.ends_with("supports-bubble-import.less"),
+            "Expected bubbled supports declaration to map to supports-bubble-import.less, got: {}",
+            source
+        );
+        assert_eq!(
+            token.get_src_line(),
+            expected_src_line,
+            "Expected src line {} for bubbled supports declaration, got {}",
+            expected_src_line,
+            token.get_src_line()
+        );
+        assert_eq!(
+            token.get_src_col(),
+            expected_src_col,
+            "Expected src col {} for bubbled supports declaration, got {}",
+            expected_src_col,
+            token.get_src_col()
+        );
     }
 }
 

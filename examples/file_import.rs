@@ -8,7 +8,6 @@
 //! ```
 
 use rust_less::{compile_file, Compiler, CompilerOptions, Error};
-use std::fs;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -249,7 +249,7 @@ pub enum StringType {
 
 impl Unit {
     /// Parse a unit from string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             // Length units
             "px" => Some(Unit::Px),
@@ -503,7 +503,10 @@ impl Color {
             )
         } else {
             // Check if we can use short form (e.g., #333 instead of #333333)
-            if self.red % 17 == 0 && self.green % 17 == 0 && self.blue % 17 == 0 {
+            if self.red.is_multiple_of(17)
+                && self.green.is_multiple_of(17)
+                && self.blue.is_multiple_of(17)
+            {
                 format!(
                     "#{:x}{:x}{:x}",
                     self.red / 17,
@@ -954,10 +957,10 @@ mod tests {
 
     #[test]
     fn test_unit_parsing() {
-        assert_eq!(Unit::from_str("px"), Some(Unit::Px));
-        assert_eq!(Unit::from_str("em"), Some(Unit::Em));
-        assert_eq!(Unit::from_str("%"), Some(Unit::Percent));
-        assert_eq!(Unit::from_str("invalid"), None);
+        assert_eq!(Unit::parse("px"), Some(Unit::Px));
+        assert_eq!(Unit::parse("em"), Some(Unit::Em));
+        assert_eq!(Unit::parse("%"), Some(Unit::Percent));
+        assert_eq!(Unit::parse("invalid"), None);
     }
 
     #[test]

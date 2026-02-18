@@ -518,7 +518,6 @@ mod advanced_features {
     }
 
     #[test]
-    #[ignore = "maps data structure not yet implemented"]
     fn test_maps() {
         let less = r#"
 @sizes: {

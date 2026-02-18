@@ -30,7 +30,7 @@ fn test_implicit_mixin_id() {
 
 #[test]
 fn test_implicit_mixin_nested() {
-    let input = r#"
+    let _input = r#"
 .outer {
     .inner {
         color: green;

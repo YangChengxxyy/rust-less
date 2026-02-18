@@ -126,10 +126,13 @@ impl Parser {
                 };
 
                 // Extract content without comment markers
-                let clean_content = if content.starts_with("/*") && content.ends_with("*/") {
-                    content[2..content.len() - 2].to_string()
-                } else if content.starts_with("//") {
-                    content[2..].to_string()
+                let clean_content = if let Some(inner) = content
+                    .strip_prefix("/*")
+                    .and_then(|s| s.strip_suffix("*/"))
+                {
+                    inner.to_string()
+                } else if let Some(stripped) = content.strip_prefix("//") {
+                    stripped.to_string()
                 } else {
                     content
                 };
@@ -154,6 +157,11 @@ impl Parser {
                 }
             }
             _ => {
+                // Check for each() call at statement level
+                if self.is_each_call() {
+                    return Ok(Some(Statement::EachCall(self.parse_each_call()?)));
+                }
+
                 // Check if this is a declaration first
                 if self.is_declaration() {
                     Ok(Some(Statement::Declaration(self.parse_declaration()?)))
@@ -181,9 +189,11 @@ impl Parser {
         }
 
         let mut lookahead = self.current + 1;
-        
+
         // Skip whitespace
-        while lookahead < self.tokens.len() && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace) {
+        while lookahead < self.tokens.len()
+            && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+        {
             lookahead += 1;
         }
 
@@ -193,7 +203,9 @@ impl Parser {
         lookahead += 1;
 
         // Skip whitespace
-        while lookahead < self.tokens.len() && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace) {
+        while lookahead < self.tokens.len()
+            && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+        {
             lookahead += 1;
         }
 
@@ -201,125 +213,136 @@ impl Parser {
             return false;
         }
 
-        match &self.tokens[lookahead].token_type {
-            TokenType::Identifier(s) if s == "extend" => true,
-            _ => false,
-        }
+        matches!(&self.tokens[lookahead].token_type, TokenType::Identifier(s) if s == "extend")
     }
 
     /// Parse an extend statement
     fn parse_extend(&mut self) -> Result<Extend> {
         let position = self.current_position();
-        
+
         // Consume &
         self.consume(TokenType::Ampersand, "Expected '&'")?;
-        
+
         // Skip whitespace
         while matches!(self.current_token().token_type, TokenType::Whitespace) {
             self.advance();
         }
-        
+
         // Consume :
         self.consume(TokenType::Colon, "Expected ':'")?;
-        
+
         // Skip whitespace
         while matches!(self.current_token().token_type, TokenType::Whitespace) {
             self.advance();
         }
-        
+
         // Consume extend
         match &self.current_token().token_type {
             TokenType::Identifier(s) if s == "extend" => {
                 self.advance();
             }
-            _ => return Err(Error::parse_error("Expected 'extend'", position.line, position.column)),
+            _ => {
+                return Err(Error::parse_error(
+                    "Expected 'extend'",
+                    position.line,
+                    position.column,
+                ))
+            }
         }
-        
+
         // Skip whitespace
         while matches!(self.current_token().token_type, TokenType::Whitespace) {
             self.advance();
         }
-        
+
         // Consume (
         self.consume(TokenType::LeftParen, "Expected '('")?;
-        
+
         // Parse selectors
         let mut selectors = Vec::new();
         let mut all = false;
-        
+
         loop {
             // Skip whitespace
             while matches!(self.current_token().token_type, TokenType::Whitespace) {
                 self.advance();
             }
-            
+
             if self.check(&TokenType::RightParen) {
                 break;
             }
-            
+
             // Parse selector
             let mut selector_str = String::new();
             let sel_pos = self.current_position();
             let mut current_is_all = false;
-            
-            while !self.is_at_end() && !self.check(&TokenType::Comma) && !self.check(&TokenType::RightParen) {
+
+            while !self.is_at_end()
+                && !self.check(&TokenType::Comma)
+                && !self.check(&TokenType::RightParen)
+            {
                 // Check for "all" keyword if it's the last element
                 if let TokenType::Identifier(s) = &self.current_token().token_type {
                     if s == "all" {
-                         // Check if next is ) or comma
-                         let mut next_idx = self.current + 1;
-                         // Skip whitespace for check
-                         while next_idx < self.tokens.len() && matches!(self.tokens[next_idx].token_type, TokenType::Whitespace) {
-                             next_idx += 1;
-                         }
-                         
-                         if next_idx < self.tokens.len() && (self.tokens[next_idx].token_type == TokenType::RightParen || self.tokens[next_idx].token_type == TokenType::Comma) {
-                             current_is_all = true;
-                             self.advance(); // consume 'all'
-                             break;
-                         }
+                        // Check if next is ) or comma
+                        let mut next_idx = self.current + 1;
+                        // Skip whitespace for check
+                        while next_idx < self.tokens.len()
+                            && matches!(self.tokens[next_idx].token_type, TokenType::Whitespace)
+                        {
+                            next_idx += 1;
+                        }
+
+                        if next_idx < self.tokens.len()
+                            && (self.tokens[next_idx].token_type == TokenType::RightParen
+                                || self.tokens[next_idx].token_type == TokenType::Comma)
+                        {
+                            current_is_all = true;
+                            self.advance(); // consume 'all'
+                            break;
+                        }
                     }
                 }
-                
+
                 if !matches!(self.current_token().token_type, TokenType::Whitespace) {
-                     selector_str.push_str(&self.current_token().lexeme);
+                    selector_str.push_str(&self.current_token().lexeme);
                 } else if !selector_str.is_empty() {
                     selector_str.push(' ');
                 }
-                
+
                 self.advance();
             }
-            
+
             if !selector_str.is_empty() {
                 let selector = Selector::simple(selector_str.trim().to_string(), sel_pos);
                 selectors.push(selector);
             }
-            
+
             if current_is_all {
                 all = true;
             }
-            
+
             // Skip whitespace
             while matches!(self.current_token().token_type, TokenType::Whitespace) {
                 self.advance();
             }
-            
+
             if self.match_token(TokenType::Comma) {
                 continue;
             } else {
                 break;
             }
         }
-        
+
         self.consume(TokenType::RightParen, "Expected ')'")?;
-        
+
         // Optional semicolon
         // Skip whitespace
         while matches!(self.current_token().token_type, TokenType::Whitespace) {
             self.advance();
         }
         self.match_token(TokenType::Semicolon);
-        
+
         Ok(Extend::new(selectors, all, position))
     }
 
@@ -391,6 +414,38 @@ impl Parser {
         // Skip whitespace
         while matches!(self.current_token().token_type, TokenType::Whitespace) {
             self.advance();
+        }
+
+        // Parse optional import keyword: (optional), (reference), (inline), (once), (multiple), (less), (css)
+        let mut explicit_import_type = None;
+        if self.check(&TokenType::LeftParen) {
+            self.advance(); // consume '('
+                            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+            if let TokenType::Identifier(keyword) = &self.current_token().token_type {
+                explicit_import_type = match keyword.as_str() {
+                    "optional" => Some(ImportType::Optional),
+                    "reference" => Some(ImportType::Reference),
+                    "inline" => Some(ImportType::Inline),
+                    "once" => Some(ImportType::Once),
+                    "multiple" => Some(ImportType::Multiple),
+                    "less" => Some(ImportType::Less),
+                    "css" => Some(ImportType::Css),
+                    _ => None,
+                };
+                self.advance();
+            }
+            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+            self.consume(TokenType::RightParen, "Expected ')' after import keyword")?;
+            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
         }
 
         // Parse the import path (string or url)
@@ -477,8 +532,10 @@ impl Parser {
         // Consume optional semicolon
         self.match_token(TokenType::Semicolon);
 
-        // Determine import type based on path extension
-        let import_type = if path.ends_with(".css") {
+        // Determine import type: explicit keyword takes precedence, otherwise infer from extension
+        let import_type = if let Some(explicit) = explicit_import_type {
+            explicit
+        } else if path.ends_with(".css") {
             ImportType::Css
         } else {
             ImportType::Less
@@ -614,29 +671,37 @@ impl Parser {
         // Simple heuristic: look for property: value pattern
         let mut lookahead = self.current;
 
-        // Skip over potential property name
-        if matches!(
+        // Skip over potential property name (identifiers and variable interpolations)
+        let started = matches!(
             self.tokens.get(lookahead).map(|t| &t.token_type),
-            Some(TokenType::Identifier(_))
+            Some(TokenType::Identifier(_)) | Some(TokenType::VariableInterpolation(_))
+        );
+
+        if !started {
+            return false;
+        }
+
+        // Consume property name tokens (identifiers and interpolations)
+        while matches!(
+            self.tokens.get(lookahead).map(|t| &t.token_type),
+            Some(TokenType::Identifier(_)) | Some(TokenType::VariableInterpolation(_))
         ) {
             lookahead += 1;
-
-            // Skip whitespace
-            while matches!(
-                self.tokens.get(lookahead).map(|t| &t.token_type),
-                Some(TokenType::Whitespace)
-            ) {
-                lookahead += 1;
-            }
-
-            // Check for colon
-            matches!(
-                self.tokens.get(lookahead).map(|t| &t.token_type),
-                Some(TokenType::Colon)
-            )
-        } else {
-            false
         }
+
+        // Skip whitespace
+        while matches!(
+            self.tokens.get(lookahead).map(|t| &t.token_type),
+            Some(TokenType::Whitespace)
+        ) {
+            lookahead += 1;
+        }
+
+        // Check for declaration separator (`:`, `+:`, `+_:`)
+        matches!(
+            self.tokens.get(lookahead).map(|t| &t.token_type),
+            Some(TokenType::Colon) | Some(TokenType::MergeComma) | Some(TokenType::MergeSpace)
+        )
     }
 
     /// Parse a list of selectors
@@ -655,7 +720,7 @@ impl Parser {
                         variable: var_name.clone(),
                         position: self.current_position(),
                     };
-                    
+
                     // Add to last part if open (no combinator), or start new part
                     if let Some(last) = parts.last_mut() {
                         if last.combinator.is_none() {
@@ -700,33 +765,31 @@ impl Parser {
                         && !matches!(self.current_token().token_type, TokenType::AtKeyword(_))
                     {
                         let token = self.current_token();
-                        
-                        if matches!(token.token_type, TokenType::Whitespace) {
-                            if paren_depth == 0 {
-                                break;
-                            }
+
+                        if matches!(token.token_type, TokenType::Whitespace) && paren_depth == 0 {
+                            break;
                         }
-                        
+
                         // Check for implicit space (since Lexer might skip whitespace)
                         if let Some((last_line, last_col_end)) = last_token_end {
-                            if token.position.line > last_line || token.position.column > last_col_end {
+                            if token.position.line > last_line
+                                || token.position.column > last_col_end
+                            {
                                 selector_text.push(' ');
                             }
                         }
-                        
+
                         if token.token_type == TokenType::LeftParen {
                             paren_depth += 1;
-                        } else if token.token_type == TokenType::RightParen {
-                            if paren_depth > 0 {
-                                paren_depth -= 1;
-                            }
+                        } else if token.token_type == TokenType::RightParen && paren_depth > 0 {
+                            paren_depth -= 1;
                         }
 
                         selector_text.push_str(&token.lexeme);
-                        
+
                         let len = token.lexeme.chars().count();
                         last_token_end = Some((token.position.line, token.position.column + len));
-                        
+
                         self.advance();
                     }
 
@@ -743,10 +806,7 @@ impl Parser {
         }
 
         if !parts.is_empty() {
-            let selector = Selector {
-                parts,
-                position,
-            };
+            let selector = Selector { parts, position };
             selectors.push(selector);
         }
 
@@ -767,7 +827,7 @@ impl Parser {
 
         while idx < len {
             let start_char = bytes[idx] as char;
-            
+
             if start_char == ' ' {
                 // Space implies Descendant combinator
                 if !current_simple_selectors.is_empty() {
@@ -783,21 +843,21 @@ impl Parser {
             }
 
             if start_char == '&' {
-                 current_simple_selectors.push(SimpleSelector::Parent(position.clone()));
-                 idx += 1;
-                 // Check if followed by suffix (e.g. &-large)
-                 if idx < len {
-                     let c = bytes[idx] as char;
-                     if c != '.' && c != '#' && c != ':' && c != '[' && c != ' ' {
-                         // It's a suffix, treat as Type
-                         let (name, next_idx) = self.consume_selector_name(text, idx);
-                         idx = next_idx;
-                         current_simple_selectors.push(SimpleSelector::Type {
-                             name,
-                             position: position.clone(),
-                         });
-                     }
-                 }
+                current_simple_selectors.push(SimpleSelector::Parent(position.clone()));
+                idx += 1;
+                // Check if followed by suffix (e.g. &-large)
+                if idx < len {
+                    let c = bytes[idx] as char;
+                    if c != '.' && c != '#' && c != ':' && c != '[' && c != ' ' {
+                        // It's a suffix, treat as Type
+                        let (name, next_idx) = self.consume_selector_name(text, idx);
+                        idx = next_idx;
+                        current_simple_selectors.push(SimpleSelector::Type {
+                            name,
+                            position: position.clone(),
+                        });
+                    }
+                }
             } else if start_char == '.' {
                 idx += 1;
                 let (name, next_idx) = self.consume_selector_name(text, idx);
@@ -822,40 +882,40 @@ impl Parser {
                 } else {
                     false
                 };
-                
+
                 let (name, next_idx) = self.consume_selector_name(text, idx);
                 idx = next_idx;
-                
+
                 let mut argument = None;
                 if idx < len && bytes[idx] as char == '(' {
                     let (arg_str, next_idx) = self.consume_parentheses(text, idx);
                     argument = Some(arg_str);
                     idx = next_idx;
                 }
-                
+
                 if is_element {
-                     current_simple_selectors.push(SimpleSelector::PseudoElement {
+                    current_simple_selectors.push(SimpleSelector::PseudoElement {
                         name,
                         position: position.clone(),
                     });
                 } else {
-                     current_simple_selectors.push(SimpleSelector::PseudoClass {
+                    current_simple_selectors.push(SimpleSelector::PseudoClass {
                         name,
                         argument,
                         position: position.clone(),
                     });
                 }
             } else if start_char == '[' {
-                 let (content, next_idx) = self.consume_brackets(text, idx);
-                 idx = next_idx;
-                 let (name, op, val) = self.parse_attribute_content(&content);
-                 current_simple_selectors.push(SimpleSelector::Attribute {
-                     name,
-                     operator: op,
-                     value: val,
-                     case_insensitive: false, // TODO: support 'i' flag
-                     position: position.clone(),
-                 });
+                let (content, next_idx) = self.consume_brackets(text, idx);
+                idx = next_idx;
+                let (name, op, val, case_insensitive) = self.parse_attribute_content(&content);
+                current_simple_selectors.push(SimpleSelector::Attribute {
+                    name,
+                    operator: op,
+                    value: val,
+                    case_insensitive,
+                    position: position.clone(),
+                });
             } else if start_char == '*' {
                 current_simple_selectors.push(SimpleSelector::Universal(position.clone()));
                 idx += 1;
@@ -873,7 +933,7 @@ impl Parser {
                 }
             }
         }
-        
+
         if !current_simple_selectors.is_empty() {
             parts.push(SelectorPart {
                 simple_selectors: current_simple_selectors,
@@ -881,7 +941,7 @@ impl Parser {
                 position: position.clone(),
             });
         }
-        
+
         Ok(parts)
     }
 
@@ -890,11 +950,11 @@ impl Parser {
         let bytes = text.as_bytes();
         let len = text.len();
         while idx < len {
-             let c = bytes[idx] as char;
-             if c == '.' || c == '#' || c == ':' || c == '[' || c == ' ' || c == '(' || c == ')' {
-                 break;
-             }
-             idx += 1;
+            let c = bytes[idx] as char;
+            if c == '.' || c == '#' || c == ':' || c == '[' || c == ' ' || c == '(' || c == ')' {
+                break;
+            }
+            idx += 1;
         }
         (text[start..idx].to_string(), idx)
     }
@@ -904,30 +964,30 @@ impl Parser {
         let bytes = text.as_bytes();
         let len = text.len();
         let mut depth;
-        
+
         if idx < len && bytes[idx] as char == '(' {
             depth = 1;
             idx += 1;
         } else {
-             return (String::new(), idx);
+            return (String::new(), idx);
         }
-        
+
         let content_start = idx;
         while idx < len && depth > 0 {
-             let c = bytes[idx] as char;
-             if c == '(' {
-                 depth += 1;
-             } else if c == ')' {
-                 depth -= 1;
-             }
-             if depth > 0 {
-                 idx += 1;
-             }
+            let c = bytes[idx] as char;
+            if c == '(' {
+                depth += 1;
+            } else if c == ')' {
+                depth -= 1;
+            }
+            if depth > 0 {
+                idx += 1;
+            }
         }
-        
+
         let content = text[content_start..idx].to_string();
         if idx < len {
-             idx += 1;
+            idx += 1;
         }
         (content, idx)
     }
@@ -936,46 +996,58 @@ impl Parser {
         let mut idx = start;
         let bytes = text.as_bytes();
         let len = text.len();
-        
+
         if idx < len && bytes[idx] as char == '[' {
             idx += 1;
         } else {
-             return (String::new(), idx);
+            return (String::new(), idx);
         }
-        
+
         let content_start = idx;
         while idx < len {
-             let c = bytes[idx] as char;
-             if c == ']' {
-                 break;
-             }
-             idx += 1;
+            let c = bytes[idx] as char;
+            if c == ']' {
+                break;
+            }
+            idx += 1;
         }
-        
+
         let content = text[content_start..idx].to_string();
         if idx < len {
-             idx += 1;
+            idx += 1;
         }
         (content, idx)
     }
 
-    fn parse_attribute_content(&self, content: &str) -> (String, Option<AttributeOperator>, Option<String>) {
+    fn parse_attribute_content(
+        &self,
+        content: &str,
+    ) -> (String, Option<AttributeOperator>, Option<String>, bool) {
         let operators = ["=", "~=", "|=", "^=", "$=", "*="];
         for op_str in operators.iter() {
             if let Some(pos) = content.find(op_str) {
                 let name = content[..pos].trim().to_string();
-                let value_part = content[pos + op_str.len()..].trim();
-                let value = if (value_part.starts_with('"') && value_part.ends_with('"')) || 
-                             (value_part.starts_with('\'') && value_part.ends_with('\'')) {
+                let mut value_part = content[pos + op_str.len()..].trim();
+
+                // Check for case-insensitive flag
+                let mut case_insensitive = false;
+                if value_part.ends_with(" i") || value_part.ends_with(" I") {
+                    case_insensitive = true;
+                    value_part = value_part[..value_part.len() - 2].trim();
+                }
+
+                let value = if (value_part.starts_with('"') && value_part.ends_with('"'))
+                    || (value_part.starts_with('\'') && value_part.ends_with('\''))
+                {
                     if value_part.len() >= 2 {
-                        value_part[1..value_part.len()-1].to_string()
+                        value_part[1..value_part.len() - 1].to_string()
                     } else {
                         value_part.to_string()
                     }
                 } else {
                     value_part.to_string()
                 };
-                
+
                 let op = match *op_str {
                     "=" => AttributeOperator::Equal,
                     "~=" => AttributeOperator::Includes,
@@ -985,10 +1057,10 @@ impl Parser {
                     "*=" => AttributeOperator::Substring,
                     _ => AttributeOperator::Equal,
                 };
-                return (name, Some(op), Some(value));
+                return (name, Some(op), Some(value), case_insensitive);
             }
         }
-        (content.trim().to_string(), None, None)
+        (content.trim().to_string(), None, None, false)
     }
 
     /// Check if current position is a mixin definition
@@ -1051,41 +1123,90 @@ impl Parser {
                         match &self.tokens[lookahead].token_type {
                             TokenType::Whitespace => lookahead += 1,
                             TokenType::When => {
-                                // Handle when clause - skip to after the guard expression
+                                // Handle when clause - skip to after all guard expressions
+                                // Supports: when (cond), when (c1) and (c2), when (c1), (c2),
+                                // when not (cond), etc.
                                 lookahead += 1;
-                                // Skip whitespace
-                                while lookahead < self.tokens.len()
-                                    && matches!(
-                                        self.tokens[lookahead].token_type,
-                                        TokenType::Whitespace
-                                    )
-                                {
-                                    lookahead += 1;
-                                }
-                                // Skip guard expression in parentheses
-                                if lookahead < self.tokens.len()
-                                    && matches!(
-                                        self.tokens[lookahead].token_type,
-                                        TokenType::LeftParen
-                                    )
-                                {
-                                    lookahead += 1;
-                                    let mut guard_paren_depth = 1;
-                                    while lookahead < self.tokens.len() && guard_paren_depth > 0 {
-                                        match &self.tokens[lookahead].token_type {
-                                            TokenType::LeftParen => guard_paren_depth += 1,
-                                            TokenType::RightParen => guard_paren_depth -= 1,
-                                            _ => {}
-                                        }
+                                loop {
+                                    // Skip whitespace
+                                    while lookahead < self.tokens.len()
+                                        && matches!(
+                                            self.tokens[lookahead].token_type,
+                                            TokenType::Whitespace
+                                        )
+                                    {
                                         lookahead += 1;
                                     }
-                                    // After guard, skip whitespace and look for {
-                                    while lookahead < self.tokens.len() {
-                                        match &self.tokens[lookahead].token_type {
-                                            TokenType::Whitespace => lookahead += 1,
-                                            TokenType::LeftBrace => return true,
-                                            _ => return false,
+                                    // Skip optional 'not' keyword
+                                    if lookahead < self.tokens.len()
+                                        && matches!(
+                                            self.tokens[lookahead].token_type,
+                                            TokenType::Not
+                                        )
+                                    {
+                                        lookahead += 1;
+                                        while lookahead < self.tokens.len()
+                                            && matches!(
+                                                self.tokens[lookahead].token_type,
+                                                TokenType::Whitespace
+                                            )
+                                        {
+                                            lookahead += 1;
                                         }
+                                    }
+                                    // Skip guard expression in parentheses
+                                    if lookahead < self.tokens.len()
+                                        && matches!(
+                                            self.tokens[lookahead].token_type,
+                                            TokenType::LeftParen
+                                        )
+                                    {
+                                        lookahead += 1;
+                                        let mut guard_paren_depth = 1;
+                                        while lookahead < self.tokens.len() && guard_paren_depth > 0
+                                        {
+                                            match &self.tokens[lookahead].token_type {
+                                                TokenType::LeftParen => guard_paren_depth += 1,
+                                                TokenType::RightParen => guard_paren_depth -= 1,
+                                                _ => {}
+                                            }
+                                            lookahead += 1;
+                                        }
+                                    } else {
+                                        return false;
+                                    }
+                                    // After guard condition, skip whitespace
+                                    while lookahead < self.tokens.len()
+                                        && matches!(
+                                            self.tokens[lookahead].token_type,
+                                            TokenType::Whitespace
+                                        )
+                                    {
+                                        lookahead += 1;
+                                    }
+                                    // Check for 'and' or ',' to continue to next condition
+                                    if lookahead < self.tokens.len() {
+                                        let is_and = matches!(
+                                            self.tokens[lookahead].token_type,
+                                            TokenType::And
+                                        ) || matches!(&self.tokens[lookahead].token_type, TokenType::Identifier(id) if id == "and");
+                                        let is_comma = matches!(
+                                            self.tokens[lookahead].token_type,
+                                            TokenType::Comma
+                                        );
+                                        if is_and || is_comma {
+                                            lookahead += 1;
+                                            continue; // Parse next guard condition
+                                        }
+                                    }
+                                    break;
+                                }
+                                // After all guards, skip whitespace and look for {
+                                while lookahead < self.tokens.len() {
+                                    match &self.tokens[lookahead].token_type {
+                                        TokenType::Whitespace => lookahead += 1,
+                                        TokenType::LeftBrace => return true,
+                                        _ => return false,
                                     }
                                 }
                                 return false;
@@ -1116,7 +1237,7 @@ impl Parser {
         // Also supports namespaces: #ns > .mixin();
         // But NOT if it's followed by { which would be a definition or CSS rule
         let mut lookahead = self.current;
-        
+
         // Loop to consume parts of the path (e.g., #ns > .mixin)
         loop {
             // Check start of part
@@ -1160,23 +1281,30 @@ impl Parser {
             // Check for next part separator (>, space) or end of path
             let mut next_token_idx = lookahead;
             let mut has_whitespace = false;
-            
+
             // Skip whitespace
-            while next_token_idx < self.tokens.len() && matches!(self.tokens[next_token_idx].token_type, TokenType::Whitespace) {
+            while next_token_idx < self.tokens.len()
+                && matches!(
+                    self.tokens[next_token_idx].token_type,
+                    TokenType::Whitespace
+                )
+            {
                 has_whitespace = true;
                 next_token_idx += 1;
             }
-            
+
             if next_token_idx >= self.tokens.len() {
                 return false;
             }
-            
+
             match &self.tokens[next_token_idx].token_type {
                 TokenType::GreaterThan => {
                     // Continue to next part
                     lookahead = next_token_idx + 1;
                     // Skip whitespace after >
-                    while lookahead < self.tokens.len() && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace) {
+                    while lookahead < self.tokens.len()
+                        && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+                    {
                         lookahead += 1;
                     }
                     continue;
@@ -1211,14 +1339,14 @@ impl Parser {
                 }
                 TokenType::Important => {
                     // !important after mixin call
-                     lookahead = next_token_idx;
-                     break;
+                    lookahead = next_token_idx;
+                    break;
                 }
                 TokenType::LeftBrace => {
                     return false; // This is a rule/definition
                 }
                 _ => {
-                    // Unknown token. 
+                    // Unknown token.
                     // If we just had a path like #ns .mixin, and now we see something else.
                     // If it's a mixin call, it should end with ; or be followed by !important or ).
                     // If we are here, it means we didn't find ( or ; or !.
@@ -1266,17 +1394,17 @@ impl Parser {
                     return true; // End of file after ), assume call
                 }
                 TokenType::Important => {
-                     lookahead += 1;
-                     // Expect ; or }
-                     while lookahead < self.tokens.len() {
+                    lookahead += 1;
+                    // Expect ; or }
+                    while lookahead < self.tokens.len() {
                         match &self.tokens[lookahead].token_type {
                             TokenType::Whitespace => lookahead += 1,
                             TokenType::Semicolon => return true,
                             TokenType::RightBrace => return true,
-                             _ => return false, // !important followed by something else
+                            _ => return false, // !important followed by something else
                         }
-                     }
-                     return true;
+                    }
+                    return true;
                 }
                 TokenType::Semicolon => return true,  // .mixin;
                 TokenType::LeftBrace => return false, // .mixin { ... } is not a call
@@ -1399,20 +1527,20 @@ impl Parser {
 
             let position = self.current_position();
 
-            // Parse parameter name (should start with @)
-            let name = if let TokenType::AtKeyword(param_name) = &self.current_token().token_type {
-                let name = param_name.clone();
-                self.advance();
-                name
-            } else {
-                return Err(Error::parse_error(
-                    "Expected parameter name starting with @",
-                    position.line,
-                    position.column,
-                ));
-            };
-
-            let mut parameter = MixinParameter::new(name, position);
+            // Parse parameter name (starts with @) or pattern-match value (identifier/number)
+            let mut parameter =
+                if let TokenType::AtKeyword(param_name) = &self.current_token().token_type {
+                    let name = param_name.clone();
+                    self.advance();
+                    MixinParameter::new(name, position)
+                } else {
+                    // Pattern-match parameter: .mixin(dark), .mixin(1)
+                    let pattern_expr = self.parse_expression()?;
+                    let mut param =
+                        MixinParameter::new(format!("__pattern_{}", parameters.len()), position);
+                    param.pattern_value = Some(pattern_expr);
+                    param
+                };
 
             // Skip whitespace
             while matches!(self.current_token().token_type, TokenType::Whitespace) {
@@ -1501,9 +1629,11 @@ impl Parser {
             // Check for descendant combinator '>' or whitespace acting as descendant
             let mut lookahead = self.current;
             let mut has_whitespace = false;
-            
+
             // Skip whitespace
-            while lookahead < self.tokens.len() && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace) {
+            while lookahead < self.tokens.len()
+                && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+            {
                 has_whitespace = true;
                 lookahead += 1;
             }
@@ -1514,7 +1644,7 @@ impl Parser {
                         // Found '>', consume it and continue
                         self.current = lookahead + 1;
                         name.push_str(" > ");
-                        
+
                         // Skip whitespace after >
                         while matches!(self.current_token().token_type, TokenType::Whitespace) {
                             self.advance();
@@ -1532,7 +1662,7 @@ impl Parser {
                     _ => {}
                 }
             }
-            
+
             break;
         }
 
@@ -1602,10 +1732,23 @@ impl Parser {
     }
 
     /// Parse a guard expression for mixin guards
+    /// Supports: `when (cond)`, `when (cond1) and (cond2)`, `when (cond1), (cond2)`,
+    /// `when not (cond)`, and combinations thereof.
     fn parse_guard_expression(&mut self) -> Result<expressions::Expression> {
-        // For now, we'll implement basic guard parsing
-        // Guards are typically parenthesized expressions like (@param > 10)
+        let position = self.current_position();
 
+        // Check for 'not' keyword
+        let negated = if self.match_token(TokenType::Not) {
+            // Skip whitespace after 'not'
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+            true
+        } else {
+            false
+        };
+
+        // Parse first guard condition: (expression)
         self.consume(
             TokenType::LeftParen,
             "Expected '(' to start guard expression",
@@ -1616,7 +1759,7 @@ impl Parser {
             self.advance();
         }
 
-        let guard_expr = self.parse_expression()?;
+        let mut guard_expr = self.parse_expression()?;
 
         // Skip whitespace
         while matches!(self.current_token().token_type, TokenType::Whitespace) {
@@ -1628,6 +1771,87 @@ impl Parser {
             "Expected ')' to end guard expression",
         )?;
 
+        // Apply 'not' if present
+        if negated {
+            guard_expr = Expression::unary_op(
+                expressions::UnaryOperator::Not,
+                guard_expr,
+                position.clone(),
+            );
+        }
+
+        // Check for 'and' or ',' (or) to combine multiple conditions
+        loop {
+            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+
+            // Check for 'and' keyword (identifier "and")
+            let is_and = matches!(&self.current_token().token_type, TokenType::And)
+                || matches!(&self.current_token().token_type, TokenType::Identifier(id) if id == "and");
+            let is_comma = self.check(&TokenType::Comma);
+
+            if !is_and && !is_comma {
+                break;
+            }
+
+            let op = if is_and {
+                self.advance(); // consume 'and'
+                expressions::BinaryOperator::And
+            } else {
+                self.advance(); // consume ','
+                expressions::BinaryOperator::Or
+            };
+
+            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+
+            // Check for 'not' on the next condition
+            let next_negated = if self.match_token(TokenType::Not) {
+                while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                    self.advance();
+                }
+                true
+            } else {
+                false
+            };
+
+            // Parse next guard condition: (expression)
+            self.consume(
+                TokenType::LeftParen,
+                "Expected '(' to start guard expression",
+            )?;
+
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+
+            let mut next_expr = self.parse_expression()?;
+
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+
+            self.consume(
+                TokenType::RightParen,
+                "Expected ')' to end guard expression",
+            )?;
+
+            if next_negated {
+                next_expr = Expression::unary_op(
+                    expressions::UnaryOperator::Not,
+                    next_expr,
+                    position.clone(),
+                );
+            }
+
+            // Combine with previous expression
+            guard_expr = Expression::binary_op(guard_expr, op, next_expr, position.clone());
+        }
+
         Ok(guard_expr)
     }
 
@@ -1635,32 +1859,49 @@ impl Parser {
     fn parse_declaration(&mut self) -> Result<Declaration> {
         let position = self.current_position();
 
-        let property = if let TokenType::Identifier(prop) = &self.current_token().token_type {
-            let name = prop.clone();
-            self.advance();
-            name
-        } else {
+        // Build property name from identifiers and variable interpolations
+        let mut property = String::new();
+        loop {
+            match &self.current_token().token_type {
+                TokenType::Identifier(prop) => {
+                    property.push_str(prop);
+                    self.advance();
+                }
+                TokenType::VariableInterpolation(var_name) => {
+                    // Encode as @{var} so the compiler can resolve it later
+                    property.push_str(&format!("@{{{}}}", var_name));
+                    self.advance();
+                }
+                _ => break,
+            }
+        }
+
+        if property.is_empty() {
             return Err(Error::parse_error(
                 "Expected property name",
                 position.line,
                 position.column,
             ));
-        };
+        }
 
         // Skip whitespace
         while matches!(self.current_token().token_type, TokenType::Whitespace) {
             self.advance();
         }
 
-        self.consume(TokenType::Colon, "Expected ':' after property name")?;
+        // Check for merge tokens (+: or +_:) before the regular colon
+        let merge = if self.match_token(TokenType::MergeComma) {
+            Some(MergeType::Comma)
+        } else if self.match_token(TokenType::MergeSpace) {
+            Some(MergeType::Space)
+        } else {
+            self.consume(TokenType::Colon, "Expected ':' after property name")?;
+            None
+        };
 
         let value = self.parse_declaration_value()?;
 
-        let important = if self.match_token(TokenType::Important) {
-            true
-        } else {
-            false
-        };
+        let important = self.match_token(TokenType::Important);
 
         self.match_token(TokenType::Semicolon); // Optional semicolon
 
@@ -1668,6 +1909,7 @@ impl Parser {
             property,
             value,
             important,
+            merge,
             position,
         })
     }
@@ -2037,7 +2279,7 @@ impl Parser {
                 let mut var_name = String::new();
                 let mut brace_count = 1;
 
-                while let Some(ch) = chars.next() {
+                for ch in chars.by_ref() {
                     if ch == '{' {
                         brace_count += 1;
                         var_name.push(ch);
@@ -2377,6 +2619,44 @@ impl Parser {
                 let var_name = name.clone();
                 self.advance();
 
+                // Check for map access chain: @variable[key][nested]
+                let mut map_expr = Expression::variable(var_name.clone(), position.clone());
+                let mut has_map_access = false;
+
+                // Allow optional whitespace before '['
+                while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                    self.advance();
+                }
+
+                while self.check(&TokenType::LeftBracket) {
+                    has_map_access = true;
+                    self.advance(); // consume '['
+                    while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                        self.advance();
+                    }
+
+                    let key = self.parse_expression()?;
+
+                    while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                        self.advance();
+                    }
+                    self.consume(TokenType::RightBracket, "Expected ']' after map key")?;
+
+                    map_expr = Expression::MapAccess {
+                        map: Box::new(map_expr),
+                        key: Box::new(key),
+                        position: position.clone(),
+                    };
+
+                    while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                        self.advance();
+                    }
+                }
+
+                if has_map_access {
+                    return Ok(map_expr);
+                }
+
                 // Parse as comma-separated list if more tokens follow
                 let mut values = vec![Expression::variable(var_name, position.clone())];
 
@@ -2547,11 +2827,215 @@ impl Parser {
                 self.consume(TokenType::RightParen, "Expected ')' after expression")?;
                 Ok(Expression::parenthesized(expr, position))
             }
+            TokenType::LeftBrace => {
+                // Map literal: { key: value; key2: value2; }
+                self.advance(); // consume '{'
+                let entries = self.parse_map_entries()?;
+                self.consume(TokenType::RightBrace, "Expected '}' after map literal")?;
+                Ok(Expression::MapLiteral { entries, position })
+            }
             _ => Err(Error::parse_error(
                 "Expected expression",
                 position.line,
                 position.column,
             )),
+        }
+    }
+
+    /// Check if current position is an each() call
+    fn is_each_call(&self) -> bool {
+        if let TokenType::Identifier(name) = &self.current_token().token_type {
+            if name == "each" {
+                let mut lookahead = self.current + 1;
+                // Skip whitespace
+                while lookahead < self.tokens.len()
+                    && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+                {
+                    lookahead += 1;
+                }
+                return lookahead < self.tokens.len()
+                    && matches!(self.tokens[lookahead].token_type, TokenType::LeftParen);
+            }
+        }
+        false
+    }
+
+    /// Parse each() call: each(list, { template })
+    fn parse_each_call(&mut self) -> Result<EachCall> {
+        let position = self.current_position();
+
+        // Consume 'each'
+        self.advance();
+        // Skip whitespace
+        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+            self.advance();
+        }
+        // Consume '('
+        self.consume(TokenType::LeftParen, "Expected '(' after 'each'")?;
+        // Skip whitespace
+        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+            self.advance();
+        }
+
+        // Parse list items (comma-separated values before the block)
+        let mut list_items = Vec::new();
+        while !self.is_at_end()
+            && !self.check(&TokenType::LeftBrace)
+            && !self.check(&TokenType::RightParen)
+        {
+            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+
+            if self.check(&TokenType::LeftBrace) || self.check(&TokenType::RightParen) {
+                break;
+            }
+
+            // Parse expression
+            let expr = self.parse_expression()?;
+            list_items.push(expr);
+
+            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+
+            // Consume comma if present
+            if self.check(&TokenType::Comma) {
+                self.advance();
+                // Skip whitespace
+                while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                    self.advance();
+                }
+                // If next is '{', this was the last comma before block
+                if self.check(&TokenType::LeftBrace) {
+                    break;
+                }
+            }
+        }
+
+        // Build the list expression
+        let list = if list_items.len() == 1 {
+            list_items.into_iter().next().unwrap()
+        } else {
+            Expression::list(list_items, ListSeparator::Comma, position.clone())
+        };
+
+        // Parse the template block { ... }
+        self.consume(
+            TokenType::LeftBrace,
+            "Expected '{' for each() template block",
+        )?;
+
+        let mut body = Vec::new();
+        while !self.is_at_end() && !self.check(&TokenType::RightBrace) {
+            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+            if self.is_at_end() || self.check(&TokenType::RightBrace) {
+                break;
+            }
+            if let Some(statement) = self.parse_statement()? {
+                body.push(statement);
+            }
+        }
+        self.consume(
+            TokenType::RightBrace,
+            "Expected '}' after each() template block",
+        )?;
+
+        // Consume closing ')' and optional ';'
+        // Skip whitespace
+        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+            self.advance();
+        }
+        self.consume(TokenType::RightParen, "Expected ')' after each() block")?;
+        self.match_token(TokenType::Semicolon);
+
+        Ok(EachCall {
+            list,
+            body,
+            position,
+        })
+    }
+
+    /// Parse map entries: key: value; key2: value2;
+    fn parse_map_entries(&mut self) -> Result<Vec<(String, Expression)>> {
+        let mut entries = Vec::new();
+
+        loop {
+            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+
+            if self.is_at_end() || self.check(&TokenType::RightBrace) {
+                break;
+            }
+
+            let key_position = self.current_position();
+            let key = self.parse_map_key().ok_or_else(|| {
+                Error::parse_error(
+                    "Expected map key (identifier, string, or number)",
+                    key_position.line,
+                    key_position.column,
+                )
+            })?;
+
+            // Skip whitespace
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+
+            // Expect colon
+            self.consume(TokenType::Colon, "Expected ':' in map entry")?;
+
+            // Parse value
+            let value = self.parse_declaration_value()?;
+
+            entries.push((key, value));
+
+            // Consume semicolon
+            self.match_token(TokenType::Semicolon);
+        }
+
+        Ok(entries)
+    }
+
+    fn parse_map_key(&mut self) -> Option<String> {
+        match &self.current_token().token_type {
+            TokenType::Identifier(name) => {
+                let key = name.clone();
+                self.advance();
+                Some(key)
+            }
+            TokenType::String(value) => {
+                let key = value.clone();
+                self.advance();
+                Some(key)
+            }
+            TokenType::Number(number) => {
+                let numeric = *number;
+                self.advance();
+
+                if let TokenType::Identifier(unit) = &self.current_token().token_type {
+                    if is_css_unit(unit) {
+                        let key = format!("{}{}", numeric, unit);
+                        self.advance();
+                        return Some(key);
+                    }
+                }
+
+                Some(numeric.to_string())
+            }
+            TokenType::Percentage(value) => {
+                let key = format!("{}%", value);
+                self.advance();
+                Some(key)
+            }
+            _ => None,
         }
     }
 }

@@ -1,18 +1,18 @@
+use super::Compiler;
 use crate::ast::*;
 use crate::error::{Error, Result};
-use super::Compiler;
 
 /// 表达式编译特性
 pub trait ExpressionCompiler {
     /// 评估表达式
     fn evaluate_expression(&mut self, expr: &Expression) -> Result<Expression>;
-    
+
     /// 将表达式评估为字符串（用于插值）
     fn evaluate_expression_to_string(&mut self, expr: &Expression) -> Result<String>;
-    
+
     /// 解析变量
     fn resolve_variable(&mut self, name: &str) -> Result<Expression>;
-    
+
     /// 评估二元操作
     fn evaluate_binary_op(
         &self,
@@ -21,7 +21,7 @@ pub trait ExpressionCompiler {
         right: &Expression,
         position: &Position,
     ) -> Result<Expression>;
-    
+
     /// 评估一元操作
     fn evaluate_unary_op(
         &self,
@@ -29,7 +29,7 @@ pub trait ExpressionCompiler {
         operand: &Expression,
         position: &Position,
     ) -> Result<Expression>;
-    
+
     /// 评估函数调用
     fn evaluate_function_call(
         &self,
@@ -37,7 +37,7 @@ pub trait ExpressionCompiler {
         arguments: &[Expression],
         position: &Position,
     ) -> Result<Expression>;
-    
+
     /// 检查表达式是否为真值
     fn is_truthy(&self, expr: &Expression) -> bool;
 }
@@ -121,6 +121,42 @@ impl ExpressionCompiler for Compiler {
                 }
                 Ok(Expression::string(result, position.clone()))
             }
+            Expression::MapLiteral { entries, position } => {
+                // Evaluate all values in the map
+                let mut eval_entries = Vec::new();
+                for (key, value) in entries {
+                    let eval_value = self.evaluate_expression(value)?;
+                    eval_entries.push((key.clone(), eval_value));
+                }
+                Ok(Expression::MapLiteral {
+                    entries: eval_entries,
+                    position: position.clone(),
+                })
+            }
+            Expression::MapAccess { map, key, position } => {
+                let map_val = self.evaluate_expression(map)?;
+                let key_val = self.evaluate_expression(key)?;
+                let key_str = normalize_map_key(&key_val);
+
+                if let Expression::MapLiteral { entries, .. } = &map_val {
+                    for (k, v) in entries {
+                        if k == &key_str {
+                            return Ok(v.clone());
+                        }
+                    }
+                    Err(Error::semantic_error(
+                        format!("Key '{}' not found in map", key_str),
+                        position.line,
+                        position.column,
+                    ))
+                } else {
+                    Err(Error::semantic_error(
+                        "Cannot access property on non-map value",
+                        position.line,
+                        position.column,
+                    ))
+                }
+            }
             _ => Ok(expr.clone()), // Literals don't need evaluation
         }
     }
@@ -186,7 +222,7 @@ impl ExpressionCompiler for Compiler {
                 },
             ) => match operator {
                 BinaryOperator::Add => {
-                    let result_unit = left_unit.clone().or_else(|| right_unit.clone());
+                    let result_unit = merge_units(left_unit, right_unit);
                     Ok(Expression::Number {
                         value: left_val + right_val,
                         unit: result_unit,
@@ -194,7 +230,7 @@ impl ExpressionCompiler for Compiler {
                     })
                 }
                 BinaryOperator::Subtract => {
-                    let result_unit = left_unit.clone().or_else(|| right_unit.clone());
+                    let result_unit = merge_units(left_unit, right_unit);
                     Ok(Expression::Number {
                         value: left_val - right_val,
                         unit: result_unit,
@@ -202,7 +238,13 @@ impl ExpressionCompiler for Compiler {
                     })
                 }
                 BinaryOperator::Multiply => {
-                    let result_unit = left_unit.clone().or_else(|| right_unit.clone());
+                    // Multiplication: if one side is unitless, use the other's unit
+                    let result_unit = match (left_unit, right_unit) {
+                        (Some(l), None) => Some(l.clone()),
+                        (None, Some(r)) => Some(r.clone()),
+                        (Some(l), Some(_)) => Some(l.clone()), // left takes precedence
+                        (None, None) => None,
+                    };
                     Ok(Expression::Number {
                         value: left_val * right_val,
                         unit: result_unit,
@@ -213,13 +255,26 @@ impl ExpressionCompiler for Compiler {
                     if *right_val == 0.0 {
                         return Err(Error::division_by_zero(position.line, position.column));
                     }
-                    let result_unit = if left_unit == right_unit {
-                        None
-                    } else {
-                        left_unit.clone()
+                    // Division: same units cancel out; otherwise left unit preserved
+                    let result_unit = match (left_unit, right_unit) {
+                        (Some(l), Some(r)) if l == r => None, // units cancel
+                        (Some(l), None) => Some(l.clone()),
+                        (None, _) => None,
+                        (Some(l), Some(_)) => Some(l.clone()), // incompatible, keep left
                     };
                     Ok(Expression::Number {
                         value: left_val / right_val,
+                        unit: result_unit,
+                        position: position.clone(),
+                    })
+                }
+                BinaryOperator::Modulo => {
+                    if *right_val == 0.0 {
+                        return Err(Error::division_by_zero(position.line, position.column));
+                    }
+                    let result_unit = merge_units(left_unit, right_unit);
+                    Ok(Expression::Number {
+                        value: left_val % right_val,
                         unit: result_unit,
                         position: position.clone(),
                     })
@@ -251,6 +306,180 @@ impl ExpressionCompiler for Compiler {
                     position.column,
                 )),
             },
+            // String concatenation with Add operator
+            (
+                Expression::String {
+                    value: left_val,
+                    quoted: left_quoted,
+                    ..
+                },
+                right_expr,
+            ) if matches!(operator, BinaryOperator::Add) => {
+                let right_str = match right_expr {
+                    Expression::String { value, .. } => value.clone(),
+                    _ => right_expr.to_css(),
+                };
+                Ok(Expression::String {
+                    value: format!("{}{}", left_val, right_str),
+                    quoted: *left_quoted,
+                    position: position.clone(),
+                })
+            }
+            (
+                left_expr,
+                Expression::String {
+                    value: right_val, ..
+                },
+            ) if matches!(operator, BinaryOperator::Add) => {
+                let left_str = match left_expr {
+                    Expression::String { value, .. } => value.clone(),
+                    _ => left_expr.to_css(),
+                };
+                Ok(Expression::String {
+                    value: format!("{}{}", left_str, right_val),
+                    quoted: false,
+                    position: position.clone(),
+                })
+            }
+            // Color + Color arithmetic
+            (
+                Expression::Color {
+                    red: r1,
+                    green: g1,
+                    blue: b1,
+                    alpha: a1,
+                    ..
+                },
+                Expression::Color {
+                    red: r2,
+                    green: g2,
+                    blue: b2,
+                    alpha: a2,
+                    ..
+                },
+            ) => match operator {
+                BinaryOperator::Add => Ok(Expression::Color {
+                    red: (*r1 as u16 + *r2 as u16).min(255) as u8,
+                    green: (*g1 as u16 + *g2 as u16).min(255) as u8,
+                    blue: (*b1 as u16 + *b2 as u16).min(255) as u8,
+                    alpha: *a1,
+                    position: position.clone(),
+                }),
+                BinaryOperator::Subtract => Ok(Expression::Color {
+                    red: (*r1 as i16 - *r2 as i16).max(0) as u8,
+                    green: (*g1 as i16 - *g2 as i16).max(0) as u8,
+                    blue: (*b1 as i16 - *b2 as i16).max(0) as u8,
+                    alpha: *a1,
+                    position: position.clone(),
+                }),
+                BinaryOperator::Multiply => Ok(Expression::Color {
+                    red: ((*r1 as u16) * (*r2 as u16) / 255).min(255) as u8,
+                    green: ((*g1 as u16) * (*g2 as u16) / 255).min(255) as u8,
+                    blue: ((*b1 as u16) * (*b2 as u16) / 255).min(255) as u8,
+                    alpha: *a1,
+                    position: position.clone(),
+                }),
+                BinaryOperator::Equal => {
+                    let equal = r1 == r2 && g1 == g2 && b1 == b2 && (a1 - a2).abs() < f64::EPSILON;
+                    Ok(Expression::Boolean(equal, position.clone()))
+                }
+                BinaryOperator::NotEqual => {
+                    let equal = r1 == r2 && g1 == g2 && b1 == b2 && (a1 - a2).abs() < f64::EPSILON;
+                    Ok(Expression::Boolean(!equal, position.clone()))
+                }
+                _ => Ok(Expression::binary_op(
+                    left.clone(),
+                    operator.clone(),
+                    right.clone(),
+                    position.clone(),
+                )),
+            },
+            // Color * Number, Color / Number, Color + Number, Color - Number
+            (
+                Expression::Color {
+                    red,
+                    green,
+                    blue,
+                    alpha,
+                    ..
+                },
+                Expression::Number { value: num, .. },
+            ) => match operator {
+                BinaryOperator::Multiply => Ok(Expression::Color {
+                    red: ((*red as f64) * num).round().clamp(0.0, 255.0) as u8,
+                    green: ((*green as f64) * num).round().clamp(0.0, 255.0) as u8,
+                    blue: ((*blue as f64) * num).round().clamp(0.0, 255.0) as u8,
+                    alpha: *alpha,
+                    position: position.clone(),
+                }),
+                BinaryOperator::Divide => {
+                    if *num == 0.0 {
+                        return Err(Error::division_by_zero(position.line, position.column));
+                    }
+                    Ok(Expression::Color {
+                        red: ((*red as f64) / num).round().clamp(0.0, 255.0) as u8,
+                        green: ((*green as f64) / num).round().clamp(0.0, 255.0) as u8,
+                        blue: ((*blue as f64) / num).round().clamp(0.0, 255.0) as u8,
+                        alpha: *alpha,
+                        position: position.clone(),
+                    })
+                }
+                BinaryOperator::Add => Ok(Expression::Color {
+                    red: ((*red as f64) + num).round().clamp(0.0, 255.0) as u8,
+                    green: ((*green as f64) + num).round().clamp(0.0, 255.0) as u8,
+                    blue: ((*blue as f64) + num).round().clamp(0.0, 255.0) as u8,
+                    alpha: *alpha,
+                    position: position.clone(),
+                }),
+                BinaryOperator::Subtract => Ok(Expression::Color {
+                    red: ((*red as f64) - num).round().clamp(0.0, 255.0) as u8,
+                    green: ((*green as f64) - num).round().clamp(0.0, 255.0) as u8,
+                    blue: ((*blue as f64) - num).round().clamp(0.0, 255.0) as u8,
+                    alpha: *alpha,
+                    position: position.clone(),
+                }),
+                _ => Ok(Expression::binary_op(
+                    left.clone(),
+                    operator.clone(),
+                    right.clone(),
+                    position.clone(),
+                )),
+            },
+            // Number * Color
+            (
+                Expression::Number { value: num, .. },
+                Expression::Color {
+                    red,
+                    green,
+                    blue,
+                    alpha,
+                    ..
+                },
+            ) if matches!(operator, BinaryOperator::Multiply) => Ok(Expression::Color {
+                red: ((*red as f64) * num).round().clamp(0.0, 255.0) as u8,
+                green: ((*green as f64) * num).round().clamp(0.0, 255.0) as u8,
+                blue: ((*blue as f64) * num).round().clamp(0.0, 255.0) as u8,
+                alpha: *alpha,
+                position: position.clone(),
+            }),
+            // Boolean logical operators
+            (left_expr, right_expr)
+                if matches!(operator, BinaryOperator::And | BinaryOperator::Or) =>
+            {
+                let left_truthy = self.is_truthy(left_expr);
+                let right_truthy = self.is_truthy(right_expr);
+                match operator {
+                    BinaryOperator::And => Ok(Expression::Boolean(
+                        left_truthy && right_truthy,
+                        position.clone(),
+                    )),
+                    BinaryOperator::Or => Ok(Expression::Boolean(
+                        left_truthy || right_truthy,
+                        position.clone(),
+                    )),
+                    _ => unreachable!(),
+                }
+            }
             _ => {
                 // For now, just return the original binary operation
                 Ok(Expression::binary_op(
@@ -317,4 +546,52 @@ impl ExpressionCompiler for Compiler {
             _ => false,
         }
     }
+}
+
+/// Merge units for add/subtract operations.
+/// If both have units: left takes precedence (LESS behavior).
+/// If one is unitless: use the other's unit.
+fn merge_units(left: &Option<String>, right: &Option<String>) -> Option<String> {
+    match (left, right) {
+        (Some(l), _) => Some(l.clone()),
+        (None, Some(r)) => Some(r.clone()),
+        (None, None) => None,
+    }
+}
+
+fn normalize_map_key(expr: &Expression) -> String {
+    match expr {
+        Expression::String { value, .. } => value.clone(),
+        Expression::Number { value, unit, .. } => match unit {
+            Some(unit) => format!("{}{}", value, unit),
+            None => value.to_string(),
+        },
+        Expression::Percentage(value, _) => format!("{}%", value),
+        Expression::Parenthesized(inner, _) => normalize_map_key(inner),
+        _ => expr.to_css(),
+    }
+}
+
+/// Check if two unit strings belong to the same unit group.
+/// Used for compatibility checks (length, angle, time, frequency, resolution).
+#[allow(dead_code)]
+fn units_compatible(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    let group = |u: &str| -> u8 {
+        match u {
+            "px" | "em" | "rem" | "ex" | "ch" | "vw" | "vh" | "vmin" | "vmax" | "cm" | "mm"
+            | "in" | "pt" | "pc" | "q" => 1, // length
+            "deg" | "grad" | "rad" | "turn" => 2, // angle
+            "s" | "ms" => 3,                      // time
+            "hz" | "khz" => 4,                    // frequency
+            "dpi" | "dpcm" | "dppx" => 5,         // resolution
+            "%" => 6,                             // percentage
+            _ => 0,                               // unknown
+        }
+    };
+    let ga = group(a);
+    let gb = group(b);
+    ga != 0 && ga == gb
 }

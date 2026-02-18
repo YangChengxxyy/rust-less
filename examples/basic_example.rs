@@ -118,13 +118,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ CSS 规则编译");
     println!("✅ 压缩输出模式");
     println!("✅ 全面的错误处理");
-    println!("\n🚧 开发中的功能 (TDD 方法):");
-    println!("🔄 嵌套和父选择器 (&)");
-    println!("🔄 混合器和混合器调用");
-    println!("🔄 颜色函数 (lighten, darken 等)");
-    println!("🔄 导入语句");
-    println!("🔄 高级选择器");
-    println!("🔄 守卫和条件");
+    println!("✅ 嵌套和父选择器 (&)");
+    println!("✅ 混合器和混合器调用");
+    println!("✅ 颜色函数 (lighten, darken 等)");
+    println!("✅ 导入语句");
+    println!("✅ 守卫和条件");
+    println!("\n🚧 待完善功能:");
+    println!("🔄 Maps 数据结构");
+    println!("🔄 Source Maps 覆盖与跨文件精度");
+    println!("🔄 插件系统");
 
     Ok(())
 }

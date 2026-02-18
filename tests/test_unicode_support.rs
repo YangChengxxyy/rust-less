@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
     use rust_less::Compiler;
@@ -15,14 +14,14 @@ mod tests {
                 content: @emoji;
             }
         "#;
-        
+
         let result = compiler.compile(input);
-        
+
         match result {
             Ok(css) => {
                 println!("CSS: {}", css);
                 assert!(css.contains("content: \"🦀\""));
-            },
+            }
             Err(e) => {
                 panic!("Emoji compilation failed: {:?}", e);
             }
@@ -38,15 +37,15 @@ mod tests {
                 width: @变量;
             }
         "#;
-        
+
         let result = compiler.compile(input);
-        
+
         match result {
             Ok(css) => {
                 println!("CSS: {}", css);
                 assert!(css.contains(".类名"));
                 assert!(css.contains("width: 10px"));
-            },
+            }
             Err(e) => {
                 panic!("Unicode identifiers failed: {:?}", e);
             }
@@ -62,14 +61,14 @@ mod tests {
                 color: @🚀;
             }
         "#;
-        
+
         let result = compiler.compile(input);
-        
+
         match result {
             Ok(css) => {
                 println!("CSS: {}", css);
                 assert!(css.contains("color: red"));
-            },
+            }
             Err(e) => {
                 panic!("Emoji identifier failed: {:?}", e);
             }

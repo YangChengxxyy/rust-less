@@ -56,10 +56,8 @@ fn test_recursion_limit_config() {
     assert!(result.is_ok());
 
     // Set limit to 10, should fail
-    let result = Compiler::new()
-        .with_recursion_limit(10)
-        .compile(input);
-    
+    let result = Compiler::new().with_recursion_limit(10).compile(input);
+
     assert!(result.is_err());
     let err = result.err().unwrap();
     assert!(format!("{}", err).contains("Infinite recursion"));

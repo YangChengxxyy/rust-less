@@ -55,17 +55,7 @@ pub fn compile_file<P: AsRef<Path>>(path: P) -> Result<String> {
 
 /// 使用自定义选项将 LESS 源代码编译为 CSS
 pub fn compile_with_options(input: &str, options: CompilerOptions) -> Result<String> {
-    let mut compiler = if options.compress {
-        Compiler::compressed()
-    } else {
-        Compiler::new()
-    };
-
-    // 添加导入路径
-    for path in &options.include_paths {
-        compiler.add_include_path(path);
-    }
-
+    let mut compiler = build_compiler_from_options(&options);
     compiler.compile(input)
 }
 
@@ -78,18 +68,26 @@ pub fn compile_file_with_options<P: AsRef<Path>>(
     path: P,
     options: CompilerOptions,
 ) -> Result<String> {
+    let mut compiler = build_compiler_from_options(&options);
+    compiler.compile_file(path)
+}
+
+fn build_compiler_from_options(options: &CompilerOptions) -> Compiler {
     let mut compiler = if options.compress {
         Compiler::compressed()
     } else {
         Compiler::new()
     };
 
-    // 添加导入路径
+    if options.source_map {
+        compiler = compiler.with_source_map(true);
+    }
+
     for include_path in &options.include_paths {
         compiler.add_include_path(include_path);
     }
 
-    compiler.compile_file(path)
+    compiler
 }
 
 /// 编译器配置选项
@@ -106,6 +104,7 @@ pub struct CompilerOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
     fn test_basic_compilation() {
@@ -117,5 +116,44 @@ mod tests {
         let css = result.unwrap();
         assert!(css.contains(".test"));
         assert!(css.contains("color: red"));
+    }
+
+    #[test]
+    fn test_build_compiler_from_options_enables_source_map() {
+        let options = CompilerOptions {
+            compress: false,
+            source_map: true,
+            include_paths: vec![],
+        };
+        let mut compiler = build_compiler_from_options(&options);
+        compiler.compile(".test { color: red; }").unwrap();
+        assert!(compiler.generate_source_map().is_some());
+    }
+
+    #[test]
+    fn test_compile_file_with_options_source_map_path() {
+        let tmp_dir = std::env::temp_dir();
+        let file_path = tmp_dir.join("rust_less_compile_file_with_options.less");
+
+        let mut file = std::fs::File::create(&file_path).unwrap();
+        writeln!(file, ".test {{ color: red; }}").unwrap();
+
+        let options = CompilerOptions {
+            compress: false,
+            source_map: true,
+            include_paths: vec![],
+        };
+        let result = compile_file_with_options(&file_path, options);
+        assert!(
+            result.is_ok(),
+            "compile_file_with_options failed: {:?}",
+            result
+        );
+
+        let css = result.unwrap();
+        assert!(css.contains(".test"));
+        assert!(css.contains("color: red;"));
+
+        let _ = std::fs::remove_file(file_path);
     }
 }

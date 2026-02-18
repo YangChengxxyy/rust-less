@@ -5,9 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.4] - 2025-01-30
+## [0.2.4] - 2025-01-22
+
+### 🎉 新增功能 (Added)
+
+- **增强字符串函数**:
+  - `replace()` 函数现在支持正则表达式！
+  - 支持 `g` (全局), `i` (忽略大小写), `m` (多行) 标志
+  - 示例: `replace("Hello World", "o", "x", "gi")`
+
+- **CSS4 特性支持**:
+  - 实现了大小写不敏感的属性选择器
+  - 支持语法: `[attribute="value" i]`
 
 ### 🔧 代码质量改进 (Code Quality)
+
+- **架构重构**:
+  - 移除了 `extend.rs` 中的临时解析 Hack，实现了规范的选择器解析
+  - 修复了 `rule.rs` 中的模块访问性 TODO，统一了变量声明的编译逻辑
+  - 提升了代码的可维护性和健壮性
+
+### 🔧 编译警告清理 (Code Quality)
 
 - **编译警告清理**:
   - 修复了全部 281 个编译警告（现在为 0）
@@ -251,14 +269,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 计划中的版本
 
-### [0.2.4] - 计划中 (1-2周内)
+### [0.2.5] - 计划中 (1-2周内)
 
-**主要目标**: 字符串函数和性能优化
+**主要目标**: 稳定性与文档一致性
 
-- [ ] 修复字符串函数中的变量参数解析问题
+- [x] 修复 `compile_file_with_options` 未应用 `source_map` 选项
+- [x] 修复 `cargo test --all-features` 下的 WASM 校验测试
 - [ ] 优化大文件编译性能
-- [ ] 改进错误消息可读性
-- [ ] 添加更多内置函数
+- [ ] 完善源码映射覆盖与跨文件精度
 
 ### [0.3.0] - 计划中 (1-2个月内)
 
@@ -266,18 +284,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [x] ~~文件系统导入~~ ✅ 已完成
 - [x] ~~循环导入检测~~ ✅ 已完成
-- [ ] 基础的 `:extend()` 支持
-- [ ] 命名空间支持 (#namespace > .mixin)
-- [ ] 递归混合器（循环生成）
+- [x] `:extend()` 支持
+- [x] 命名空间支持 (#namespace > .mixin)
+- [x] 递归混合器（循环生成）
+- [ ] 最小可用源码映射
 
 ### [0.4.0] - 计划中 (2-3个月内)
 
 **主要目标**: 高级功能
 
-- [ ] 循环和递归混合器
-- [ ] 命名空间支持 (`#namespace > .mixin`)
 - [ ] Maps 数据结构
 - [ ] 源码映射支持
+- [ ] 插件系统钩子设计
 
 ### [1.0.0] - 计划中 (6-12个月内)
 

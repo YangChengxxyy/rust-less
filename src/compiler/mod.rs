@@ -10,17 +10,19 @@ use crate::parser::Parser;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-mod expression;
-mod rule;
-mod mixin;
-mod import;
 mod at_rule;
+mod expression;
+mod import;
+mod mixin;
+mod rule;
+pub mod sourcemap;
 
-pub(crate) use expression::ExpressionCompiler;
-pub(crate) use rule::RuleCompiler;
-pub(crate) use mixin::MixinCompiler;
-pub(crate) use import::ImportCompiler;
 pub(crate) use at_rule::AtRuleCompiler;
+pub(crate) use expression::ExpressionCompiler;
+pub(crate) use import::ImportCompiler;
+pub(crate) use mixin::MixinCompiler;
+pub(crate) use rule::RuleCompiler;
+use sourcemap::SourceMapGenerator;
 
 /// LESS 到 CSS 转换的主编译器
 pub struct Compiler {
@@ -44,6 +46,21 @@ pub struct Compiler {
     pub(crate) recursion_depth: usize,
     /// 最大递归深度限制
     pub(crate) max_recursion_depth: usize,
+    /// 源码映射生成器
+    pub(crate) source_map_generator: SourceMapGenerator,
+    /// 当前输出行号（0-based）
+    pub(crate) current_line: u32,
+    /// 当前输出列号（0-based）
+    pub(crate) current_col: u32,
+    /// 当前正在编译的源文件路径
+    pub(crate) current_file: String,
+    /// 是否抑制输出（用于 reference 导入）
+    pub(crate) suppress_output: bool,
+    /// 是否强制 !important（用于 .mixin() !important 传播）
+    pub(crate) force_important: bool,
+    /// 属性值合并缓冲区: property -> (values, merge_type, important, first_position)
+    pub(crate) pending_merges:
+        std::collections::HashMap<String, (Vec<String>, MergeType, bool, Position)>,
 }
 
 impl Compiler {
@@ -64,6 +81,13 @@ impl Compiler {
             imported_files: HashSet::new(),
             recursion_depth: 0,
             max_recursion_depth: 100,
+            source_map_generator: SourceMapGenerator::default(),
+            current_line: 0,
+            current_col: 0,
+            current_file: "input.less".to_string(),
+            suppress_output: false,
+            force_important: false,
+            pending_merges: std::collections::HashMap::new(),
         }
     }
 
@@ -84,7 +108,70 @@ impl Compiler {
             imported_files: HashSet::new(),
             recursion_depth: 0,
             max_recursion_depth: 100,
+            source_map_generator: SourceMapGenerator::default(),
+            current_line: 0,
+            current_col: 0,
+            current_file: "input.less".to_string(),
+            suppress_output: false,
+            force_important: false,
+            pending_merges: std::collections::HashMap::new(),
         }
+    }
+
+    /// 启用源码映射生成
+    pub fn with_source_map(mut self, enabled: bool) -> Self {
+        self.source_map_generator = SourceMapGenerator::new(enabled);
+        self
+    }
+
+    /// 获取生成的源码映射
+    pub fn generate_source_map(&self) -> Option<String> {
+        self.source_map_generator.generate_json()
+    }
+
+    /// 写入字符串到输出，并更新行号列号
+    pub(crate) fn write_str(&mut self, s: &str) {
+        if self.suppress_output {
+            return;
+        }
+        self.output.push_str(s);
+        for c in s.chars() {
+            if c == '\n' {
+                self.current_line += 1;
+                self.current_col = 0;
+            } else {
+                self.current_col += 1;
+            }
+        }
+    }
+
+    /// 写入字符到输出
+    pub(crate) fn write_char(&mut self, c: char) {
+        if self.suppress_output {
+            return;
+        }
+        self.output.push(c);
+        if c == '\n' {
+            self.current_line += 1;
+            self.current_col = 0;
+        } else {
+            self.current_col += 1;
+        }
+    }
+
+    /// 添加源码映射
+    pub(crate) fn add_mapping(&mut self, position: &Position, name: Option<&str>) {
+        if self.suppress_output {
+            return;
+        }
+        let source_file = self.current_file.clone();
+        self.source_map_generator.add_mapping(
+            &source_file,
+            position,
+            self.current_line,
+            self.current_col,
+            name,
+        );
     }
 
     /// 设置最大递归深度
@@ -108,6 +195,7 @@ impl Compiler {
     /// 编译 LESS 文件
     pub fn compile_file<P: AsRef<Path>>(&mut self, path: P) -> Result<String> {
         let path = path.as_ref();
+        self.imported_files.clear();
 
         // 获取绝对路径
         let absolute_path = if path.is_absolute() {
@@ -129,6 +217,9 @@ impl Compiler {
         // 设置基础路径
         self.base_path = canonical_path.parent().map(|p| p.to_path_buf());
 
+        // Set current file for source map
+        self.current_file = canonical_path.display().to_string();
+
         // 添加到已导入文件集合
         self.imported_files.insert(canonical_path.clone());
 
@@ -148,6 +239,11 @@ impl Compiler {
 
         self.output.clear();
         self.indent_level = 0;
+        self.pending_media_queries.clear();
+        self.pending_merges.clear();
+        self.current_line = 0;
+        self.current_col = 0;
+        self.source_map_generator.reset();
 
         self.compile_stylesheet(&stylesheet)?;
 
@@ -159,12 +255,18 @@ impl Compiler {
 
     /// Get the current scope
     fn current_scope(&mut self) -> &mut Scope {
-        self.scope_stack.last_mut().unwrap()
+        self.scope_stack
+            .last_mut()
+            .expect("scope stack should never be empty")
     }
 
     /// Push a new scope
     fn push_scope(&mut self) {
-        let parent = self.scope_stack.last().unwrap().clone();
+        let parent = self
+            .scope_stack
+            .last()
+            .expect("scope stack should never be empty")
+            .clone();
         self.scope_stack.push(Scope::with_parent(parent));
     }
 
@@ -177,24 +279,42 @@ impl Compiler {
 
     /// Add indentation to output
     fn add_indent(&mut self) {
-        if !self.compressed {
+        if !self.compressed && !self.suppress_output {
             for _ in 0..self.indent_level {
                 self.output.push_str("  ");
+                self.current_col += 2;
             }
         }
     }
 
     /// Add newline to output
     fn add_newline(&mut self) {
-        if !self.compressed {
+        if !self.compressed && !self.suppress_output {
             self.output.push('\n');
+            self.current_line += 1;
+            self.current_col = 0;
         }
     }
 
     /// Add space to output
     fn add_space(&mut self) {
-        if !self.compressed {
+        if !self.compressed && !self.suppress_output {
             self.output.push(' ');
+            self.current_col += 1;
+        }
+    }
+
+    /// Pre-scan variable declarations in a list of statements (lazy evaluation / hoisting).
+    /// Variables whose expressions fail to evaluate are silently skipped
+    /// and will be picked up during normal compilation.
+    pub(crate) fn pre_scan_variables(&mut self, statements: &[Statement]) {
+        for stmt in statements {
+            if let Statement::Variable(var) = stmt {
+                if let Ok(value) = self.evaluate_expression(&var.value) {
+                    self.current_scope()
+                        .define_variable(var.name.clone(), value);
+                }
+            }
         }
     }
 
@@ -204,6 +324,9 @@ impl Compiler {
         let mut collector = ExtendCollector::new();
         collector.collect(stylesheet);
         self.extend_registry.merge(collector.registry);
+
+        // Pre-scan variables for forward reference support (lazy evaluation)
+        self.pre_scan_variables(&stylesheet.statements);
 
         for statement in &stylesheet.statements {
             self.compile_statement(statement)?;
@@ -218,7 +341,7 @@ impl Compiler {
             Statement::Rule(rule) => {
                 let parent_selectors = self.current_selectors.clone();
                 self.compile_rule(rule, &parent_selectors)
-            },
+            }
             Statement::Declaration(decl) => self.compile_declaration(decl),
             Statement::MixinDefinition(mixin) => self.compile_mixin_definition(mixin),
             Statement::MixinCall(call) => self.compile_mixin_call(call),
@@ -230,11 +353,94 @@ impl Compiler {
             }
             Statement::Comment(comment) => self.compile_comment(comment),
             Statement::Extend(_) => Ok(()), // Phase 1: Ignore extend statements in compiler
+            Statement::EachCall(each_call) => self.compile_each_call(each_call),
+        }
+    }
+
+    /// Compile an each() call by expanding the template for each list item
+    fn compile_each_call(&mut self, each_call: &EachCall) -> Result<()> {
+        // Check recursion depth
+        if self.recursion_depth >= self.max_recursion_depth {
+            return Err(Error::infinite_recursion(
+                "each() call",
+                each_call.position.line,
+                each_call.position.column,
+            ));
+        }
+        self.recursion_depth += 1;
+
+        let list = self.evaluate_expression(&each_call.list)?;
+
+        // Extract list items
+        let items: Vec<Expression> = match &list {
+            Expression::List { values, .. } => values.clone(),
+            other => vec![other.clone()],
+        };
+
+        for (index, item) in items.iter().enumerate() {
+            // Create a scope with @value, @key, @index
+            self.push_scope();
+
+            let value_str = self.evaluate_expression_to_string(item)?;
+            self.current_scope().define_variable(
+                "value".to_string(),
+                Expression::identifier(value_str, each_call.position.clone()),
+            );
+            self.current_scope().define_variable(
+                "key".to_string(),
+                Expression::number((index + 1) as f64, each_call.position.clone()),
+            );
+            self.current_scope().define_variable(
+                "index".to_string(),
+                Expression::number((index + 1) as f64, each_call.position.clone()),
+            );
+
+            // Expand the template body
+            for statement in &each_call.body {
+                self.compile_statement(statement)?;
+            }
+
+            self.pop_scope();
+        }
+
+        self.recursion_depth -= 1;
+        Ok(())
+    }
+
+    /// Flush pending property merges, outputting the combined declarations
+    pub(crate) fn flush_pending_merges(&mut self) {
+        if self.pending_merges.is_empty() {
+            return;
+        }
+        // Collect entries to avoid borrowing issues
+        let entries: Vec<(String, Vec<String>, MergeType, bool, Position)> = self
+            .pending_merges
+            .drain()
+            .map(|(k, (vals, mt, imp, pos))| (k, vals, mt, imp, pos))
+            .collect();
+
+        for (property, values, merge_type, important, position) in entries {
+            let separator = match merge_type {
+                MergeType::Comma => ", ",
+                MergeType::Space => " ",
+            };
+            self.add_mapping(&position, Some(&property));
+            self.add_indent();
+            self.write_str(&property);
+            self.write_char(':');
+            self.add_space();
+            self.write_str(&values.join(separator));
+            if important || self.force_important {
+                self.add_space();
+                self.write_str("!important");
+            }
+            self.write_char(';');
+            self.add_newline();
         }
     }
 
     /// Compile a variable declaration
-    fn compile_variable_declaration(&mut self, var: &VariableDeclaration) -> Result<()> {
+    pub(crate) fn compile_variable_declaration(&mut self, var: &VariableDeclaration) -> Result<()> {
         let value = self.evaluate_expression(&var.value)?;
         self.current_scope()
             .define_variable(var.name.clone(), value);

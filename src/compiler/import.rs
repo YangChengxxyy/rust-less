@@ -1,26 +1,26 @@
+use super::Compiler;
 use crate::ast::*;
 use crate::error::{Error, Result};
 use crate::parser::Parser;
-use super::Compiler;
 use std::path::{Path, PathBuf};
 
 /// 导入编译特性
 pub trait ImportCompiler {
     /// 编译导入
     fn compile_import(&mut self, import: &Import) -> Result<()>;
-    
+
     /// 解析导入路径
     fn resolve_import_path(&self, import_path: &str) -> Result<PathBuf>;
-    
+
     /// 编译 LESS 导入
     fn compile_less_import(&mut self, import: &Import) -> Result<()>;
-    
+
     /// 编译引用导入
     fn compile_less_import_reference(&mut self, import: &Import) -> Result<()>;
-    
+
     /// 编译内联导入
     fn compile_inline_import(&mut self, import: &Import) -> Result<()>;
-    
+
     /// 编译多次导入
     fn compile_less_import_multiple(&mut self, import: &Import) -> Result<()>;
 }
@@ -30,14 +30,15 @@ impl ImportCompiler for Compiler {
         match import.import_type {
             ImportType::Css => {
                 // CSS imports are passed through as-is
+                self.add_mapping(&import.position, Some("@import"));
                 self.add_indent();
-                self.output.push_str("@import ");
-                self.output.push_str(&format!("\"{}\"", import.path));
+                self.write_str("@import ");
+                self.write_str(&format!("\"{}\"", import.path));
                 if let Some(media) = &import.media {
                     self.add_space();
-                    self.output.push_str(media);
+                    self.write_str(media);
                 }
-                self.output.push(';');
+                self.write_char(';');
                 self.add_newline();
             }
             ImportType::Less | ImportType::Once => {
@@ -55,6 +56,16 @@ impl ImportCompiler for Compiler {
             ImportType::Multiple => {
                 // Multiple imports - allow importing same file multiple times
                 self.compile_less_import_multiple(import)?;
+            }
+            ImportType::Optional => {
+                // Optional imports - silently skip if file not found
+                match self.compile_less_import(import) {
+                    Ok(()) => {}
+                    Err(Error::ImportError { .. }) => {
+                        // File not found, silently skip
+                    }
+                    Err(e) => return Err(e),
+                }
             }
         }
         Ok(())
@@ -130,11 +141,13 @@ impl ImportCompiler for Compiler {
         // 添加到已导入集合
         self.imported_files.insert(resolved_path.clone());
 
-        // 保存当前基础路径
+        // 保存当前基础路径和源文件
         let old_base_path = self.base_path.clone();
+        let old_file = self.current_file.clone();
 
-        // 更新基础路径为导入文件的目录
+        // 更新基础路径和当前文件为导入文件
         self.base_path = resolved_path.parent().map(|p| p.to_path_buf());
+        self.current_file = resolved_path.display().to_string();
 
         // 读取文件内容
         let content = std::fs::read_to_string(&resolved_path).map_err(|e| {
@@ -168,8 +181,9 @@ impl ImportCompiler for Compiler {
         // 编译导入的样式表
         self.compile_stylesheet(&stylesheet)?;
 
-        // 恢复基础路径
+        // 恢复基础路径和源文件
         self.base_path = old_base_path;
+        self.current_file = old_file;
 
         Ok(())
     }
@@ -191,7 +205,9 @@ impl ImportCompiler for Compiler {
         self.imported_files.insert(resolved_path.clone());
 
         let old_base_path = self.base_path.clone();
+        let old_file = self.current_file.clone();
         self.base_path = resolved_path.parent().map(|p| p.to_path_buf());
+        self.current_file = resolved_path.display().to_string();
 
         let content = std::fs::read_to_string(&resolved_path).map_err(|e| {
             Error::import_error(
@@ -220,42 +236,18 @@ impl ImportCompiler for Compiler {
             )
         })?;
 
-        // 只处理变量和混合器定义，不输出 CSS
-        // 这里需要访问 compile_variable_declaration 和 compile_mixin_definition
-        // 它们现在分别在 ExpressionCompiler (或 mod.rs?) 和 MixinCompiler 中
-        // 假设 Compiler 实现了所有 Trait
-        
-        // 注意：compile_variable_declaration 如果在 mod.rs，我们不能直接调用 self.compile_variable_declaration() 
-        // 除非它是 inherent 方法。如果它是 trait 方法 (ExpressionCompiler?), 那么需要 import ExpressionCompiler.
-        // 我们假设 compile_variable_declaration 逻辑很简单，或者我们通过 compile_statement 间接调用？
-        // 但是这里我们想过滤语句。
-        
-        // 我们需要在 ImportCompiler 中能够调用 Compiler 的其他编译方法。
-        // 这需要导入相应的 Traits。
-        use super::mixin::MixinCompiler;
-        // compile_variable_declaration 暂定在 mod.rs，如果是 inherent 方法，则可见。
-        // 否则如果它在 StatementCompiler 之类的地方，则需要导入。
-        // 我们在 mod.rs 中保留 compile_variable_declaration 为 inherent 方法。
+        // 使用 suppress_output 标志来处理引用导入
+        // 这允许我们复用完整的 compile_stylesheet 逻辑（包括嵌套 mixins, 变量等）
+        // 而不会生成任何 CSS 输出
+        let old_suppress = self.suppress_output;
+        self.suppress_output = true;
 
-        for statement in &stylesheet.statements {
-            match statement {
-                Statement::Variable(var) => {
-                    // self.compile_variable_declaration(var)?;
-                    // Temporarily using evaluate_expression from ExpressionCompiler manually
-                    use super::expression::ExpressionCompiler;
-                    let value = self.evaluate_expression(&var.value)?;
-                    self.current_scope().define_variable(var.name.clone(), value);
-                }
-                Statement::MixinDefinition(mixin) => {
-                    self.compile_mixin_definition(mixin)?;
-                }
-                _ => {
-                    // 忽略其他语句（规则、声明等）
-                }
-            }
-        }
+        self.compile_stylesheet(&stylesheet)?;
 
+        self.suppress_output = old_suppress;
         self.base_path = old_base_path;
+        self.current_file = old_file;
+
         Ok(())
     }
 
@@ -277,11 +269,24 @@ impl ImportCompiler for Compiler {
             )
         })?;
 
-        // 直接输出文件内容
-        self.output.push_str(&content);
+        // Inline import maps directly to the imported file content.
+        let old_file = self.current_file.clone();
+        self.current_file = resolved_path.display().to_string();
+
+        let mut src_line = 1usize;
+        for line in content.split_inclusive('\n') {
+            let pos = Position::new(src_line, 1);
+            self.add_mapping(&pos, None);
+            self.write_str(line);
+            src_line += 1;
+        }
+
+        // Handle files without trailing newline while preserving old behavior.
         if !content.ends_with('\n') {
             self.add_newline();
         }
+
+        self.current_file = old_file;
 
         Ok(())
     }
@@ -297,7 +302,9 @@ impl ImportCompiler for Compiler {
 
         // 不检查循环依赖，允许多次导入
         let old_base_path = self.base_path.clone();
+        let old_file = self.current_file.clone();
         self.base_path = resolved_path.parent().map(|p| p.to_path_buf());
+        self.current_file = resolved_path.display().to_string();
 
         let content = std::fs::read_to_string(&resolved_path).map_err(|e| {
             Error::import_error(
@@ -328,6 +335,7 @@ impl ImportCompiler for Compiler {
 
         self.compile_stylesheet(&stylesheet)?;
         self.base_path = old_base_path;
+        self.current_file = old_file;
 
         Ok(())
     }

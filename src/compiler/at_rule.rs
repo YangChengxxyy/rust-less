@@ -1,30 +1,33 @@
-use crate::ast::*;
-use crate::error::Result;
-use super::Compiler;
 use super::expression::ExpressionCompiler;
 use super::rule::RuleCompiler;
+use super::Compiler;
+use crate::ast::*;
+use crate::error::Result;
 
 /// At-Rule 编译特性
 pub trait AtRuleCompiler {
     /// 编译 At-Rule
     fn compile_at_rule(&mut self, at_rule: &AtRule, is_nested: bool) -> Result<()>;
-    
+
     /// 编译媒体查询
     fn compile_media_query(&mut self, at_rule: &AtRule, is_nested: bool) -> Result<()>;
-    
+
     /// 编译嵌套媒体查询并合并条件
     fn compile_nested_media_query_with_merging(&mut self, at_rule: &AtRule) -> Result<()>;
-    
+
     /// 处理媒体查询中的嵌套规则
     fn process_nested_rule_in_media(
         &self,
         rule: &Rule,
         statements: &mut Vec<Statement>,
     ) -> Result<()>;
-    
+
     /// 编译嵌套媒体查询（简单实现）
     fn compile_nested_media_query_simple(&mut self, at_rule: &AtRule) -> Result<()>;
-    
+
+    /// 编译嵌套在规则内的条件性 at-rule（@supports 等），实现选择器冒泡
+    fn compile_nested_conditional_at_rule(&mut self, at_rule: &AtRule) -> Result<()>;
+
     /// 输出所有挂起的媒体查询
     fn output_pending_media_queries(&mut self) -> Result<()>;
 }
@@ -36,18 +39,25 @@ impl AtRuleCompiler for Compiler {
             return self.compile_media_query(at_rule, is_nested);
         }
 
+        // @supports gets similar bubble-up treatment as @media when nested in rules
+        if at_rule.name == "supports" && !self.current_selectors.is_empty() {
+            return self.compile_nested_conditional_at_rule(at_rule);
+        }
+
+        // Source map: map at-rule to source position
+        self.add_mapping(&at_rule.position, None);
         self.add_indent();
-        self.output.push('@');
-        self.output.push_str(&at_rule.name);
+        self.write_char('@');
+        self.write_str(&at_rule.name);
 
         if let Some(prelude) = &at_rule.prelude {
             self.add_space();
-            self.output.push_str(prelude);
+            self.write_str(prelude);
         }
 
         if let Some(block) = &at_rule.block {
             self.add_space();
-            self.output.push('{');
+            self.write_char('{');
             self.add_newline();
 
             self.indent_level += 1;
@@ -57,9 +67,9 @@ impl AtRuleCompiler for Compiler {
             self.indent_level -= 1;
 
             self.add_indent();
-            self.output.push('}');
+            self.write_char('}');
         } else {
-            self.output.push(';');
+            self.write_char(';');
         }
 
         self.add_newline();
@@ -83,15 +93,15 @@ impl AtRuleCompiler for Compiler {
         self.media_query_stack.push(current_condition.to_string());
 
         self.add_indent();
-        self.output.push_str("@media");
+        self.write_str("@media");
         if !current_condition.is_empty() {
             self.add_space();
-            self.output.push_str(current_condition);
+            self.write_str(current_condition);
         }
 
         if let Some(block) = &at_rule.block {
             self.add_space();
-            self.output.push('{');
+            self.write_char('{');
             self.add_newline();
 
             self.indent_level += 1;
@@ -101,7 +111,7 @@ impl AtRuleCompiler for Compiler {
             self.indent_level -= 1;
 
             self.add_indent();
-            self.output.push('}');
+            self.write_char('}');
         }
 
         self.add_newline();
@@ -149,7 +159,8 @@ impl AtRuleCompiler for Compiler {
                     Statement::Variable(var) => {
                         // Manually compile variable declaration
                         let value = self.evaluate_expression(&var.value)?;
-                        self.current_scope().define_variable(var.name.clone(), value);
+                        self.current_scope()
+                            .define_variable(var.name.clone(), value);
                     }
                     Statement::Declaration(decl) => {
                         current_declarations.push(decl.clone());
@@ -205,7 +216,7 @@ impl AtRuleCompiler for Compiler {
                                     Statement::Declaration(decl) => {
                                         self.create_rule_for_current_selectors(
                                             &mut nested_transformed_statements,
-                                            &[decl.clone()],
+                                            std::slice::from_ref(decl),
                                             &nested_at_rule.position,
                                         )?;
                                     }
@@ -307,8 +318,9 @@ impl AtRuleCompiler for Compiler {
                     Statement::Variable(var) => {
                         // Process variables in scope but don't add to output
                         // Use evaluate_expression directly as we don't have compile_variable_declaration
-                         let value = self.evaluate_expression(&var.value)?;
-                         self.current_scope().define_variable(var.name.clone(), value);
+                        let value = self.evaluate_expression(&var.value)?;
+                        self.current_scope()
+                            .define_variable(var.name.clone(), value);
                     }
                     Statement::Declaration(decl) => {
                         // Collect declarations to be wrapped with current selectors
@@ -388,12 +400,67 @@ impl AtRuleCompiler for Compiler {
         Ok(())
     }
 
+    fn compile_nested_conditional_at_rule(&mut self, at_rule: &AtRule) -> Result<()> {
+        // Similar to compile_nested_media_query_simple but for @supports and similar
+        // conditional at-rules. Bubbles the selector into the at-rule block.
+        if let Some(block) = &at_rule.block {
+            let mut at_rule_header = format!("@{}", at_rule.name);
+            if let Some(prelude) = &at_rule.prelude {
+                at_rule_header.push(' ');
+                at_rule_header.push_str(prelude);
+            }
+
+            let mut transformed_statements = Vec::new();
+            let mut current_declarations = Vec::new();
+
+            for statement in block {
+                match statement {
+                    Statement::Variable(var) => {
+                        let value = self.evaluate_expression(&var.value)?;
+                        self.current_scope()
+                            .define_variable(var.name.clone(), value);
+                    }
+                    Statement::Declaration(decl) => {
+                        current_declarations.push(decl.clone());
+                    }
+                    Statement::Rule(rule) => {
+                        if !current_declarations.is_empty() {
+                            self.create_rule_for_current_selectors(
+                                &mut transformed_statements,
+                                &current_declarations,
+                                &at_rule.position,
+                            )?;
+                            current_declarations.clear();
+                        }
+                        self.process_nested_rule_in_media(rule, &mut transformed_statements)?;
+                    }
+                    _ => {
+                        transformed_statements.push(statement.clone());
+                    }
+                }
+            }
+
+            if !current_declarations.is_empty() {
+                self.create_rule_for_current_selectors(
+                    &mut transformed_statements,
+                    &current_declarations,
+                    &at_rule.position,
+                )?;
+            }
+
+            // Use pending_media_queries to defer output (same mechanism as @media)
+            self.pending_media_queries
+                .push((at_rule_header, transformed_statements));
+        }
+        Ok(())
+    }
+
     fn output_pending_media_queries(&mut self) -> Result<()> {
         let pending = std::mem::take(&mut self.pending_media_queries);
         for (media_query, statements) in pending {
-            self.output.push_str(&media_query);
+            self.write_str(&media_query);
             self.add_space();
-            self.output.push('{');
+            self.write_char('{');
             self.add_newline();
 
             self.indent_level += 1;
@@ -403,7 +470,7 @@ impl AtRuleCompiler for Compiler {
             self.indent_level -= 1;
 
             self.add_indent();
-            self.output.push('}');
+            self.write_char('}');
             self.add_newline();
         }
         Ok(())

@@ -139,49 +139,50 @@ impl Selector {
     /// Create a simple selector with a single part
     pub fn simple(selector_text: String, position: Position) -> Self {
         // Handle complex selectors starting with &
-        if selector_text.starts_with('&') && selector_text.len() > 1 {
-            let mut simple_selectors = vec![SimpleSelector::Parent(position.clone())];
-            let remaining = &selector_text[1..];
+        if let Some(remaining) = selector_text.strip_prefix('&') {
+            if !remaining.is_empty() {
+                let mut simple_selectors = vec![SimpleSelector::Parent(position.clone())];
 
-            // Parse the rest of the selector
-            if remaining.starts_with(':') {
-                // Pseudo-class like &:hover
-                simple_selectors.push(SimpleSelector::PseudoClass {
-                    name: remaining[1..].to_string(),
-                    argument: None,
+                // Parse the rest of the selector
+                if let Some(stripped) = remaining.strip_prefix(':') {
+                    // Pseudo-class like &:hover
+                    simple_selectors.push(SimpleSelector::PseudoClass {
+                        name: stripped.to_string(),
+                        argument: None,
+                        position: position.clone(),
+                    });
+                } else if let Some(stripped) = remaining.strip_prefix('.') {
+                    // Class like &.active
+                    simple_selectors.push(SimpleSelector::Class {
+                        name: stripped.to_string(),
+                        position: position.clone(),
+                    });
+                } else {
+                    // Direct concatenation like &-large
+                    simple_selectors.push(SimpleSelector::Type {
+                        name: remaining.to_string(),
+                        position: position.clone(),
+                    });
+                }
+
+                let part = SelectorPart {
+                    simple_selectors,
+                    combinator: None,
                     position: position.clone(),
-                });
-            } else if remaining.starts_with('.') {
-                // Class like &.active
-                simple_selectors.push(SimpleSelector::Class {
-                    name: remaining[1..].to_string(),
-                    position: position.clone(),
-                });
-            } else {
-                // Direct concatenation like &-large
-                simple_selectors.push(SimpleSelector::Type {
-                    name: remaining.to_string(),
-                    position: position.clone(),
-                });
+                };
+
+                return Self::new(vec![part], position);
             }
-
-            let part = SelectorPart {
-                simple_selectors,
-                combinator: None,
-                position: position.clone(),
-            };
-
-            return Self::new(vec![part], position);
         }
 
-        let simple_selector = if selector_text.starts_with('.') {
+        let simple_selector = if let Some(stripped) = selector_text.strip_prefix('.') {
             SimpleSelector::Class {
-                name: selector_text[1..].to_string(),
+                name: stripped.to_string(),
                 position: position.clone(),
             }
-        } else if selector_text.starts_with('#') {
+        } else if let Some(stripped) = selector_text.strip_prefix('#') {
             SimpleSelector::Id {
-                name: selector_text[1..].to_string(),
+                name: stripped.to_string(),
                 position: position.clone(),
             }
         } else if selector_text == "*" {
@@ -302,18 +303,7 @@ impl SimpleSelector {
     pub fn to_css(&self) -> String {
         match self {
             SimpleSelector::Universal(_) => "*".to_string(),
-            SimpleSelector::Type { name, .. } => {
-                // Handle direct concatenation with parent selector
-                if name.starts_with('-')
-                    || name
-                        .chars()
-                        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-                {
-                    name.clone()
-                } else {
-                    name.clone()
-                }
-            }
+            SimpleSelector::Type { name, .. } => name.clone(),
             SimpleSelector::Class { name, .. } => format!(".{}", name),
             SimpleSelector::Id { name, .. } => format!("#{}", name),
             SimpleSelector::Attribute {

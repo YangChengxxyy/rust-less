@@ -172,6 +172,14 @@ pub enum Expression {
 
     /// JavaScript evaluation: `expression`
     JavaScript(String, Position),
+
+    /// Map literal: { key: value; key2: value2; }
+    MapLiteral {
+        /// Key-value pairs
+        entries: Vec<(String, Expression)>,
+        /// Source position
+        position: Position,
+    },
 }
 
 /// Parts of a template string
@@ -463,7 +471,8 @@ impl Expression {
             | Expression::PropertyAccess { position: pos, .. }
             | Expression::Escaped(_, pos)
             | Expression::Anonymous(_, pos)
-            | Expression::JavaScript(_, pos) => pos,
+            | Expression::JavaScript(_, pos)
+            | Expression::MapLiteral { position: pos, .. } => pos,
         }
     }
 
@@ -671,6 +680,11 @@ impl super::Visitable for Expression {
             }
             Expression::PropertyAccess { object, .. } => {
                 object.accept(visitor);
+            }
+            Expression::MapLiteral { entries, .. } => {
+                for (_, value) in entries {
+                    value.accept(visitor);
+                }
             }
             _ => {} // Leaf expressions don't need to visit children
         }

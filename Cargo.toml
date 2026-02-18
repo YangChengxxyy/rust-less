@@ -1,6 +1,6 @@
 [package]
 name = "rust-less"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 description = "高性能的 LESS 到 CSS 编译器，支持变量、嵌套、颜色函数等核心功能"
 license = "MIT"
@@ -62,12 +62,18 @@ wee_alloc = { version = "0.4", optional = true }
 # JavaScript types
 js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
+sourcemap = "9.3.2"
 
 [dev-dependencies]
 criterion = "0.5"
 insta = "1.34"
 pretty_assertions = "1.4"
+wasm-bindgen-test = "0.3"
 
+
+[[bench]]
+name = "compiler_bench"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true

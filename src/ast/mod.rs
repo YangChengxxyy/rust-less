@@ -39,7 +39,7 @@ impl Default for Position {
 
 /// LESS 样式表是规则和语句的集合
 /// Root AST node representing a complete LESS stylesheet
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Stylesheet {
     /// All top-level statements in the stylesheet
     pub statements: Vec<Statement>,
@@ -50,10 +50,7 @@ pub struct Stylesheet {
 impl Stylesheet {
     /// Create a new empty stylesheet
     pub fn new() -> Self {
-        Self {
-            statements: Vec::new(),
-            position: Position::default(),
-        }
+        Self::default()
     }
 
     /// Create a stylesheet with the given statements
@@ -86,6 +83,19 @@ pub enum Statement {
     Comment(Comment),
     /// 扩展语句
     Extend(Extend),
+    /// each() 迭代调用
+    EachCall(EachCall),
+}
+
+/// each() 迭代调用
+#[derive(Debug, Clone, PartialEq)]
+pub struct EachCall {
+    /// 要迭代的列表表达式
+    pub list: Expression,
+    /// 模板块体
+    pub body: Vec<Statement>,
+    /// Source position
+    pub position: Position,
 }
 
 /// 变量声明: @variable: value;
@@ -158,6 +168,15 @@ impl Rule {
     }
 }
 
+/// Property merge type for `+:` and `+_:` syntax
+#[derive(Debug, Clone, PartialEq)]
+pub enum MergeType {
+    /// Merge with comma separator (`+:`)
+    Comma,
+    /// Merge with space separator (`+_:`)
+    Space,
+}
+
 /// 属性声明: property: value;
 /// CSS property declaration: `property: value;`
 #[derive(Debug, Clone, PartialEq)]
@@ -168,6 +187,8 @@ pub struct Declaration {
     pub value: Expression,
     /// Whether !important is specified
     pub important: bool,
+    /// Property merge type (None for normal, Some for +: or +_:)
+    pub merge: Option<MergeType>,
     /// Source position
     pub position: Position,
 }
@@ -179,6 +200,7 @@ impl Declaration {
             property,
             value,
             important: false,
+            merge: None,
             position,
         }
     }
@@ -186,6 +208,12 @@ impl Declaration {
     /// Mark this declaration as !important
     pub fn with_important(mut self) -> Self {
         self.important = true;
+        self
+    }
+
+    /// Set merge type
+    pub fn with_merge(mut self, merge_type: MergeType) -> Self {
+        self.merge = Some(merge_type);
         self
     }
 }
@@ -202,6 +230,8 @@ pub struct MixinDefinition {
     pub guard: Option<Expression>,
     /// Mixin body statements
     pub body: Vec<Statement>,
+    /// Source file path where the mixin is defined
+    pub source_file: Option<String>,
     /// Source position
     pub position: Position,
 }
@@ -214,6 +244,7 @@ impl MixinDefinition {
             parameters: Vec::new(),
             guard: None,
             body: Vec::new(),
+            source_file: None,
             position,
         }
     }
@@ -235,6 +266,12 @@ impl MixinDefinition {
         self.body = body;
         self
     }
+
+    /// Attach the source file path where this mixin is defined
+    pub fn with_source_file(mut self, source_file: impl Into<String>) -> Self {
+        self.source_file = Some(source_file.into());
+        self
+    }
 }
 
 /// 混合器参数
@@ -247,6 +284,8 @@ pub struct MixinParameter {
     pub default_value: Option<Expression>,
     /// Whether this is a variadic parameter (@rest...)
     pub variadic: bool, // 用于 @rest... 参数
+    /// Pattern-match value (for `.mixin(dark)` style definitions)
+    pub pattern_value: Option<Expression>,
     /// Source position
     pub position: Position,
 }
@@ -258,6 +297,7 @@ impl MixinParameter {
             name,
             default_value: None,
             variadic: false,
+            pattern_value: None,
             position,
         }
     }
@@ -342,6 +382,8 @@ pub enum ImportType {
     Multiple,
     /// 引用导入 (@import (reference) "file.less")
     Reference,
+    /// 可选导入 (@import (optional) "file.less") - 文件不存在时静默跳过
+    Optional,
 }
 
 impl Import {
@@ -456,7 +498,11 @@ pub struct Extend {
 impl Extend {
     /// Create a new extend directive
     pub fn new(selectors: Vec<Selector>, all: bool, position: Position) -> Self {
-        Self { selectors, all, position }
+        Self {
+            selectors,
+            all,
+            position,
+        }
     }
 }
 
@@ -594,7 +640,7 @@ impl Scope {
 
     /// Define a mixin in this scope
     pub fn define_mixin(&mut self, name: String, mixin: MixinDefinition) {
-        self.mixins.entry(name).or_insert_with(Vec::new).push(mixin);
+        self.mixins.entry(name).or_default().push(mixin);
     }
 
     /// Look up a variable by name, searching parent scopes if needed
@@ -675,6 +721,7 @@ impl Visitable for Statement {
             Statement::AtRule(at_rule) => at_rule.accept(visitor),
             Statement::Comment(comment) => comment.accept(visitor),
             Statement::Extend(extend) => extend.accept(visitor),
+            Statement::EachCall(_) => {} // each() is handled by compiler expansion
         }
     }
 }
@@ -786,6 +833,7 @@ impl fmt::Display for ImportType {
             ImportType::Once => write!(f, "once"),
             ImportType::Multiple => write!(f, "multiple"),
             ImportType::Reference => write!(f, "reference"),
+            ImportType::Optional => write!(f, "optional"),
         }
     }
 }

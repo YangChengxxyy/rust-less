@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
     use rust_less::{Compiler, Error};
@@ -17,17 +16,23 @@ mod tests {
                 replaced-literal: replace(@str, "world", "Rust");
             }
         "#;
-        
+
         let result = compiler.compile(input);
-        
+
         match result {
             Ok(css) => {
                 println!("CSS Output:\n{}", css);
                 assert!(css.contains("escaped: hello world"), "e(@str) failed");
                 // replace() returns a string, so it should be quoted in CSS output
-                assert!(css.contains("replaced: \"hello LESS\""), "replace(@str, @search, @replace) failed");
-                assert!(css.contains("replaced-literal: \"hello Rust\""), "replace(@str, literal, literal) failed");
-            },
+                assert!(
+                    css.contains("replaced: \"hello LESS\""),
+                    "replace(@str, @search, @replace) failed"
+                );
+                assert!(
+                    css.contains("replaced-literal: \"hello Rust\""),
+                    "replace(@str, literal, literal) failed"
+                );
+            }
             Err(e) => {
                 panic!("Compilation failed: {:?}", e);
             }

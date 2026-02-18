@@ -2,13 +2,16 @@
 //!
 //! 此模块实现了将 Rust LESS 编译器功能暴露给 JavaScript 的具体绑定。
 
-use crate::{compile, Compiler, CompilerOptions};
+use crate::{compile, Compiler};
 use wasm_bindgen::prelude::*;
 
 // 当 `console_error_panic_hook` 功能启用时，我们可以调用 `set_panic_hook` 函数
 // 来获得更好的错误消息调试体验
+/// 设置 panic hook 以获得更好的错误报告
 #[cfg(feature = "console_error_panic_hook")]
-pub use console_error_panic_hook::set_panic_hook;
+pub fn set_panic_hook() {
+    console_error_panic_hook::set_once();
+}
 
 // 当 `wee_alloc` 功能启用时，使用 `wee_alloc` 作为全局分配器
 #[cfg(feature = "wee_alloc")]
@@ -68,6 +71,7 @@ impl WasmCompilerOptions {
 #[wasm_bindgen]
 pub struct CompileResult {
     css: String,
+    source_map: Option<String>,
     error: Option<String>,
 }
 
@@ -77,6 +81,12 @@ impl CompileResult {
     #[wasm_bindgen(getter)]
     pub fn css(&self) -> String {
         self.css.clone()
+    }
+
+    /// 获取 source map JSON（如果启用了 source map 生成）
+    #[wasm_bindgen(getter, js_name = "sourceMap")]
+    pub fn source_map(&self) -> Option<String> {
+        self.source_map.clone()
     }
 
     /// 获取错误信息（如果有）
@@ -102,9 +112,14 @@ impl CompileResult {
 #[wasm_bindgen]
 pub fn compile_less(input: &str) -> CompileResult {
     match compile(input) {
-        Ok(css) => CompileResult { css, error: None },
+        Ok(css) => CompileResult {
+            css,
+            source_map: None,
+            error: None,
+        },
         Err(e) => CompileResult {
             css: String::new(),
+            source_map: None,
             error: Some(e.to_string()),
         },
     }
@@ -120,17 +135,28 @@ pub fn compile_less(input: &str) -> CompileResult {
 /// 返回编译结果，包含 CSS 或错误信息
 #[wasm_bindgen]
 pub fn compile_less_with_options(input: &str, options: &WasmCompilerOptions) -> CompileResult {
-    let result = if options.compress {
-        let mut compiler = Compiler::compressed();
-        compiler.compile(input)
+    let mut compiler = if options.compress {
+        Compiler::compressed()
     } else {
-        compile(input)
+        Compiler::new()
     };
 
-    match result {
-        Ok(css) => CompileResult { css, error: None },
+    if options.source_map {
+        compiler = compiler.with_source_map(true);
+    }
+
+    match compiler.compile(input) {
+        Ok(css) => {
+            let source_map = compiler.generate_source_map();
+            CompileResult {
+                css,
+                source_map,
+                error: None,
+            }
+        }
         Err(e) => CompileResult {
             css: String::new(),
+            source_map: None,
             error: Some(e.to_string()),
         },
     }
@@ -140,6 +166,12 @@ pub fn compile_less_with_options(input: &str, options: &WasmCompilerOptions) -> 
 #[wasm_bindgen]
 pub struct WasmCompiler {
     inner: Compiler,
+}
+
+impl Default for WasmCompiler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[wasm_bindgen]
@@ -160,13 +192,27 @@ impl WasmCompiler {
         }
     }
 
+    /// 启用源码映射生成
+    #[wasm_bindgen(js_name = "enableSourceMap")]
+    pub fn enable_source_map(&mut self) {
+        self.inner = Compiler::new().with_source_map(true);
+    }
+
     /// 编译 LESS 代码
     #[wasm_bindgen]
     pub fn compile(&mut self, input: &str) -> CompileResult {
         match self.inner.compile(input) {
-            Ok(css) => CompileResult { css, error: None },
+            Ok(css) => {
+                let source_map = self.inner.generate_source_map();
+                CompileResult {
+                    css,
+                    source_map,
+                    error: None,
+                }
+            }
             Err(e) => CompileResult {
                 css: String::new(),
+                source_map: None,
                 error: Some(e.to_string()),
             },
         }
@@ -208,9 +254,8 @@ pub fn get_error_details(input: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wasm_bindgen_test::*;
 
-    #[wasm_bindgen_test]
+    #[test]
     fn test_compile_less() {
         let less = "@color: red; .test { color: @color; }";
         let result = compile_less(less);
@@ -218,7 +263,7 @@ mod tests {
         assert!(result.css().contains("color: red"));
     }
 
-    #[wasm_bindgen_test]
+    #[test]
     fn test_compile_with_options() {
         let less = "@color: red; .test { color: @color; }";
         let mut options = WasmCompilerOptions::new();
@@ -228,7 +273,7 @@ mod tests {
         assert!(result.is_success());
     }
 
-    #[wasm_bindgen_test]
+    #[test]
     fn test_compiler_class() {
         let mut compiler = WasmCompiler::new();
         let less = "@color: blue; .header { color: @color; }";
@@ -238,13 +283,13 @@ mod tests {
         assert!(result.css().contains("color: blue"));
     }
 
-    #[wasm_bindgen_test]
+    #[test]
     fn test_validation() {
         assert!(validate_less("@color: red; .test { color: @color; }"));
-        assert!(!validate_less("@color: red .test { color: @color; }")); // 缺少分号
+        assert!(!validate_less("@color red; .test { color: @color; }")); // 变量声明缺少冒号
     }
 
-    #[wasm_bindgen_test]
+    #[test]
     fn test_version() {
         let version = version();
         assert!(!version.is_empty());

@@ -69,8 +69,10 @@ pub enum TokenType {
     Ellipsis, // ... for @param...
 
     // Special tokens
-    Important, // !important
-    Default,   // !default
+    Important,  // !important
+    Default,    // !default
+    MergeComma, // +: (property merge with comma)
+    MergeSpace, // +_: (property merge with space)
 
     // End of file
     Eof,
@@ -347,20 +349,32 @@ impl Lexer {
             }
         } else if self.current_char == Some('/') && self.peek() == Some('*') {
             // Block comment - include /* */ markers
+            let start_line = self.line;
+            let start_col = self.column;
             value.push_str("/*");
             self.advance(); // Skip /
             self.advance(); // Skip *
 
+            let mut found_end = false;
             while let Some(ch) = self.current_char {
                 if ch == '*' && self.peek() == Some('/') {
                     self.advance(); // Skip *
                     self.advance(); // Skip /
                     value.push_str("*/");
+                    found_end = true;
                     break;
                 } else {
                     value.push(ch);
                     self.advance();
                 }
+            }
+
+            if !found_end {
+                return Err(Error::parse_error(
+                    "Unterminated block comment",
+                    start_line,
+                    start_col,
+                ));
             }
         }
 
@@ -479,7 +493,7 @@ impl Lexer {
                         "default" => TokenType::Default,
                         _ => {
                             return Err(Error::lex_error(
-                                &format!("Unknown directive: !{}", identifier),
+                                format!("Unknown directive: !{identifier}"),
                                 self.line,
                                 self.column,
                             ))
@@ -495,6 +509,25 @@ impl Lexer {
 
                 // Single character tokens
                 Some('+') => {
+                    // Check for +_: (merge with space) or +: (merge with comma)
+                    if self.peek() == Some('_') && self.peek_ahead(2) == Some(':') {
+                        self.advance(); // consume +
+                        self.advance(); // consume _
+                        self.advance(); // consume :
+                        return Ok(Token {
+                            token_type: TokenType::MergeSpace,
+                            position,
+                            lexeme: "+_:".to_string(),
+                        });
+                    } else if self.peek() == Some(':') {
+                        self.advance(); // consume +
+                        self.advance(); // consume :
+                        return Ok(Token {
+                            token_type: TokenType::MergeComma,
+                            position,
+                            lexeme: "+:".to_string(),
+                        });
+                    }
                     self.advance();
                     return Ok(Token {
                         token_type: TokenType::Plus,
@@ -731,7 +764,7 @@ impl Lexer {
 
                 Some(ch) => {
                     return Err(Error::lex_error(
-                        &format!("Unexpected character: '{}'", ch),
+                        format!("Unexpected character: '{ch}'"),
                         self.line,
                         self.column,
                     ));
@@ -802,6 +835,8 @@ impl fmt::Display for TokenType {
             TokenType::Ellipsis => write!(f, "Ellipsis"),
             TokenType::Important => write!(f, "Important"),
             TokenType::Default => write!(f, "Default"),
+            TokenType::MergeComma => write!(f, "MergeComma"),
+            TokenType::MergeSpace => write!(f, "MergeSpace"),
             TokenType::Eof => write!(f, "Eof"),
         }
     }
