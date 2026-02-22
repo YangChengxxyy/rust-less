@@ -57,8 +57,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 新增 Maps 函数层与集成层测试（写入/深合并/key 规范化/错误语义）
 - 新增 Source Map `@keyframes` 规则名一致性回归测试（本地与 import 场景）
 - 新增 source map less.js 兼容模式回归测试（编译器与 CLI）
-- 当前测试状态: **312 passed, 0 ignored**
+- 当前测试状态（2026-02-22）: **346 passed, 0 ignored**（`--all-features`: **356 passed, 0 ignored**）
 - `cargo clippy --all-targets --all-features`: 通过（无警告）
+- 兼容性摘要来源：`docs/LESSJS_DIFF_REPORT.json`（`pass=70`、`fail=0`、`unsupported=14`）
 
 ## [0.2.4] - 2025-01-22
 
@@ -99,7 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **项目清理**:
   - 删除了项目根目录的临时测试文件
-  - 移除 `test_nesting`, `test_nesting.rs`, `test_advanced_nesting`, `test_advanced_nesting.rs`
+  - 清理了部分历史临时测试产物（根目录保留了用于手动排查的 legacy 样例）
 
 ### 📚 文档更新 (Documentation)
 
@@ -342,14 +343,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [x] `:extend()` 支持
 - [x] 命名空间支持 (#namespace > .mixin)
 - [x] 递归混合器（循环生成）
-- [ ] 最小可用源码映射
+- [x] 最小可用源码映射
 
 ### [0.4.0] - 计划中 (2-3个月内)
 
 **主要目标**: 高级功能
 
-- [ ] Maps 数据结构
-- [ ] 源码映射支持
+- [x] Maps 基础数据结构与函数接口
+- [ ] Maps 高级语义补齐（边界行为与 less.js 语义继续对齐）
+- [x] 源码映射支持（基础链路 + CLI + less.js 兼容模式）
+- [ ] 源码映射深度对齐（复杂导入链与嵌套 at-rule）
 - [ ] 插件系统钩子设计
 
 ### [1.0.0] - 计划中 (6-12个月内)
@@ -374,7 +377,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | LESS 兼容性 | 测试通过率 | 状态 |
 |------|-------------|------------|------|
-| 0.2.3 | 90% | 100% | 当前稳定版 |
+| 0.2.4 | 97% | 100% | 当前稳定版 |
+| 0.2.3 | 90% | 100% | 旧版本 |
 | 0.2.2 | 87% | 100% | 旧版本 |
 | 0.2.1 | 85% | 92.1% | 旧版本 |
 | 0.2.0 | 75% | 85% | 旧版本 |

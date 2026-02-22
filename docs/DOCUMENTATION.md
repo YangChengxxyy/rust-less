@@ -9,11 +9,12 @@
 
 Rust LESS 是一个用 Rust 编写的高性能 LESS 编译器，旨在提供与官方 LESS 编译器高度兼容的功能，同时带来显著的性能提升。
 
-**质量基线（2026-02-21）**:
-- `cargo test --quiet`: 326 passed, 0 failed, 0 ignored
-- `cargo test --all-features --quiet`: 336 passed, 0 failed, 0 ignored
+**质量基线（2026-02-22）**:
+- `cargo test --quiet`: 346 passed, 0 failed, 0 ignored
+- `cargo test --all-features --quiet`: 356 passed, 0 failed, 0 ignored
 - `bash tools/status-check/run-status-check.sh`: 默认启用 `--strict --strict-mappings`，门禁全绿
 - `bash tools/perf-check/run-perf-check.sh`: 基于 `docs/PERF_BASELINE.json` 的性能阈值回归门禁
+- 兼容性摘要来源：`docs/LESSJS_DIFF_REPORT.json`（`pass=70`、`fail=0`、`unsupported=14`）
 
 ## 🎯 核心功能实现状态
 
