@@ -157,6 +157,9 @@ impl ExpressionCompiler for Compiler {
                     ))
                 }
             }
+            // Detached rulesets are opaque values; pass through without evaluation.
+            // They are only expanded when invoked via `@var()`.
+            Expression::DetachedRuleset { .. } => Ok(expr.clone()),
             _ => Ok(expr.clone()), // Literals don't need evaluation
         }
     }

@@ -180,6 +180,15 @@ pub enum Expression {
         /// Source position
         position: Position,
     },
+
+    /// Detached ruleset: { color: red; .inner { ... } }
+    /// A block of statements stored as a value, invoked with @var()
+    DetachedRuleset {
+        /// The statements inside the detached ruleset
+        body: Vec<super::Statement>,
+        /// Source position
+        position: Position,
+    },
 }
 
 /// Parts of a template string
@@ -472,7 +481,8 @@ impl Expression {
             | Expression::Escaped(_, pos)
             | Expression::Anonymous(_, pos)
             | Expression::JavaScript(_, pos)
-            | Expression::MapLiteral { position: pos, .. } => pos,
+            | Expression::MapLiteral { position: pos, .. }
+            | Expression::DetachedRuleset { position: pos, .. } => pos,
         }
     }
 
@@ -567,6 +577,7 @@ impl Expression {
             Expression::Null(_) => "null".to_string(),
             Expression::Escaped(value, _) => value.clone(),
             Expression::Anonymous(value, _) => value.clone(),
+            Expression::DetachedRuleset { .. } => "[detached ruleset]".to_string(),
             _ => format!("{:?}", self), // Fallback for complex expressions
         }
     }
@@ -684,6 +695,11 @@ impl super::Visitable for Expression {
             Expression::MapLiteral { entries, .. } => {
                 for (_, value) in entries {
                     value.accept(visitor);
+                }
+            }
+            Expression::DetachedRuleset { body, .. } => {
+                for statement in body {
+                    statement.accept(visitor);
                 }
             }
             _ => {} // Leaf expressions don't need to visit children

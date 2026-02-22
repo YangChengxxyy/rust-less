@@ -152,6 +152,10 @@ impl Parser {
                     Ok(Some(Statement::Variable(
                         self.parse_variable_declaration()?,
                     )))
+                } else if self.is_detached_ruleset_call() {
+                    Ok(Some(Statement::DetachedRulesetCall(
+                        self.parse_detached_ruleset_call()?,
+                    )))
                 } else {
                     Ok(Some(Statement::AtRule(self.parse_at_rule()?)))
                 }
@@ -2824,11 +2828,33 @@ impl Parser {
                 Ok(Expression::parenthesized(expr, position))
             }
             TokenType::LeftBrace => {
-                // Map literal: { key: value; key2: value2; }
-                self.advance(); // consume '{'
-                let entries = self.parse_map_entries()?;
-                self.consume(TokenType::RightBrace, "Expected '}' after map literal")?;
-                Ok(Expression::MapLiteral { entries, position })
+                if self.is_detached_ruleset_lookahead() {
+                    // Detached ruleset: { .selector { ... }; property: value; }
+                    self.advance(); // consume '{'
+                    let mut body = Vec::new();
+                    while !self.is_at_end() && !self.check(&TokenType::RightBrace) {
+                        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                            self.advance();
+                        }
+                        if self.is_at_end() || self.check(&TokenType::RightBrace) {
+                            break;
+                        }
+                        if let Some(statement) = self.parse_statement()? {
+                            body.push(statement);
+                        }
+                    }
+                    self.consume(
+                        TokenType::RightBrace,
+                        "Expected '}' after detached ruleset",
+                    )?;
+                    Ok(Expression::DetachedRuleset { body, position })
+                } else {
+                    // Map literal: { key: value; key2: value2; }
+                    self.advance(); // consume '{'
+                    let entries = self.parse_map_entries()?;
+                    self.consume(TokenType::RightBrace, "Expected '}' after map literal")?;
+                    Ok(Expression::MapLiteral { entries, position })
+                }
             }
             _ => Err(Error::parse_error(
                 "Expected expression",
@@ -2836,6 +2862,217 @@ impl Parser {
                 position.column,
             )),
         }
+    }
+
+    /// Check if current `{` starts a detached ruleset (vs. a map literal).
+    ///
+    /// Lookahead strategy:
+    /// 1. Empty `{}` → map literal (empty map)
+    /// 2. Scan for nested braces - check what precedes each `{`:
+    ///    - `identifier:` + `{` → nested map value
+    ///    - selector/at-rule + `{` → detached ruleset
+    /// 3. Check first token pattern for selector/at-rule → detached ruleset
+    /// 4. `identifier:` / `string:` / `number:` pattern → map literal
+    fn is_detached_ruleset_lookahead(&self) -> bool {
+        // First pass: scan for nested braces and check their context
+        {
+            let mut lookahead = self.current + 1;
+            let mut brace_depth = 1;
+
+            while lookahead < self.tokens.len() && brace_depth > 0 {
+                let token_type = &self.tokens[lookahead].token_type;
+
+                match token_type {
+                    TokenType::LeftBrace => {
+                        // Check what precedes this `{`
+                        // Skip whitespace to find the real previous token
+                        let mut la_prev = lookahead as i64 - 1;
+                        while la_prev >= 0
+                            && matches!(self.tokens[la_prev as usize].token_type, TokenType::Whitespace)
+                        {
+                            la_prev -= 1;
+                        }
+
+                        if la_prev >= 0 {
+                            let prev = &self.tokens[la_prev as usize].token_type;
+                            match prev {
+                                // `identifier:` or `string:` or `number:` followed by `{` → nested map
+                                TokenType::Colon => {
+                                    // This `{` is a nested map value, continue scanning
+                                }
+                                // `.class`, `#id`, `&`, `@keyword` followed by `{` → DR
+                                TokenType::Dot | TokenType::Ampersand | TokenType::Hash(_)
+                                | TokenType::AtKeyword(_) => {
+                                    return true;
+                                }
+                                // Identifier followed by `{` - check if it's a selector
+                                TokenType::Identifier(_) => {
+                                    // If the identifier looks like a selector (e.g., starts with & pattern)
+                                    // or is followed by `{` directly, it could be a rule
+                                    // For now, assume it's a rule if not preceded by `:`
+                                    // Actually, we need to check TWO tokens back
+                                    let mut la_prev2 = la_prev - 1;
+                                    while la_prev2 >= 0
+                                        && matches!(self.tokens[la_prev2 as usize].token_type, TokenType::Whitespace)
+                                    {
+                                        la_prev2 -= 1;
+                                    }
+                                    if la_prev2 >= 0
+                                        && !matches!(self.tokens[la_prev2 as usize].token_type, TokenType::Colon)
+                                    {
+                                        // `identifier` without preceding `:` followed by `{`
+                                        // This is likely a selector like `div { }`
+                                        return true;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        brace_depth += 1;
+                    }
+                    TokenType::RightBrace => brace_depth -= 1,
+                    _ => {}
+                }
+                lookahead += 1;
+            }
+        }
+
+        // No nested braces indicating DR - check first token patterns
+        let mut lookahead = self.current + 1;
+
+        // Skip whitespace
+        while lookahead < self.tokens.len()
+            && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+        {
+            lookahead += 1;
+        }
+
+        if lookahead >= self.tokens.len() {
+            return false;
+        }
+
+        match &self.tokens[lookahead].token_type {
+            // Empty braces → empty map
+            TokenType::RightBrace => false,
+
+            // Selectors: `.class`, `#id`, `&`
+            TokenType::Dot | TokenType::Ampersand => true,
+            TokenType::Hash(_) => true,
+
+            // At-rules inside: `@media`, `@keyframes`, etc. → detached ruleset
+            TokenType::AtKeyword(_) => true,
+
+            // Identifier, String, or Number followed by `:` → likely map literal
+            TokenType::Identifier(_) | TokenType::String(_) | TokenType::Number(_) => {
+                let mut la2 = lookahead + 1;
+                while la2 < self.tokens.len()
+                    && matches!(self.tokens[la2].token_type, TokenType::Whitespace)
+                {
+                    la2 += 1;
+                }
+                // If followed by `:`, assume map literal
+                !(la2 < self.tokens.len()
+                    && matches!(self.tokens[la2].token_type, TokenType::Colon))
+            }
+
+            // Anything else → detached ruleset
+            _ => true,
+        }
+    }
+
+    /// Check if the current `@keyword` token is a detached ruleset call: `@name()`
+    ///
+    /// Pattern: `@keyword` followed by `(` `)` (with optional whitespace).
+    /// Must NOT be a variable declaration (`@keyword:`) or a known at-rule.
+    fn is_detached_ruleset_call(&self) -> bool {
+        if let TokenType::AtKeyword(name) = &self.current_token().token_type {
+            // Skip known at-rules that take `(...)` syntax
+            let known_at_rules = [
+                "import", "media", "supports", "keyframes", "font-face", "charset", "namespace",
+                "page", "counter-style", "document", "layer",
+            ];
+            if known_at_rules.contains(&name.as_str()) {
+                return false;
+            }
+
+            let mut lookahead = self.current + 1;
+            // Skip whitespace
+            while lookahead < self.tokens.len()
+                && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+            {
+                lookahead += 1;
+            }
+            if lookahead >= self.tokens.len() {
+                return false;
+            }
+            // Must be `(`
+            if !matches!(self.tokens[lookahead].token_type, TokenType::LeftParen) {
+                return false;
+            }
+            lookahead += 1;
+            // Skip whitespace
+            while lookahead < self.tokens.len()
+                && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+            {
+                lookahead += 1;
+            }
+            if lookahead >= self.tokens.len() {
+                return false;
+            }
+            // Must be `)`
+            matches!(self.tokens[lookahead].token_type, TokenType::RightParen)
+        } else {
+            false
+        }
+    }
+
+    /// Parse a detached ruleset call: `@name();`
+    fn parse_detached_ruleset_call(&mut self) -> Result<DetachedRulesetCall> {
+        let position = self.current_position();
+
+        // Consume @keyword
+        let name = if let TokenType::AtKeyword(name) = &self.current_token().token_type {
+            let n = name.clone();
+            self.advance();
+            n
+        } else {
+            return Err(Error::parse_error(
+                "Expected @variable for detached ruleset call",
+                position.line,
+                position.column,
+            ));
+        };
+
+        // Skip whitespace
+        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+            self.advance();
+        }
+
+        // Consume ( )
+        self.consume(
+            TokenType::LeftParen,
+            "Expected '(' in detached ruleset call",
+        )?;
+        // Skip whitespace
+        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+            self.advance();
+        }
+        self.consume(
+            TokenType::RightParen,
+            "Expected ')' in detached ruleset call",
+        )?;
+
+        // Skip whitespace
+        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+            self.advance();
+        }
+
+        // Consume optional semicolon
+        if self.check(&TokenType::Semicolon) {
+            self.advance();
+        }
+
+        Ok(DetachedRulesetCall { name, position })
     }
 
     /// Check if current position is an each() call

@@ -80,18 +80,22 @@ impl RuleCompiler for Compiler {
         let previous_selectors = self.current_selectors.clone();
         self.current_selectors = current_selectors.clone();
 
-        // Check if we need to output this rule (has declarations, mixin calls, or comments)
+        // Check if we need to output this rule (has declarations, mixin calls, DR calls, or comments)
         let has_declarations = !rule.declarations.is_empty();
         let has_mixin_calls = rule
             .nested_rules
             .iter()
             .any(|stmt| matches!(stmt, Statement::MixinCall(_)));
+        let has_dr_calls = rule
+            .nested_rules
+            .iter()
+            .any(|stmt| matches!(stmt, Statement::DetachedRulesetCall(_)));
         let has_comments = rule
             .nested_rules
             .iter()
             .any(|stmt| matches!(stmt, Statement::Comment(_)));
 
-        if has_declarations || has_mixin_calls || has_comments {
+        if has_declarations || has_mixin_calls || has_dr_calls || has_comments {
             // Source map: map rule selector to source position
             let rule_name = current_selectors.join(", ");
             if self.source_map_lessjs_compat {
@@ -114,6 +118,7 @@ impl RuleCompiler for Compiler {
                 Declaration(Declaration),
                 MixinCall(MixinCall),
                 Comment(Comment),
+                DetachedRulesetCall(DetachedRulesetCall),
             }
 
             // Collect all declarations, mixin calls, and comments with their positions
@@ -145,6 +150,13 @@ impl RuleCompiler for Compiler {
                             RuleItem::Comment(comment.clone()),
                         ));
                     }
+                    Statement::DetachedRulesetCall(call) => {
+                        items.push((
+                            call.position.line,
+                            call.position.column,
+                            RuleItem::DetachedRulesetCall(call.clone()),
+                        ));
+                    }
                     _ => {}
                 }
             }
@@ -157,6 +169,9 @@ impl RuleCompiler for Compiler {
                     RuleItem::Declaration(decl) => self.compile_declaration(&decl)?,
                     RuleItem::MixinCall(call) => self.compile_mixin_call(&call)?,
                     RuleItem::Comment(comment) => self.compile_comment(&comment)?,
+                    RuleItem::DetachedRulesetCall(call) => {
+                        self.compile_detached_ruleset_call(&call)?
+                    }
                 }
             }
 
@@ -185,6 +200,10 @@ impl RuleCompiler for Compiler {
                     continue;
                 }
                 Statement::Comment(_) => {
+                    // Already processed above inside the block
+                    continue;
+                }
+                Statement::DetachedRulesetCall(_) => {
                     // Already processed above inside the block
                     continue;
                 }

@@ -85,6 +85,17 @@ pub enum Statement {
     Extend(Extend),
     /// each() 迭代调用
     EachCall(EachCall),
+    /// Detached ruleset 调用: @var();
+    DetachedRulesetCall(DetachedRulesetCall),
+}
+
+/// Detached ruleset 调用: @var()
+#[derive(Debug, Clone, PartialEq)]
+pub struct DetachedRulesetCall {
+    /// 变量名（不含 @）
+    pub name: String,
+    /// Source position
+    pub position: Position,
 }
 
 /// each() 迭代调用
@@ -722,6 +733,7 @@ impl Visitable for Statement {
             Statement::Comment(comment) => comment.accept(visitor),
             Statement::Extend(extend) => extend.accept(visitor),
             Statement::EachCall(_) => {} // each() is handled by compiler expansion
+            Statement::DetachedRulesetCall(_) => {} // handled by compiler
         }
     }
 }

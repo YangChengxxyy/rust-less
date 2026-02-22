@@ -487,6 +487,7 @@ impl Compiler {
             Statement::Comment(comment) => self.compile_comment(comment),
             Statement::Extend(_) => Ok(()), // Phase 1: Ignore extend statements in compiler
             Statement::EachCall(each_call) => self.compile_each_call(each_call),
+            Statement::DetachedRulesetCall(call) => self.compile_detached_ruleset_call(call),
         }
     }
 
@@ -553,6 +554,56 @@ impl Compiler {
             }
 
             Ok(())
+        })();
+
+        self.recursion_depth -= 1;
+        result
+    }
+
+    /// Compile a detached ruleset call: resolve the variable, confirm it holds
+    /// a `DetachedRuleset`, then compile its body in a new scope.
+    fn compile_detached_ruleset_call(&mut self, call: &DetachedRulesetCall) -> Result<()> {
+        // Check recursion depth
+        if self.recursion_depth >= self.max_recursion_depth {
+            return Err(Error::infinite_recursion(
+                format!("@{}()", call.name),
+                call.position.line,
+                call.position.column,
+            ));
+        }
+        self.recursion_depth += 1;
+
+        let result = (|| -> Result<()> {
+            // Resolve the variable
+            let value = if let Some(v) = self.current_scope().lookup_variable(&call.name) {
+                v.clone()
+            } else {
+                return Err(Error::undefined_variable(
+                    &call.name,
+                    call.position.line,
+                    call.position.column,
+                ));
+            };
+
+            // Confirm it's a detached ruleset
+            if let Expression::DetachedRuleset { body, .. } = value {
+                // Push a new scope and compile the body
+                self.push_scope();
+                for statement in &body {
+                    self.compile_statement(statement)?;
+                }
+                self.pop_scope();
+                Ok(())
+            } else {
+                Err(Error::semantic_error(
+                    format!(
+                        "@{}() is not a detached ruleset",
+                        call.name
+                    ),
+                    call.position.line,
+                    call.position.column,
+                ))
+            }
         })();
 
         self.recursion_depth -= 1;
