@@ -561,7 +561,13 @@ fn merge_units(left: &Option<String>, right: &Option<String>) -> Option<String> 
 
 fn normalize_map_key(expr: &Expression) -> String {
     match expr {
-        Expression::String { value, .. } => value.clone(),
+        Expression::String { value, quoted, .. } => {
+            if *quoted {
+                format!("\"{}\"", value)
+            } else {
+                value.clone()
+            }
+        }
         Expression::Number { value, unit, .. } => match unit {
             Some(unit) => format!("{}{}", value, unit),
             None => value.to_string(),

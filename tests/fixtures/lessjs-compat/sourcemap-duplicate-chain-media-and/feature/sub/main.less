@@ -1,0 +1,15 @@
+@import "../../shared/one/entry.less";
+@import "../../shared/two/entry.less";
+@media screen and (max-width: 900px) {
+    .dupe-and-screen {
+        padding: 3px;
+    }
+    @supports (display: grid) {
+        .dupe-and-grid {
+            margin: 4px;
+        }
+    }
+}
+.main-and-anchor {
+    border-width: 2px;
+}

@@ -1,0 +1,21 @@
+@base: {
+    ui: {
+        theme: {
+            palette: {
+                primary: 11;
+                secondary: 22;
+            };
+        };
+    };
+    keep: 9;
+};
+@set: map-set(@base, ui, theme, palette, accent, 33);
+@updated: map-update(@set, ui, theme, palette, primary, 10);
+@removed: map-deep-remove(@updated, ui, theme, palette, secondary);
+.test {
+    accent: map-get(@set, ui, theme, palette, accent);
+    primary_updated: map-get(@updated, ui, theme, palette, primary);
+    has_secondary_removed: map-has-key(@removed, ui, theme, palette, secondary);
+    original_secondary: map-get(@base, ui, theme, palette, secondary);
+    keep: map-get(@removed, keep);
+}

@@ -1,0 +1,7 @@
+.deep-custom-func {
+    @media (min-width: clamp(320px, viewport-step(50vw, var(--x-offset)), 1440px)) and (hover: hover) and (max-width: min(1280px, calc(960px + var(--y-offset)))) {
+        @supports (display: grid) {
+            margin-left: 16px;
+        }
+    }
+}

@@ -1,0 +1,10 @@
+@import "../../shared/one/entry.less";
+@import "../../shared/two/entry.less";
+@media screen and (min-width: calc(100px + env(safe-area-inset-left))), print and (max-width: calc(1200px - var(--gutter))) {
+    .dupe-env-var {
+        padding: 13px;
+    }
+}
+.main-env-var-anchor {
+    border-width: 6px;
+}

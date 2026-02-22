@@ -1,0 +1,8 @@
+@tokens: {
+    a: {
+        b: 1;
+    };
+};
+.test {
+    x: map-update(@tokens, a, b, c, 2);
+}

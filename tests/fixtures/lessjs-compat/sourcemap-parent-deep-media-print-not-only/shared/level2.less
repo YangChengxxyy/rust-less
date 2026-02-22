@@ -1,0 +1,9 @@
+.deep-print-not-only {
+    @media print and (min-width: 640px), not only screen and (max-width: 400px) {
+        @supports (display: grid) {
+            @supports (display: flex) {
+                margin-left: 11px;
+            }
+        }
+    }
+}

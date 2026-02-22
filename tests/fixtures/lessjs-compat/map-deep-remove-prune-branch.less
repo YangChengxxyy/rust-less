@@ -1,0 +1,18 @@
+@base: {
+    a: {
+        b: {
+            c: {
+                d: 1;
+            };
+            x: 2;
+        };
+    };
+    keep: 9;
+};
+@removed: map-deep-remove(@base, a, b, c, d);
+.test {
+    has_c: map-has-key(@removed, a, b, c);
+    has_a: map-has-key(@removed, a);
+    x: map-get(@removed, a, b, x);
+    keep: map-get(@removed, keep);
+}

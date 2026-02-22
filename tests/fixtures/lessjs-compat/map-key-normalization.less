@@ -1,0 +1,11 @@
+@tokens: {
+    "name": alpha;
+    size: 12px;
+    3: 30px;
+};
+.test {
+    by_identifier: map-get(@tokens, name);
+    by_string: map-get(@tokens, "name");
+    by_number: map-get(@tokens, 3);
+    has_number_string: map-has-key(@tokens, "3");
+}

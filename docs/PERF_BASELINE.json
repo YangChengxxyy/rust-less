@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "generated_at": "2026-02-21",
+  "unit": "ns",
+  "default_max_regression_pct": 20,
+  "benchmarks": {
+    "compile_simple": {
+      "mean_ns": 17653.665177700605
+    },
+    "compile_nesting": {
+      "mean_ns": 57695.48814332136
+    },
+    "compile_mixins": {
+      "mean_ns": 99936.1665355331
+    },
+    "compile_complex": {
+      "mean_ns": 262610.0592379005
+    },
+    "compile_compressed": {
+      "mean_ns": 265489.19605567673
+    }
+  }
+}

@@ -1,0 +1,19 @@
+@base: {
+    token: 1;
+    nested: {
+        a: 1;
+        b: 1;
+    };
+};
+@override: {
+    token: 2;
+    nested: {
+        c: 3;
+    };
+};
+@merged: map-merge(@base, @override);
+.test {
+    token: map-get(@merged, token);
+    has_nested_a: map-has-key(@merged, nested, a);
+    has_nested_c: map-has-key(@merged, nested, c);
+}

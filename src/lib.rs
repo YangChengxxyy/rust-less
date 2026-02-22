@@ -81,6 +81,7 @@ fn build_compiler_from_options(options: &CompilerOptions) -> Compiler {
 
     if options.source_map {
         compiler = compiler.with_source_map(true);
+        compiler.set_source_map_lessjs_compat(options.source_map_lessjs_compat);
     }
 
     for include_path in &options.include_paths {
@@ -97,6 +98,8 @@ pub struct CompilerOptions {
     pub compress: bool,
     /// 包含源码映射
     pub source_map: bool,
+    /// source map 输出为 less.js 兼容模式（保留默认行为为 false）
+    pub source_map_lessjs_compat: bool,
     /// 导入的额外包含路径
     pub include_paths: Vec<String>,
 }
@@ -123,6 +126,7 @@ mod tests {
         let options = CompilerOptions {
             compress: false,
             source_map: true,
+            source_map_lessjs_compat: false,
             include_paths: vec![],
         };
         let mut compiler = build_compiler_from_options(&options);
@@ -141,6 +145,7 @@ mod tests {
         let options = CompilerOptions {
             compress: false,
             source_map: true,
+            source_map_lessjs_compat: false,
             include_paths: vec![],
         };
         let result = compile_file_with_options(&file_path, options);

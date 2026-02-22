@@ -1,0 +1,23 @@
+@base: {
+    config: {
+        a: 1;
+        b: 1;
+    };
+};
+@ov1: {
+    config: {
+        b: 2;
+        c: 2;
+    };
+};
+@ov2: {
+    config: {
+        c: 3;
+    };
+};
+@merged: map-deep-merge(@base, @ov1, @ov2);
+.test {
+    a: map-get(@merged, config, a);
+    b: map-get(@merged, config, b);
+    c: map-get(@merged, config, c);
+}

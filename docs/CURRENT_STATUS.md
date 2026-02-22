@@ -1,6 +1,6 @@
 # 项目当前状态
 
-**更新日期**: 2026-02-18
+**更新日期**: 2026-02-22
 **版本**: 0.2.4
 **状态**: 🟢 积极开发中
 
@@ -8,10 +8,10 @@
 
 | 类型 | 通过 | 失败 | 忽略 | 通过率 |
 |------|------|------|------|--------|
-| 单元测试 | 103 | 0 | 0 | 100% |
-| 集成测试 | 182 | 0 | 0 | 100% |
+| 单元测试 | 106 | 0 | 0 | 100% |
+| 集成测试 | 219 | 0 | 0 | 100% |
 | Doc测试 | 1 | 0 | 0 | 100% |
-| **总计** | **286** | **0** | **0** | **100%** |
+| **总计** | **326** | **0** | **0** | **100%** |
 
 ## 编译状态
 
@@ -20,6 +20,7 @@
 - ✅ `cargo clippy --all-targets --all-features` - 通过（无警告）
 - ✅ `cargo test` - 全部通过
 - ✅ `cargo test --all-features` - 全部通过
+- ✅ `bash tools/status-check/run-status-check.sh` - 门禁脚本已接入（测试 + clippy + less.js strict + strict-mappings 对照）
 
 ## 已修复的问题 (2025-01-22)
 
@@ -37,15 +38,15 @@
 
 ### 🔴 高优先级
 
-1. **源码映射 (Source Maps) 完善**
-   - 完善 AST 节点的位置信息，确保所有节点都能正确映射
-   - 支持跨文件的源码映射
+1. **源码映射深度对齐**
+   - 扩展 less.js 原生可比场景（复杂导入链、嵌套 at-rule）
+   - 保持 `mappings` 严格门禁默认开启，并继续扩展覆盖场景
 
 ### 🟡 中优先级
 
-2. **性能回归排查**
-   - Criterion 基准显示多个场景相对历史基线有回归
-   - 建议先锁定最近变更范围，再做热点 profiling
+2. **性能基线持续维护**
+   - 已建立 `docs/PERF_BASELINE.json` 与阈值门禁
+   - 持续根据发布节奏更新基线，防止长期漂移
 
 ### 🟢 低优先级 (远期功能)
 
@@ -72,8 +73,8 @@
 | 命名空间 | 100% | ✅ |
 | 循环/递归混合器 | 100% | ✅ |
 | 字符串函数 | 100% | ✅ |
-| Maps | 55% | 🔧 已支持 `map-get`/`map-has-key`/`map-keys`/`map-values`/`map-merge`/`map-deep-merge`/`map-set`/`map-remove`，高级能力待补齐 |
-| 源码映射 | 55% | 🔧 已接入规则/声明/at-rule，并支持 imported mixin 的跨文件归属与状态重置 |
+| Maps | 85% | 🔧 已支持 `map-get`/`map-has-key`/`map-keys`/`map-values`/`map-merge`/`map-deep-merge`/`map-set`/`map-update`/`map-replace`/`map-remove`/`map-deep-remove`，并支持 `each(map, ...)` 迭代 |
+| 源码映射 | 80% | 🔧 已接入规则/声明/at-rule，覆盖 imported mixin/keyframes 跨文件归属、`token.name` 一致性与 CLI 外部 `.map` 输出链路，支持 less.js 兼容模式 |
 
 ## 版本规划
 
@@ -85,15 +86,35 @@
 - [x] 性能基准测试（已补跑，存在回归趋势）
 
 ### v0.3.0 (1-2 月)
-- [ ] 最小可用源码映射
+- [x] 最小可用源码映射
 - [x] @import 选项完善 (`reference`, `inline`, `optional`, `once`, `multiple`)
 - [x] CLI 功能对齐（`--include-path`, `--source-map`）
 
 ### v0.4.0 (2-3 月)
-- [x] Maps 基础函数（`map-get`, `map-has-key`, `map-keys`, `map-values`, `map-merge`, `map-deep-merge`, `map-set`, `map-remove`）
-- [ ] Maps 高级能力（嵌套结构读写、规则对齐）
-- [ ] 完整源码映射
+- [x] Maps 基础函数（`map-get`, `map-has-key`, `map-keys`, `map-values`, `map-merge`, `map-deep-merge`, `map-set`, `map-update`, `map-replace`, `map-remove`, `map-deep-remove`）
+- [ ] Maps 高级能力（嵌套结构读写、规则对齐；`map-update`/`map-replace`/`map-deep-remove`、`each(map, ...)` 与 `map-deep-merge` 边界策略已完成）
+- [ ] 完整源码映射（当前已覆盖主链路，`mappings` strict 门禁已默认开启；待扩展复杂对照用例）
 - [ ] 插件钩子设计
+
+## 下一阶段执行计划 (v0.2.5, 2-4周)
+
+### 1. Source Map 深度对齐
+- [ ] 扩展 less.js 原生可比用例（已新增导入链 `keyframes`/`media`/嵌套 at-rule、跨目录 sourceRoot 与同 basename 多目录 source 场景；后续补更复杂多层组合）
+- [x] 落地 `mappings` 串严格对齐开关（`--observe-mappings` / `--strict-mappings`）
+- [x] 现有 source-map 对照集在 strict mappings 模式收敛（`fail=0`）
+- [x] 将 `--strict-mappings --strict` 纳入默认门禁（`tools/status-check/run-status-check.sh`）
+- [x] 将 source map 差异分类从 observed 细分为结构差异/编码差异
+
+### 2. Maps 高级语义补齐
+- [ ] 继续补齐 less.js 对照中的边界语义（键规范化、冲突优先级、错误文案）
+- [x] 增加更复杂嵌套 map 的读写/删除回归（3 层以上路径组合，见 `tests/test_round2.rs` 新增深路径组合用例）
+- [x] 梳理“rust-less 扩展能力”与“less.js 原生能力”的产品边界文档（见 `docs/MAPS_PRODUCT_BOUNDARY.md`）
+
+### 3. 质量与兼容性
+- [x] 增加 less.js 对照用例（Maps + Source Map）并标注差异清单（已接入 `tools/lessjs-compat/run-lessjs-compat.js` 并完成实编译；当前 `pass=70/observed=0/fail=0/unsupported=14`）
+- [x] 新增统一质量门禁脚本：`tools/status-check/run-status-check.sh`
+- [x] 建立性能基线与阈值门禁（`docs/PERF_BASELINE.json` + `tools/perf-check/run-perf-check.sh`）
+- [x] 阶段验收：`cargo test`、`cargo test --all-features`、`cargo clippy --all-targets --all-features` 全绿
 
 ### v1.0.0 (6-12 月)
 - [ ] LSP

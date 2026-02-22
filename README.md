@@ -11,7 +11,7 @@
 
 这是一个用 Rust 完全重写的 LESS 编译器，重点强调：
 - **高性能** - 利用 Rust 的零成本抽象和内存安全
-- **测试驱动开发** - 103个单元测试 + 182个集成测试确保代码质量
+- **测试驱动开发** - 106个单元测试 + 219个集成测试确保代码质量
 - **全面的 LESS 语法支持** - 97% 功能完成度，核心功能已完备
 - **模块化架构** - 清晰的代码结构，完整的API文档
 - **优秀的错误处理** - 提供清晰、有用的错误信息
@@ -19,7 +19,7 @@
 ## 📊 当前实现状态
 
 **版本**: 0.2.4  
-**测试通过率**: 100% (286 passed, 0 ignored)  
+**测试通过率**: 100% (`cargo test --quiet` 共 326 passed, 0 ignored；`--all-features` 共 336 passed)  
 **功能完成度**: 97%（核心 LESS 功能已完备，Maps 可写能力已落地，源码映射持续完善）
 **生产就绪度**: 适合大部分生产项目
 
@@ -46,8 +46,8 @@
 
 | 功能 | 状态 | 完成度 | 说明 |
 |------|------|--------|------|
-| **Maps (基础函数)** | 🔧 改进中 | 55% | 已支持 `map-get`/`map-has-key`/`map-keys`/`map-values`/`map-merge`/`map-deep-merge`/`map-set`/`map-remove`，高级语义待补齐 |
-| **源码映射** | 🔧 改进中 | 55% | 已接入规则/声明/at-rule 映射，支持 imported mixin 的跨文件归属与状态重置 |
+| **Maps (基础函数)** | 🔧 改进中 | 85% | 已支持 `map-get`/`map-has-key`/`map-keys`/`map-values`/`map-merge`/`map-deep-merge`/`map-set`/`map-update`/`map-replace`/`map-remove`/`map-deep-remove`，并支持 `each(map, ...)` 的 `@key/@value/@index` 迭代 |
+| **源码映射** | 🔧 改进中 | 80% | 已接入规则/声明/at-rule 映射，覆盖 imported mixin/keyframes 跨文件归属，支持外部 `.map` 输出与 less.js 兼容模式 |
 
 ### ❌ 待实现的关键功能
 
@@ -214,16 +214,32 @@ cargo test --verbose
 
 # 运行基准测试
 cargo bench
+
+# 运行性能回归门禁（基于 Criterion 基线阈值）
+bash tools/perf-check/run-perf-check.sh
+
+# 运行 less.js 实编译对照（Maps + Source Map）
+npm install --prefix tools/lessjs-compat
+node tools/lessjs-compat/run-lessjs-compat.js
+
+# 运行统一质量门禁（测试 + clippy + less.js strict + strict-mappings 对照）
+bash tools/status-check/run-status-check.sh
+# 显式启用 strict-mappings（与默认行为一致）
+bash tools/status-check/run-status-check.sh --strict-mappings
+# 统一门禁（仅观测 mappings hash 差异，不作为失败）
+bash tools/status-check/run-status-check.sh --observe-mappings
+# 统一门禁（含性能阈值）
+bash tools/status-check/run-status-check.sh --with-perf
 ```
 
 ### 测试统计
 
 | 测试类型 | 通过 | 失败 | 忽略 | 通过率 |
 |----------|------|------|------|--------|
-| 单元测试 | 103 | 0 | 0 | 100% |
-| 集成测试 | 182 | 0 | 0 | 100% |
+| 单元测试 | 106 | 0 | 0 | 100% |
+| 集成测试 | 219 | 0 | 0 | 100% |
 | Doc测试 | 1 | 0 | 0 | 100% |
-| **总计** | **286** | **0** | **0** | **100%** |
+| **总计** | **326** | **0** | **0** | **100%** |
 
 ## 🎯 功能演示
 
@@ -379,16 +395,18 @@ cargo bench
 - [x] `:extend()` 语法支持
 - [x] 命名空间支持 (#namespace > .mixin)
 - [x] 递归混合器（循环生成）
-- [ ] 源码映射生成（最小可用：行列 + 源文件）
+- [x] 源码映射生成（最小可用：行列 + 源文件）
 - [x] 导入解析策略完善（`@import (reference|inline|optional|once|multiple)`）
 - [x] CLI 关键参数补齐（`--include-path`、`--source-map`）
 
 ### 第三阶段：高级功能 (v0.4.0) - 2-3个月
 - [x] 循环和递归混合器
 - [x] 命名空间支持
-- [x] Maps 基础函数接口（`map-get`、`map-has-key`、`map-keys`、`map-values`、`map-merge`、`map-deep-merge`、`map-set`、`map-remove`）
-- [ ] Maps 高级能力（嵌套结构读写、规则对齐与更多内置函数）
-- [ ] 源码映射支持（完整特性：内联/外部输出）
+- [x] Maps 基础函数接口（`map-get`、`map-has-key`、`map-keys`、`map-values`、`map-merge`、`map-deep-merge`、`map-set`、`map-update`、`map-replace`、`map-remove`、`map-deep-remove`）
+- [ ] Maps 高级能力（`each(map, ...)` 与 `map-deep-merge` 边界策略已支持；待补 less.js 规则完全对齐）
+- [x] Maps 兼容性扩展（已建立并接入实编译对照，见 `docs/LESSJS_COMPAT_STATUS.md`）
+- [x] 源码映射支持（已支持外部 `.map` 输出与 `--source-map-lessjs-compat`）
+- [ ] 源码映射深度对齐（复杂导入链/嵌套 at-rule 的覆盖扩展；`mappings` strict 门禁已默认启用）
 - [ ] 插件钩子设计草案（解析/编译扩展点）
 
 ### 第四阶段：生态系统 (v1.0.0) - 6-12个月
@@ -470,6 +488,7 @@ use rust_less::CompilerOptions;
 let options = CompilerOptions {
     compress: true,
     source_map: false,
+    source_map_lessjs_compat: false,
     include_paths: vec!["styles/".to_string()],
 };
 let result = compile_with_options(input, options)?;
@@ -478,11 +497,17 @@ let result = compile_with_options(input, options)?;
 ### CLI 选项
 
 ```bash
-rust-less [FILE] [-o OUTPUT] [-c|--compress]
+rust-less [FILE] [-o OUTPUT] [-c|--compress] [--source-map]
 
 # FILE       输入 LESS 文件（省略则从 stdin 读取）
 # -o FILE    输出 CSS 文件（省略则输出到 stdout）
 # -c         压缩输出的 CSS
+# --source-map                     生成 source map
+# --source-map-file FILE           指定 source map 输出路径
+# --source-map-url URL             指定 CSS 注释中的 sourceMappingURL
+# --source-map-root ROOT           设置 source map sourceRoot
+# --source-map-lessjs-compat       启用 less.js 兼容 source map 输出策略
+# --include-path PATH              添加导入搜索路径（可重复）
 ```
 
 ## 📚 API 文档
@@ -501,6 +526,7 @@ impl Compiler {
     pub fn new() -> Self                                  // 美化输出
     pub fn compressed() -> Self                           // 压缩输出
     pub fn with_source_map(self, enabled: bool) -> Self   // 源码映射
+    pub fn set_source_map_lessjs_compat(&mut self, enabled: bool) -> &mut Self
     pub fn with_include_paths(self, paths: Vec<P>) -> Self // 导入路径
     pub fn with_recursion_limit(self, limit: usize) -> Self // 递归深度
     pub fn add_include_path(&mut self, path: P) -> &mut Self
@@ -513,6 +539,7 @@ impl Compiler {
 pub struct CompilerOptions {
     pub compress: bool,
     pub source_map: bool,
+    pub source_map_lessjs_compat: bool,
     pub include_paths: Vec<String>,
 }
 ```

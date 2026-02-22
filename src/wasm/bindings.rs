@@ -32,6 +32,7 @@ pub fn init() {
 pub struct WasmCompilerOptions {
     compress: bool,
     source_map: bool,
+    source_map_lessjs_compat: bool,
 }
 
 #[wasm_bindgen]
@@ -64,6 +65,18 @@ impl WasmCompilerOptions {
     #[wasm_bindgen(getter)]
     pub fn source_map(&self) -> bool {
         self.source_map
+    }
+
+    /// 设置 source map 的 less.js 兼容模式
+    #[wasm_bindgen(setter, js_name = "sourceMapLessjsCompat")]
+    pub fn set_source_map_lessjs_compat(&mut self, enabled: bool) {
+        self.source_map_lessjs_compat = enabled;
+    }
+
+    /// 获取 source map less.js 兼容模式
+    #[wasm_bindgen(getter, js_name = "sourceMapLessjsCompat")]
+    pub fn source_map_lessjs_compat(&self) -> bool {
+        self.source_map_lessjs_compat
     }
 }
 
@@ -143,6 +156,7 @@ pub fn compile_less_with_options(input: &str, options: &WasmCompilerOptions) -> 
 
     if options.source_map {
         compiler = compiler.with_source_map(true);
+        compiler.set_source_map_lessjs_compat(options.source_map_lessjs_compat);
     }
 
     match compiler.compile(input) {

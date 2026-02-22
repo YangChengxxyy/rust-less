@@ -136,6 +136,7 @@ mod import_resolution {
         let options = CompilerOptions {
             compress: false,
             source_map: false,
+            source_map_lessjs_compat: false,
             include_paths: vec![fixtures_path().to_string_lossy().to_string()],
         };
 
@@ -244,6 +245,7 @@ mod compiler_options {
         let options = CompilerOptions {
             compress: true,
             source_map: false,
+            source_map_lessjs_compat: false,
             include_paths: vec![],
         };
 
@@ -278,6 +280,7 @@ mod compiler_options {
         let options = CompilerOptions {
             compress: false,
             source_map: true,
+            source_map_lessjs_compat: false,
             include_paths: vec![],
         };
 
@@ -307,6 +310,30 @@ mod compiler_options {
             source_map.contains("mixins.less"),
             "Source map should contain mixins.less for imported mixin expansions: {}",
             source_map
+        );
+    }
+
+    #[test]
+    fn test_source_map_lessjs_compat_mode_rewrites_sources_and_names() {
+        let entry = fixtures_path().join("keyframes-entry.less");
+        let mut compiler = Compiler::new().with_source_map(true);
+        compiler.set_source_map_source_root(Some("/workspace/src".to_string()));
+        compiler.set_source_map_lessjs_compat(true);
+
+        compiler
+            .compile_file(&entry)
+            .expect("Expected keyframes entry to compile");
+
+        let source_map = compiler.generate_source_map().unwrap();
+        let sm = sourcemap::SourceMap::from_slice(source_map.as_bytes())
+            .expect("Expected valid source map JSON");
+
+        assert_eq!(sm.get_source_root(), None);
+        assert_eq!(sm.get_name_count(), 0);
+        assert_eq!(sm.get_source_count(), 1);
+        assert_eq!(
+            sm.get_source(0),
+            Some("/workspace/src/keyframes-import.less")
         );
     }
 
@@ -395,6 +422,11 @@ mod compiler_options {
             "Expected imported rule to map to circular-b.less, got: {}",
             source
         );
+        assert_eq!(
+            token.get_name(),
+            Some("color"),
+            "Expected imported rule token name to be color"
+        );
     }
 
     #[test]
@@ -459,6 +491,11 @@ mod compiler_options {
             "Expected src col {} for bubbled declaration, got {}",
             expected_src_col,
             token.get_src_col()
+        );
+        assert_eq!(
+            token.get_name(),
+            Some("color"),
+            "Expected bubbled media declaration token name to be color"
         );
     }
 
@@ -530,6 +567,206 @@ mod compiler_options {
             "Expected src col {} for bubbled supports declaration, got {}",
             expected_src_col,
             token.get_src_col()
+        );
+        assert_eq!(
+            token.get_name(),
+            Some("color"),
+            "Expected bubbled supports declaration token name to be color"
+        );
+    }
+
+    #[test]
+    fn test_source_map_lookup_for_imported_mixin_declaration_points_to_mixin_file() {
+        let main = fixtures_path().join("main.less");
+        let mixins = fixtures_path().join("mixins.less");
+        let mixins_text = std::fs::read_to_string(&mixins).expect("Expected mixins.less");
+
+        let expected_src_line = mixins_text
+            .lines()
+            .position(|line| line.contains("-webkit-border-radius: @radius;"))
+            .expect("Expected -webkit-border-radius declaration in mixins fixture")
+            as u32;
+        let expected_src_col = mixins_text
+            .lines()
+            .nth(expected_src_line as usize)
+            .and_then(|line| line.find("-webkit-border-radius"))
+            .expect("Expected -webkit-border-radius token column in mixins fixture")
+            as u32;
+
+        let mut compiler = Compiler::new().with_source_map(true);
+        let css = compiler.compile_file(&main).unwrap();
+        let source_map = compiler.generate_source_map().unwrap();
+        let sm = sourcemap::SourceMap::from_slice(source_map.as_bytes())
+            .expect("Expected valid source map JSON");
+
+        let generated_line =
+            css.lines()
+                .position(|line| line.contains("-webkit-border-radius: 8px;"))
+                .expect("Expected imported mixin declaration in generated CSS") as u32;
+
+        let token = sm
+            .lookup_token(generated_line, 0)
+            .expect("Expected source-map token for imported mixin declaration");
+        let source = token
+            .get_source()
+            .expect("Expected source path for imported mixin token");
+
+        assert!(
+            source.ends_with("mixins.less"),
+            "Expected imported mixin declaration to map to mixins.less, got: {}",
+            source
+        );
+        assert_eq!(
+            token.get_src_line(),
+            expected_src_line,
+            "Expected src line {} for imported mixin declaration, got {}",
+            expected_src_line,
+            token.get_src_line()
+        );
+        assert_eq!(
+            token.get_src_col(),
+            expected_src_col,
+            "Expected src col {} for imported mixin declaration, got {}",
+            expected_src_col,
+            token.get_src_col()
+        );
+        assert_eq!(
+            token.get_name(),
+            Some("-webkit-border-radius"),
+            "Expected imported mixin declaration token name to be -webkit-border-radius"
+        );
+    }
+
+    #[test]
+    fn test_source_map_lookup_for_imported_keyframes_declaration_points_to_imported_file() {
+        let entry = fixtures_path().join("keyframes-entry.less");
+        let imported = fixtures_path().join("keyframes-import.less");
+        let imported_text =
+            std::fs::read_to_string(&imported).expect("Expected keyframes-import.less");
+
+        let expected_src_line = imported_text
+            .lines()
+            .position(|line| line.contains("opacity: 0;"))
+            .expect("Expected keyframes opacity declaration in imported fixture")
+            as u32;
+        let expected_src_col = imported_text
+            .lines()
+            .nth(expected_src_line as usize)
+            .and_then(|line| line.find("opacity"))
+            .expect("Expected keyframes opacity token column in imported fixture")
+            as u32;
+
+        let mut compiler = Compiler::new().with_source_map(true);
+        let css = compiler.compile_file(&entry).unwrap();
+        let source_map = compiler.generate_source_map().unwrap();
+        let sm = sourcemap::SourceMap::from_slice(source_map.as_bytes())
+            .expect("Expected valid source map JSON");
+
+        assert!(
+            css.contains("@keyframes importedFade"),
+            "Expected imported keyframes output, got: {}",
+            css
+        );
+
+        let generated_line = css
+            .lines()
+            .position(|line| line.contains("opacity: 0;"))
+            .expect("Expected imported keyframes declaration in generated CSS")
+            as u32;
+
+        let token = sm
+            .lookup_token(generated_line, 0)
+            .expect("Expected source-map token for imported keyframes declaration");
+        let source = token
+            .get_source()
+            .expect("Expected source path for imported keyframes token");
+
+        assert!(
+            source.ends_with("keyframes-import.less"),
+            "Expected imported keyframes declaration to map to keyframes-import.less, got: {}",
+            source
+        );
+        assert_eq!(
+            token.get_src_line(),
+            expected_src_line,
+            "Expected src line {} for imported keyframes declaration, got {}",
+            expected_src_line,
+            token.get_src_line()
+        );
+        assert_eq!(
+            token.get_src_col(),
+            expected_src_col,
+            "Expected src col {} for imported keyframes declaration, got {}",
+            expected_src_col,
+            token.get_src_col()
+        );
+        assert_eq!(
+            token.get_name(),
+            Some("opacity"),
+            "Expected imported keyframes declaration token name to be opacity"
+        );
+    }
+
+    #[test]
+    fn test_source_map_lookup_for_imported_keyframes_rule_name_is_consistent() {
+        let entry = fixtures_path().join("keyframes-entry.less");
+        let imported = fixtures_path().join("keyframes-import.less");
+        let imported_text =
+            std::fs::read_to_string(&imported).expect("Expected keyframes-import.less");
+
+        let expected_src_line = imported_text
+            .lines()
+            .position(|line| line.contains("@keyframes importedFade"))
+            .expect("Expected @keyframes header in imported fixture")
+            as u32;
+        let expected_src_col = imported_text
+            .lines()
+            .nth(expected_src_line as usize)
+            .and_then(|line| line.find("@keyframes"))
+            .expect("Expected @keyframes header column in imported fixture")
+            as u32;
+
+        let mut compiler = Compiler::new().with_source_map(true);
+        let css = compiler.compile_file(&entry).unwrap();
+        let source_map = compiler.generate_source_map().unwrap();
+        let sm = sourcemap::SourceMap::from_slice(source_map.as_bytes())
+            .expect("Expected valid source map JSON");
+
+        let generated_line =
+            css.lines()
+                .position(|line| line.contains("@keyframes importedFade"))
+                .expect("Expected imported @keyframes header in generated CSS") as u32;
+
+        let token = sm
+            .lookup_token(generated_line, 0)
+            .expect("Expected source-map token for imported @keyframes header");
+        let source = token
+            .get_source()
+            .expect("Expected source path for imported @keyframes header token");
+
+        assert!(
+            source.ends_with("keyframes-import.less"),
+            "Expected imported @keyframes header to map to keyframes-import.less, got: {}",
+            source
+        );
+        assert_eq!(
+            token.get_src_line(),
+            expected_src_line,
+            "Expected src line {} for imported @keyframes header, got {}",
+            expected_src_line,
+            token.get_src_line()
+        );
+        assert_eq!(
+            token.get_src_col(),
+            expected_src_col,
+            "Expected src col {} for imported @keyframes header, got {}",
+            expected_src_col,
+            token.get_src_col()
+        );
+        assert_eq!(
+            token.get_name(),
+            Some("@keyframes importedFade"),
+            "Expected imported @keyframes header token name to be @keyframes importedFade"
         );
     }
 }

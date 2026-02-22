@@ -1,0 +1,13 @@
+@base: {
+    "3": {
+        "name": 1;
+    };
+};
+@set: map-set(@base, 3, name, 2);
+@updated: map-update(@set, "3", "name", 4);
+@replaced: map-replace(@updated, 3, "name", 5);
+.test {
+    final_value: map-get(@replaced, "3", name);
+    original_value: map-get(@base, "3", "name");
+    has_numeric_key: map-has-key(@replaced, 3);
+}

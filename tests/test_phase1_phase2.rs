@@ -599,6 +599,41 @@ mod source_map {
             "Expected descendant multi-selector name in source-map token"
         );
     }
+
+    #[test]
+    fn test_source_map_file_and_source_root_fields() {
+        let mut compiler = Compiler::new().with_source_map(true);
+        compiler.set_source_map_file(Some("dist/output.css".to_string()));
+        compiler.set_source_map_source_root(Some("/workspace/src".to_string()));
+        compiler.compile(r#".test { color: red; }"#).unwrap();
+
+        let source_map = compiler.generate_source_map().unwrap();
+        let sm = SourceMap::from_slice(source_map.as_bytes()).expect("Expected valid source map");
+
+        assert_eq!(sm.get_file(), Some("dist/output.css"));
+        assert_eq!(sm.get_source_root(), Some("/workspace/src"));
+    }
+
+    #[test]
+    fn test_source_map_file_and_source_root_persist_between_compiles() {
+        let mut compiler = Compiler::new().with_source_map(true);
+        compiler.set_source_map_file(Some("dist/output.css".to_string()));
+        compiler.set_source_map_source_root(Some("/workspace/src".to_string()));
+
+        compiler.compile(r#".first { color: red; }"#).unwrap();
+        let first_map = compiler.generate_source_map().unwrap();
+        let first_sm =
+            SourceMap::from_slice(first_map.as_bytes()).expect("Expected valid source map");
+        assert_eq!(first_sm.get_file(), Some("dist/output.css"));
+        assert_eq!(first_sm.get_source_root(), Some("/workspace/src"));
+
+        compiler.compile(r#".second { color: blue; }"#).unwrap();
+        let second_map = compiler.generate_source_map().unwrap();
+        let second_sm =
+            SourceMap::from_slice(second_map.as_bytes()).expect("Expected valid source map");
+        assert_eq!(second_sm.get_file(), Some("dist/output.css"));
+        assert_eq!(second_sm.get_source_root(), Some("/workspace/src"));
+    }
 }
 
 mod unit_handling {

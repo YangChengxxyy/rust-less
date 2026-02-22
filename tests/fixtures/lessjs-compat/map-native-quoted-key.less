@@ -1,0 +1,8 @@
+@tokens: {
+    "name": alpha;
+    3: 30px;
+};
+.test {
+    by_name: @tokens[name];
+    by_number: @tokens[3];
+}

@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### 🎉 新增功能 (Added)
+
+- **Maps 可写能力增强**:
+  - 新增 `map-set()`，支持多级路径写入
+  - 新增 `map-update()` / `map-replace()`，支持仅更新已存在路径
+  - 新增 `map-deep-remove()`，支持深层路径删除并清理空父级 map
+  - 新增 `map-deep-merge()`，支持递归深合并
+  - 新增 `map-has-key()`，支持多级路径存在性检查
+
+### 🔧 行为改进 (Changed)
+
+- **each(map, ...) 语义补齐**:
+  - 支持 map 迭代时 `@key` / `@value` / `@index` 变量绑定
+
+- **map-deep-merge 边界策略固化**:
+  - 明确标量-映射冲突下“后者覆盖前者”规则
+  - 多参数 deep merge 按参数顺序覆盖（后参数优先）
+  - 保持输入 map 不可变（返回新 map）
+
+- **Maps 兼容性回归增强**:
+  - 新增首批 less.js 对照语义回归（冲突覆盖、缺失键、嵌套边界）
+  - 新增兼容性跟踪文档：`docs/LESSJS_COMPAT_STATUS.md`
+  - 新增 less.js 实编译对照脚本：`tools/lessjs-compat/run-lessjs-compat.js`
+  - 新增首版差异报告产物：`docs/LESSJS_DIFF_REPORT.md` / `docs/LESSJS_DIFF_REPORT.json`
+  - 对照报告新增 `unsupported` 分类，区分 less.js 不支持的扩展语义与真实失败
+
+- **Source Map 跨文件回归增强**:
+  - 新增 imported mixin / imported keyframes 的 token lookup 回归
+  - 补充 import / media bubble / supports bubble 场景的 `token.name` 一致性断言
+  - `@keyframes` 规则头映射补充 `token.name`（包含 import 场景）
+  - Source Map 产品化链路补齐：CLI `--source-map-file` / `--source-map-url` / `--source-map-root`
+  - 新增 source map less.js 兼容模式：CLI `--source-map-lessjs-compat`
+  - 兼容模式下对齐 `sourceRoot/sources` 策略并输出 `names=[]`
+  - 新增 source map 原生对照用例：本地规则、同目录 import、嵌套 import、本地 media
+
+- **Map key 规范化一致性**:
+  - 统一字符串/标识符/数字/数字+单位/百分比 key 的匹配策略
+  - `map` 字面量 key 解析支持标识符、字符串、数字和百分比
+  - 中括号 map 访问使用同一套 key 规范化规则
+  - 原生 map 访问补齐 quoted/unquoted key 区分语义（对齐 less.js）
+
+- **错误语义细化**:
+  - 明确区分“键不存在”和“中间路径非 map”两类错误
+  - 覆盖 `map-set`/`map-update`/`map-replace`/`map-deep-remove`/`map-get`/`map-remove` 的非 map 参数与路径边界错误
+
+### 📊 测试与质量 (Tests)
+
+- 新增 Maps 函数层与集成层测试（写入/深合并/key 规范化/错误语义）
+- 新增 Source Map `@keyframes` 规则名一致性回归测试（本地与 import 场景）
+- 新增 source map less.js 兼容模式回归测试（编译器与 CLI）
+- 当前测试状态: **312 passed, 0 ignored**
+- `cargo clippy --all-targets --all-features`: 通过（无警告）
+
 ## [0.2.4] - 2025-01-22
 
 ### 🎉 新增功能 (Added)

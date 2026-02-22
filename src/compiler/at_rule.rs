@@ -1,8 +1,173 @@
 use super::expression::ExpressionCompiler;
 use super::rule::RuleCompiler;
-use super::Compiler;
+use super::{Compiler, PendingAtRuleMapping};
 use crate::ast::*;
 use crate::error::Result;
+
+fn at_rule_mapping_name(at_rule: &AtRule) -> String {
+    let mut name = format!("@{}", at_rule.name);
+    if let Some(prelude) = &at_rule.prelude {
+        let prelude = prelude.trim();
+        if !prelude.is_empty() {
+            name.push(' ');
+            name.push_str(prelude);
+        }
+    }
+    name
+}
+
+fn is_identifier_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'
+}
+
+fn find_top_level_separator(chars: &[char], from: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut idx = from;
+
+    while idx < chars.len() {
+        match chars[idx] {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => return Some(idx),
+            'a' if depth == 0 && idx + 2 < chars.len() => {
+                if chars[idx + 1] == 'n' && chars[idx + 2] == 'd' {
+                    let prev_ok = idx == 0 || chars[idx - 1].is_whitespace();
+                    let next_ok = idx + 3 >= chars.len() || chars[idx + 3].is_whitespace();
+                    if prev_ok && next_ok {
+                        return Some(idx);
+                    }
+                }
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+
+    None
+}
+
+fn media_feature_mappings(prelude: &str) -> Vec<(usize, usize)> {
+    let normalized = prelude.trim();
+    if normalized.is_empty() {
+        return Vec::new();
+    }
+
+    let chars: Vec<char> = normalized.chars().collect();
+    let len = chars.len();
+    let mut mappings = Vec::new();
+    let mut depth = 0usize;
+
+    for i in 0..len {
+        match chars[i] {
+            '(' => {
+                if depth == 0 {
+                    // Top-level media feature: map generated position right after '('
+                    // to the current item separator (',' or top-level 'and') or trailing '{'.
+                    let next_separator = find_top_level_separator(&chars, i + 1);
+
+                    let generated_col_delta = 8 + i;
+                    let source_col_delta = next_separator
+                        .map(|separator_idx| 7 + separator_idx)
+                        .unwrap_or_else(|| 8 + len);
+                    mappings.push((generated_col_delta, source_col_delta));
+                } else if i > 0 && is_identifier_char(chars[i - 1]) {
+                    // Function call inside media feature (e.g. calc(...)):
+                    // less.js maps most function-name starts to themselves.
+                    // Special-case: url(...) maps to the first character after '('.
+                    let mut start = i - 1;
+                    while start > 0 && is_identifier_char(chars[start - 1]) {
+                        start -= 1;
+                    }
+                    let function_name: String = chars[start..i].iter().collect();
+                    let (generated_col_delta, source_col_delta) =
+                        if function_name.eq_ignore_ascii_case("url") {
+                            (8 + i, 8 + i)
+                        } else {
+                            (7 + start, 7 + start)
+                        };
+                    mappings.push((generated_col_delta, source_col_delta));
+                }
+                depth += 1;
+            }
+            ')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    mappings
+}
+
+fn should_bubble_conditional_at_rule(name: &str) -> bool {
+    name == "supports"
+}
+
+impl Compiler {
+    fn transform_conditional_at_rule_for_current_selectors(
+        &mut self,
+        at_rule: &AtRule,
+    ) -> Result<AtRule> {
+        let Some(block) = &at_rule.block else {
+            return Ok(at_rule.clone());
+        };
+
+        let mut transformed_statements = Vec::new();
+        let mut current_declarations = Vec::new();
+
+        for statement in block {
+            match statement {
+                Statement::Variable(var) => {
+                    let value = self.evaluate_expression(&var.value)?;
+                    self.current_scope()
+                        .define_variable(var.name.clone(), value);
+                }
+                Statement::Declaration(decl) => {
+                    current_declarations.push(decl.clone());
+                }
+                Statement::Rule(rule) => {
+                    if !current_declarations.is_empty() {
+                        self.create_rule_for_current_selectors(
+                            &mut transformed_statements,
+                            &current_declarations,
+                            &at_rule.position,
+                        )?;
+                        current_declarations.clear();
+                    }
+                    self.process_nested_rule_in_media(rule, &mut transformed_statements)?;
+                }
+                Statement::AtRule(nested_at_rule)
+                    if should_bubble_conditional_at_rule(&nested_at_rule.name) =>
+                {
+                    if !current_declarations.is_empty() {
+                        self.create_rule_for_current_selectors(
+                            &mut transformed_statements,
+                            &current_declarations,
+                            &at_rule.position,
+                        )?;
+                        current_declarations.clear();
+                    }
+                    let transformed_nested =
+                        self.transform_conditional_at_rule_for_current_selectors(nested_at_rule)?;
+                    transformed_statements.push(Statement::AtRule(transformed_nested));
+                }
+                _ => {
+                    transformed_statements.push(statement.clone());
+                }
+            }
+        }
+
+        if !current_declarations.is_empty() {
+            self.create_rule_for_current_selectors(
+                &mut transformed_statements,
+                &current_declarations,
+                &at_rule.position,
+            )?;
+        }
+
+        let mut transformed_at_rule = at_rule.clone();
+        transformed_at_rule.block = Some(transformed_statements);
+        Ok(transformed_at_rule)
+    }
+}
 
 /// At-Rule 编译特性
 pub trait AtRuleCompiler {
@@ -39,14 +204,15 @@ impl AtRuleCompiler for Compiler {
             return self.compile_media_query(at_rule, is_nested);
         }
 
-        // @supports gets similar bubble-up treatment as @media when nested in rules
-        if at_rule.name == "supports" && !self.current_selectors.is_empty() {
+        // Conditional at-rules (e.g. @supports) get bubble-up treatment when nested in rules.
+        if should_bubble_conditional_at_rule(&at_rule.name) && !self.current_selectors.is_empty() {
             return self.compile_nested_conditional_at_rule(at_rule);
         }
 
-        // Source map: map at-rule to source position
-        self.add_mapping(&at_rule.position, None);
         self.add_indent();
+        // Source map: map at-rule header to source position with stable token name.
+        let mapping_name = at_rule_mapping_name(at_rule);
+        self.add_mapping(&at_rule.position, Some(&mapping_name));
         self.write_char('@');
         self.write_str(&at_rule.name);
 
@@ -93,6 +259,16 @@ impl AtRuleCompiler for Compiler {
         self.media_query_stack.push(current_condition.to_string());
 
         self.add_indent();
+        let mapping_name = at_rule_mapping_name(at_rule);
+        self.add_mapping(&at_rule.position, Some(&mapping_name));
+        if self.source_map_lessjs_compat && !current_condition.is_empty() {
+            for (generated_col_delta, source_col_delta) in media_feature_mappings(current_condition) {
+                let mut source_pos = at_rule.position.clone();
+                source_pos.column = source_pos.column.saturating_add(source_col_delta);
+                let gen_col = self.current_col.saturating_add(generated_col_delta as u32);
+                self.add_mapping_at_generated_col(&source_pos, Some(&mapping_name), gen_col);
+            }
+        }
         self.write_str("@media");
         if !current_condition.is_empty() {
             self.add_space();
@@ -226,6 +402,18 @@ impl AtRuleCompiler for Compiler {
                                             &mut nested_transformed_statements,
                                         )?;
                                     }
+                                    Statement::AtRule(nested_conditional)
+                                        if should_bubble_conditional_at_rule(
+                                            &nested_conditional.name,
+                                        ) =>
+                                    {
+                                        let transformed_conditional = self
+                                            .transform_conditional_at_rule_for_current_selectors(
+                                                nested_conditional,
+                                            )?;
+                                        nested_transformed_statements
+                                            .push(Statement::AtRule(transformed_conditional));
+                                    }
                                     _ => {
                                         nested_transformed_statements
                                             .push(nested_statement.clone());
@@ -233,9 +421,37 @@ impl AtRuleCompiler for Compiler {
                                 }
                             }
 
-                            self.pending_media_queries
-                                .push((nested_media_query, nested_transformed_statements));
+                            let nested_mapping = PendingAtRuleMapping {
+                                source_file: self.current_file.clone(),
+                                position: nested_at_rule.position.clone(),
+                                name: at_rule_mapping_name(nested_at_rule),
+                                media_feature_mappings: nested_at_rule
+                                    .prelude
+                                    .as_ref()
+                                    .map(|p| media_feature_mappings(p))
+                                    .unwrap_or_default(),
+                            };
+                            self.queue_pending_media_query(
+                                nested_media_query,
+                                nested_transformed_statements,
+                                Some(nested_mapping),
+                            );
                         }
+                    }
+                    Statement::AtRule(nested_at_rule)
+                        if should_bubble_conditional_at_rule(&nested_at_rule.name) =>
+                    {
+                        if !current_declarations.is_empty() {
+                            self.create_rule_for_current_selectors(
+                                &mut transformed_statements,
+                                &current_declarations,
+                                &at_rule.position,
+                            )?;
+                            current_declarations.clear();
+                        }
+                        let transformed_nested = self
+                            .transform_conditional_at_rule_for_current_selectors(nested_at_rule)?;
+                        transformed_statements.push(Statement::AtRule(transformed_nested));
                     }
                     _ => {
                         transformed_statements.push(statement.clone());
@@ -252,8 +468,17 @@ impl AtRuleCompiler for Compiler {
                 )?;
             }
 
-            self.pending_media_queries
-                .push((media_query, transformed_statements));
+            let mapping = PendingAtRuleMapping {
+                source_file: self.current_file.clone(),
+                position: at_rule.position.clone(),
+                name: at_rule_mapping_name(at_rule),
+                media_feature_mappings: at_rule
+                    .prelude
+                    .as_ref()
+                    .map(|p| media_feature_mappings(p))
+                    .unwrap_or_default(),
+            };
+            self.queue_pending_media_query(media_query, transformed_statements, Some(mapping));
         }
 
         Ok(())
@@ -371,16 +596,23 @@ impl AtRuleCompiler for Compiler {
                             }
                         }
                     }
-                    _ => {
-                        // Check if this is a declaration at the rule level
-                        if let Statement::Rule(_rule) = statement {
-                            // This case is already handled above
-                        } else {
-                            // For direct declarations in the media query, we need to extract them
-                            // This requires walking through the rule structure to find declarations
-                            // For now, add the statement as-is and handle in the parser
-                            transformed_statements.push(statement.clone());
+                    Statement::AtRule(nested_at_rule)
+                        if should_bubble_conditional_at_rule(&nested_at_rule.name) =>
+                    {
+                        if !current_declarations.is_empty() {
+                            self.create_rule_for_current_selectors(
+                                &mut transformed_statements,
+                                &current_declarations,
+                                &at_rule.position,
+                            )?;
+                            current_declarations.clear();
                         }
+                        let transformed_nested = self
+                            .transform_conditional_at_rule_for_current_selectors(nested_at_rule)?;
+                        transformed_statements.push(Statement::AtRule(transformed_nested));
+                    }
+                    _ => {
+                        transformed_statements.push(statement.clone());
                     }
                 }
             }
@@ -394,8 +626,17 @@ impl AtRuleCompiler for Compiler {
                 )?;
             }
 
-            self.pending_media_queries
-                .push((media_query, transformed_statements));
+            let mapping = PendingAtRuleMapping {
+                source_file: self.current_file.clone(),
+                position: at_rule.position.clone(),
+                name: at_rule_mapping_name(at_rule),
+                media_feature_mappings: at_rule
+                    .prelude
+                    .as_ref()
+                    .map(|p| media_feature_mappings(p))
+                    .unwrap_or_default(),
+            };
+            self.queue_pending_media_query(media_query, transformed_statements, Some(mapping));
         }
         Ok(())
     }
@@ -449,29 +690,21 @@ impl AtRuleCompiler for Compiler {
             }
 
             // Use pending_media_queries to defer output (same mechanism as @media)
-            self.pending_media_queries
-                .push((at_rule_header, transformed_statements));
+            let mapping = PendingAtRuleMapping {
+                source_file: self.current_file.clone(),
+                position: at_rule.position.clone(),
+                name: at_rule_mapping_name(at_rule),
+                media_feature_mappings: Vec::new(),
+            };
+            self.queue_pending_media_query(at_rule_header, transformed_statements, Some(mapping));
         }
         Ok(())
     }
 
     fn output_pending_media_queries(&mut self) -> Result<()> {
         let pending = std::mem::take(&mut self.pending_media_queries);
-        for (media_query, statements) in pending {
-            self.write_str(&media_query);
-            self.add_space();
-            self.write_char('{');
-            self.add_newline();
-
-            self.indent_level += 1;
-            for statement in &statements {
-                self.compile_statement(statement)?;
-            }
-            self.indent_level -= 1;
-
-            self.add_indent();
-            self.write_char('}');
-            self.add_newline();
+        for query in pending {
+            self.emit_pending_media_query(query)?;
         }
         Ok(())
     }

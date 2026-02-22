@@ -4,6 +4,14 @@ use clap::{Arg, Command};
 use rust_less::Compiler;
 use std::fs;
 use std::io::{self, Read};
+use std::path::Path;
+
+fn default_source_map_url(map_path: &str) -> String {
+    Path::new(map_path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| map_path.to_string())
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = Command::new("rust-less")
@@ -37,6 +45,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .help("生成 source map 文件"),
         )
         .arg(
+            Arg::new("source-map-file")
+                .long("source-map-file")
+                .value_name("FILE")
+                .help("指定 source map 输出文件路径（默认: <output>.map）"),
+        )
+        .arg(
+            Arg::new("source-map-url")
+                .long("source-map-url")
+                .value_name("URL")
+                .help("指定写入 CSS 注释的 sourceMappingURL（默认使用 map 文件名）"),
+        )
+        .arg(
+            Arg::new("source-map-root")
+                .long("source-map-root")
+                .value_name("ROOT")
+                .help("设置 source map 的 sourceRoot 字段"),
+        )
+        .arg(
+            Arg::new("source-map-lessjs-compat")
+                .long("source-map-lessjs-compat")
+                .action(clap::ArgAction::SetTrue)
+                .help("启用 less.js 兼容 source map 输出（names 为空，sourceRoot 改写到 sources）"),
+        )
+        .arg(
             Arg::new("include-path")
                 .long("include-path")
                 .value_name("PATH")
@@ -45,16 +77,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .get_matches();
 
-    // Read input
-    let input_content = if let Some(input_file) = matches.get_one::<String>("input") {
-        fs::read_to_string(input_file)?
-    } else {
+    let input_file = matches.get_one::<String>("input").cloned();
+    let output_file = matches.get_one::<String>("output").cloned();
+
+    // Read input from stdin only when no file path is provided.
+    let input_content = if input_file.is_none() {
         let mut buffer = String::new();
         io::stdin().read_to_string(&mut buffer)?;
         buffer
+    } else {
+        String::new()
     };
 
     let source_map_enabled = matches.get_flag("source-map");
+    let source_map_file = if source_map_enabled {
+        matches
+            .get_one::<String>("source-map-file")
+            .cloned()
+            .or_else(|| output_file.as_ref().map(|out| format!("{}.map", out)))
+    } else {
+        None
+    };
+    let source_map_url = if source_map_enabled {
+        matches
+            .get_one::<String>("source-map-url")
+            .cloned()
+            .or_else(|| {
+                source_map_file
+                    .as_ref()
+                    .map(|path| default_source_map_url(path))
+            })
+    } else {
+        None
+    };
 
     // Compile LESS to CSS
     let mut compiler = if matches.get_flag("compress") {
@@ -65,6 +120,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if source_map_enabled {
         compiler = compiler.with_source_map(true);
+        if let Some(source_root) = matches.get_one::<String>("source-map-root") {
+            compiler.set_source_map_source_root(Some(source_root.clone()));
+        }
+        compiler.set_source_map_lessjs_compat(matches.get_flag("source-map-lessjs-compat"));
+        if let Some(output) = &output_file {
+            compiler.set_source_map_file(Some(output.clone()));
+        }
     }
 
     // Add include paths
@@ -75,29 +137,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Compile from file or stdin
-    let css_output = if let Some(input_file) = matches.get_one::<String>("input") {
-        compiler.compile_file(input_file)?
+    let css_output = if let Some(input_path) = &input_file {
+        compiler.compile_file(input_path)?
     } else {
         compiler.compile(&input_content)?
     };
 
     // Write output
-    if let Some(output_file) = matches.get_one::<String>("output") {
-        fs::write(output_file, &css_output)?;
+    if let Some(output) = &output_file {
+        let mut final_css = css_output;
 
-        // Write source map if enabled
+        // Write source map sidecar and append sourceMappingURL when possible.
         if source_map_enabled {
             if let Some(sm_json) = compiler.generate_source_map() {
-                let sm_file = format!("{}.map", output_file);
-                fs::write(&sm_file, sm_json)?;
-                eprintln!("Source map written to {}", sm_file);
+                if let Some(sm_file) = &source_map_file {
+                    fs::write(sm_file, sm_json)?;
+                    let mapping_url = source_map_url
+                        .clone()
+                        .unwrap_or_else(|| default_source_map_url(sm_file));
+                    if !final_css.ends_with('\n') {
+                        final_css.push('\n');
+                    }
+                    final_css.push_str(&format!("/*# sourceMappingURL={} */\n", mapping_url));
+                    eprintln!("Source map written to {}", sm_file);
+                } else {
+                    eprintln!(
+                        "source map generation enabled but no output file was resolved; skipping map file write"
+                    );
+                }
             }
         }
 
-        eprintln!("CSS written to {}", output_file);
+        fs::write(output, final_css)?;
+        eprintln!("CSS written to {}", output);
     } else {
         print!("{}", css_output);
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::default_source_map_url;
+
+    #[test]
+    fn test_default_source_map_url_uses_file_name() {
+        let url = default_source_map_url("/tmp/dist/styles.css.map");
+        assert_eq!(url, "styles.css.map");
+    }
+
+    #[test]
+    fn test_default_source_map_url_plain_path() {
+        let url = default_source_map_url("styles.css.map");
+        assert_eq!(url, "styles.css.map");
+    }
 }

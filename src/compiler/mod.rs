@@ -24,6 +24,23 @@ pub(crate) use mixin::MixinCompiler;
 pub(crate) use rule::RuleCompiler;
 use sourcemap::SourceMapGenerator;
 
+#[derive(Debug, Clone)]
+pub(crate) struct PendingAtRuleMapping {
+    pub(crate) source_file: String,
+    pub(crate) position: Position,
+    pub(crate) name: String,
+    /// For `@media`, less.js may emit extra header segments.
+    /// Tuple: (generated_column_delta_from_line_start, source_column_delta_from_@media_start).
+    pub(crate) media_feature_mappings: Vec<(usize, usize)>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PendingMediaQuery {
+    pub(crate) header: String,
+    pub(crate) statements: Vec<Statement>,
+    pub(crate) mapping: Option<PendingAtRuleMapping>,
+}
+
 /// LESS 到 CSS 转换的主编译器
 pub struct Compiler {
     pub(crate) scope_stack: Vec<Scope>,
@@ -33,7 +50,7 @@ pub struct Compiler {
     pub(crate) function_registry: FunctionRegistry,
     pub(crate) extend_registry: ExtendRegistry,
     pub(crate) current_selectors: Vec<String>,
-    pub(crate) pending_media_queries: Vec<(String, Vec<Statement>)>,
+    pub(crate) pending_media_queries: Vec<PendingMediaQuery>,
     /// 媒体查询上下文栈，用于追踪嵌套的媒体查询条件
     pub(crate) media_query_stack: Vec<String>,
     /// 当前编译文件的基础路径
@@ -48,6 +65,8 @@ pub struct Compiler {
     pub(crate) max_recursion_depth: usize,
     /// 源码映射生成器
     pub(crate) source_map_generator: SourceMapGenerator,
+    /// source map 是否启用 less.js 兼容输出策略
+    pub(crate) source_map_lessjs_compat: bool,
     /// 当前输出行号（0-based）
     pub(crate) current_line: u32,
     /// 当前输出列号（0-based）
@@ -82,6 +101,7 @@ impl Compiler {
             recursion_depth: 0,
             max_recursion_depth: 100,
             source_map_generator: SourceMapGenerator::default(),
+            source_map_lessjs_compat: false,
             current_line: 0,
             current_col: 0,
             current_file: "input.less".to_string(),
@@ -109,6 +129,7 @@ impl Compiler {
             recursion_depth: 0,
             max_recursion_depth: 100,
             source_map_generator: SourceMapGenerator::default(),
+            source_map_lessjs_compat: false,
             current_line: 0,
             current_col: 0,
             current_file: "input.less".to_string(),
@@ -127,6 +148,26 @@ impl Compiler {
     /// 获取生成的源码映射
     pub fn generate_source_map(&self) -> Option<String> {
         self.source_map_generator.generate_json()
+    }
+
+    /// 设置 source map 的 file 字段（通常为生成的 CSS 文件路径）。
+    pub fn set_source_map_file(&mut self, file: Option<String>) -> &mut Self {
+        self.source_map_generator.set_file(file.as_deref());
+        self
+    }
+
+    /// 设置 source map 的 sourceRoot 字段。
+    pub fn set_source_map_source_root(&mut self, source_root: Option<String>) -> &mut Self {
+        self.source_map_generator
+            .set_source_root(source_root.as_deref());
+        self
+    }
+
+    /// 设置 source map 输出为 less.js 兼容模式。
+    pub fn set_source_map_lessjs_compat(&mut self, enabled: bool) -> &mut Self {
+        self.source_map_generator.set_lessjs_compat_mode(enabled);
+        self.source_map_lessjs_compat = enabled;
+        self
     }
 
     /// 写入字符串到输出，并更新行号列号
@@ -172,6 +213,87 @@ impl Compiler {
             self.current_col,
             name,
         );
+    }
+
+    pub(crate) fn add_mapping_at_generated_col(
+        &mut self,
+        position: &Position,
+        name: Option<&str>,
+        gen_col: u32,
+    ) {
+        if self.suppress_output {
+            return;
+        }
+        let source_file = self.current_file.clone();
+        self.source_map_generator.add_mapping(
+            &source_file,
+            position,
+            self.current_line,
+            gen_col,
+            name,
+        );
+    }
+
+    pub(crate) fn queue_pending_media_query(
+        &mut self,
+        header: String,
+        statements: Vec<Statement>,
+        mapping: Option<PendingAtRuleMapping>,
+    ) {
+        self.pending_media_queries.push(PendingMediaQuery {
+            header,
+            statements,
+            mapping,
+        });
+    }
+
+    pub(crate) fn emit_pending_media_query(&mut self, query: PendingMediaQuery) -> Result<()> {
+        let PendingMediaQuery {
+            header,
+            statements,
+            mapping,
+        } = query;
+
+        let previous_file = self.current_file.clone();
+        if let Some(mapping_info) = mapping.as_ref() {
+            self.current_file = mapping_info.source_file.clone();
+            self.add_mapping(&mapping_info.position, Some(&mapping_info.name));
+
+            if !mapping_info.media_feature_mappings.is_empty() {
+                let line_start_col = self.current_col;
+                for (generated_col_delta, source_col_delta) in &mapping_info.media_feature_mappings {
+                    let gen_col = line_start_col.saturating_add(*generated_col_delta as u32);
+                    let mut source_pos = mapping_info.position.clone();
+                    source_pos.column = source_pos.column.saturating_add(*source_col_delta);
+                    self.add_mapping_at_generated_col(
+                        &source_pos,
+                        Some(&mapping_info.name),
+                        gen_col,
+                    );
+                }
+            }
+        }
+
+        let result = (|| -> Result<()> {
+            self.write_str(&header);
+            self.add_space();
+            self.write_char('{');
+            self.add_newline();
+
+            self.indent_level += 1;
+            for statement in &statements {
+                self.compile_statement(statement)?;
+            }
+            self.indent_level -= 1;
+
+            self.add_indent();
+            self.write_char('}');
+            self.add_newline();
+            Ok(())
+        })();
+
+        self.current_file = previous_file;
+        result
     }
 
     /// 设置最大递归深度
@@ -234,6 +356,17 @@ impl Compiler {
 
     /// 将 LESS 源代码编译为 CSS
     pub fn compile(&mut self, input: &str) -> Result<String> {
+        let source_base_path = {
+            let current_file = Path::new(&self.current_file);
+            if current_file.is_absolute() {
+                current_file.parent().map(|p| p.to_path_buf())
+            } else {
+                None
+            }
+        };
+        self.source_map_generator
+            .set_source_base_path(source_base_path);
+
         let mut parser = Parser::from_string(input.to_string())?;
         let stylesheet = parser.parse()?;
 
@@ -369,42 +502,61 @@ impl Compiler {
         }
         self.recursion_depth += 1;
 
-        let list = self.evaluate_expression(&each_call.list)?;
+        let result = (|| -> Result<()> {
+            let list = self.evaluate_expression(&each_call.list)?;
 
-        // Extract list items
-        let items: Vec<Expression> = match &list {
-            Expression::List { values, .. } => values.clone(),
-            other => vec![other.clone()],
-        };
+            let iterations: Vec<(Expression, Expression)> = match &list {
+                Expression::MapLiteral { entries, .. } => entries
+                    .iter()
+                    .map(|(key, value)| {
+                        (
+                            Expression::identifier(key.clone(), each_call.position.clone()),
+                            value.clone(),
+                        )
+                    })
+                    .collect(),
+                Expression::List { values, .. } => values
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| {
+                        (
+                            Expression::number((index + 1) as f64, each_call.position.clone()),
+                            value.clone(),
+                        )
+                    })
+                    .collect(),
+                other => vec![(
+                    Expression::number(1.0, each_call.position.clone()),
+                    other.clone(),
+                )],
+            };
 
-        for (index, item) in items.iter().enumerate() {
-            // Create a scope with @value, @key, @index
-            self.push_scope();
+            for (index, (key_expr, value_expr)) in iterations.into_iter().enumerate() {
+                // Create a scope with @value, @key, @index
+                self.push_scope();
 
-            let value_str = self.evaluate_expression_to_string(item)?;
-            self.current_scope().define_variable(
-                "value".to_string(),
-                Expression::identifier(value_str, each_call.position.clone()),
-            );
-            self.current_scope().define_variable(
-                "key".to_string(),
-                Expression::number((index + 1) as f64, each_call.position.clone()),
-            );
-            self.current_scope().define_variable(
-                "index".to_string(),
-                Expression::number((index + 1) as f64, each_call.position.clone()),
-            );
+                self.current_scope()
+                    .define_variable("value".to_string(), value_expr);
+                self.current_scope()
+                    .define_variable("key".to_string(), key_expr);
+                self.current_scope().define_variable(
+                    "index".to_string(),
+                    Expression::number((index + 1) as f64, each_call.position.clone()),
+                );
 
-            // Expand the template body
-            for statement in &each_call.body {
-                self.compile_statement(statement)?;
+                // Expand the template body
+                for statement in &each_call.body {
+                    self.compile_statement(statement)?;
+                }
+
+                self.pop_scope();
             }
 
-            self.pop_scope();
-        }
+            Ok(())
+        })();
 
         self.recursion_depth -= 1;
-        Ok(())
+        result
     }
 
     /// Flush pending property merges, outputting the combined declarations

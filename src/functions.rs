@@ -104,7 +104,10 @@ impl FunctionRegistry {
         self.register("map-merge", Box::new(map_merge_function));
         self.register("map-deep-merge", Box::new(map_deep_merge_function));
         self.register("map-set", Box::new(map_set_function));
+        self.register("map-update", Box::new(map_update_function));
+        self.register("map-replace", Box::new(map_replace_function));
         self.register("map-remove", Box::new(map_remove_function));
+        self.register("map-deep-remove", Box::new(map_deep_remove_function));
 
         // Unit conversion
         self.register("convert", Box::new(convert_function));
@@ -1003,6 +1006,22 @@ fn map_key_string(expr: &Expression) -> String {
     }
 }
 
+fn unquote_map_key(key: &str) -> Option<&str> {
+    if key.len() >= 2 && key.starts_with('"') && key.ends_with('"') {
+        Some(&key[1..key.len() - 1])
+    } else {
+        None
+    }
+}
+
+fn canonical_map_key(key: &str) -> &str {
+    unquote_map_key(key).unwrap_or(key)
+}
+
+fn map_keys_equal(left: &str, right: &str) -> bool {
+    canonical_map_key(left) == canonical_map_key(right)
+}
+
 fn map_path_keys(args: &[Expression], start: usize) -> Vec<String> {
     args[start..].iter().map(map_key_string).collect()
 }
@@ -1013,7 +1032,9 @@ fn map_lookup_path<'a>(
 ) -> std::result::Result<Option<&'a Expression>, String> {
     let mut current_entries = entries;
     for (index, key) in path.iter().enumerate() {
-        let value = if let Some((_, value)) = current_entries.iter().find(|(k, _)| k == key) {
+        let value = if let Some((_, value)) =
+            current_entries.iter().find(|(k, _)| map_keys_equal(k, key))
+        {
             value
         } else {
             return Ok(None);
@@ -1043,13 +1064,19 @@ enum RemoveMapPathResult {
     IntermediateNotMap(String),
 }
 
-fn remove_map_path(entries: &mut Vec<(String, Expression)>, path: &[String]) -> RemoveMapPathResult {
+fn remove_map_path(
+    entries: &mut Vec<(String, Expression)>,
+    path: &[String],
+) -> RemoveMapPathResult {
     if path.is_empty() {
         return RemoveMapPathResult::Missing;
     }
 
     if path.len() == 1 {
-        if let Some(index) = entries.iter().position(|(k, _)| k == &path[0]) {
+        if let Some(index) = entries
+            .iter()
+            .position(|(k, _)| map_keys_equal(k, &path[0]))
+        {
             entries.remove(index);
             return RemoveMapPathResult::Removed;
         }
@@ -1062,16 +1089,66 @@ fn remove_map_path(entries: &mut Vec<(String, Expression)>, path: &[String]) -> 
             entries: nested_entries,
             ..
         },
-    )) = entries.iter_mut().find(|(k, _)| k == &path[0])
+    )) = entries
+        .iter_mut()
+        .find(|(k, _)| map_keys_equal(k, &path[0]))
     {
         return remove_map_path(nested_entries, &path[1..]);
     }
 
-    if entries.iter().any(|(k, _)| k == &path[0]) {
+    if entries.iter().any(|(k, _)| map_keys_equal(k, &path[0])) {
         return RemoveMapPathResult::IntermediateNotMap(path[0].clone());
     }
 
     RemoveMapPathResult::Missing
+}
+
+fn deep_remove_map_path(
+    entries: &mut Vec<(String, Expression)>,
+    path: &[String],
+) -> RemoveMapPathResult {
+    if path.is_empty() {
+        return RemoveMapPathResult::Missing;
+    }
+
+    if path.len() == 1 {
+        if let Some(index) = entries
+            .iter()
+            .position(|(k, _)| map_keys_equal(k, &path[0]))
+        {
+            entries.remove(index);
+            return RemoveMapPathResult::Removed;
+        }
+        return RemoveMapPathResult::Missing;
+    }
+
+    let Some(index) = entries
+        .iter()
+        .position(|(k, _)| map_keys_equal(k, &path[0]))
+    else {
+        return RemoveMapPathResult::Missing;
+    };
+
+    let mut should_prune_parent = false;
+    let result = match &mut entries[index].1 {
+        Expression::MapLiteral {
+            entries: nested_entries,
+            ..
+        } => {
+            let result = deep_remove_map_path(nested_entries, &path[1..]);
+            if matches!(result, RemoveMapPathResult::Removed) && nested_entries.is_empty() {
+                should_prune_parent = true;
+            }
+            result
+        }
+        _ => RemoveMapPathResult::IntermediateNotMap(path[0].clone()),
+    };
+
+    if should_prune_parent {
+        entries.remove(index);
+    }
+
+    result
 }
 
 fn set_map_path(
@@ -1085,7 +1162,10 @@ fn set_map_path(
     }
 
     if path.len() == 1 {
-        if let Some((_, existing)) = entries.iter_mut().find(|(k, _)| k == &path[0]) {
+        if let Some((_, existing)) = entries
+            .iter_mut()
+            .find(|(k, _)| map_keys_equal(k, &path[0]))
+        {
             *existing = value.clone();
         } else {
             entries.push((path[0].clone(), value.clone()));
@@ -1093,7 +1173,10 @@ fn set_map_path(
         return Ok(());
     }
 
-    if let Some((_, existing)) = entries.iter_mut().find(|(k, _)| k == &path[0]) {
+    if let Some((_, existing)) = entries
+        .iter_mut()
+        .find(|(k, _)| map_keys_equal(k, &path[0]))
+    {
         if let Expression::MapLiteral {
             entries: nested_entries,
             ..
@@ -1127,9 +1210,46 @@ fn set_map_path(
     }
 }
 
+fn update_map_path(
+    entries: &mut [(String, Expression)],
+    path: &[String],
+    value: &Expression,
+) -> std::result::Result<bool, String> {
+    if path.is_empty() {
+        return Err("Key path cannot be empty".to_string());
+    }
+
+    if path.len() == 1 {
+        if let Some((_, existing)) = entries
+            .iter_mut()
+            .find(|(k, _)| map_keys_equal(k, &path[0]))
+        {
+            *existing = value.clone();
+            return Ok(true);
+        }
+        return Ok(false);
+    }
+
+    if let Some((_, existing)) = entries
+        .iter_mut()
+        .find(|(k, _)| map_keys_equal(k, &path[0]))
+    {
+        if let Expression::MapLiteral {
+            entries: nested_entries,
+            ..
+        } = existing
+        {
+            return update_map_path(nested_entries, &path[1..], value);
+        }
+        return Err(format!("Intermediate key '{}' is not a map", path[0]));
+    }
+
+    Ok(false)
+}
+
 fn deep_merge_entries(target: &mut Vec<(String, Expression)>, source: &[(String, Expression)]) {
     for (key, value) in source {
-        if let Some((_, existing)) = target.iter_mut().find(|(k, _)| k == key) {
+        if let Some((_, existing)) = target.iter_mut().find(|(k, _)| map_keys_equal(k, key)) {
             if let Expression::MapLiteral {
                 entries: target_nested,
                 ..
@@ -1352,7 +1472,13 @@ fn map_keys_function(args: &[Expression], position: &Position) -> Result<Express
 
     let values = entries
         .iter()
-        .map(|(k, _)| Expression::identifier(k.clone(), position.clone()))
+        .map(|(k, _)| {
+            if let Some(unquoted) = unquote_map_key(k) {
+                Expression::string(unquoted.to_string(), position.clone())
+            } else {
+                Expression::identifier(k.clone(), position.clone())
+            }
+        })
         .collect();
     Ok(Expression::list(
         values,
@@ -1408,7 +1534,7 @@ fn map_merge_function(args: &[Expression], position: &Position) -> Result<Expres
         };
 
         for (key, value) in entries {
-            if let Some((_, existing)) = merged.iter_mut().find(|(k, _)| k == key) {
+            if let Some((_, existing)) = merged.iter_mut().find(|(k, _)| map_keys_equal(k, key)) {
                 *existing = value.clone();
             } else {
                 merged.push((key.clone(), value.clone()));
@@ -1509,6 +1635,126 @@ fn map_set_function(args: &[Expression], position: &Position) -> Result<Expressi
     })
 }
 
+fn map_update_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    if args.len() < 3 {
+        return Err(Error::function_error(
+            "map-update",
+            "Expected at least 3 arguments (map, key..., value)",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let mut entries = match &args[0] {
+        Expression::MapLiteral { entries, .. } => entries.clone(),
+        _ => {
+            return Err(Error::function_error(
+                "map-update",
+                "First argument must be a map",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let final_path = map_path_keys(&args[..args.len() - 1], 1);
+    let value_expr = &args[args.len() - 1];
+
+    if final_path.is_empty() {
+        return Err(Error::function_error(
+            "map-update",
+            "Key path cannot be empty",
+            position.line,
+            position.column,
+        ));
+    }
+
+    match update_map_path(&mut entries, &final_path, value_expr) {
+        Ok(true) => {}
+        Ok(false) => {
+            return Err(Error::function_error(
+                "map-update",
+                format!("Key path '{}' not found in map", final_path.join(" -> ")),
+                position.line,
+                position.column,
+            ));
+        }
+        Err(message) => {
+            return Err(Error::function_error(
+                "map-update",
+                message,
+                position.line,
+                position.column,
+            ));
+        }
+    }
+
+    Ok(Expression::MapLiteral {
+        entries,
+        position: position.clone(),
+    })
+}
+
+fn map_replace_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    if args.len() < 3 {
+        return Err(Error::function_error(
+            "map-replace",
+            "Expected at least 3 arguments (map, key..., value)",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let mut entries = match &args[0] {
+        Expression::MapLiteral { entries, .. } => entries.clone(),
+        _ => {
+            return Err(Error::function_error(
+                "map-replace",
+                "First argument must be a map",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let final_path = map_path_keys(&args[..args.len() - 1], 1);
+    let value_expr = &args[args.len() - 1];
+
+    if final_path.is_empty() {
+        return Err(Error::function_error(
+            "map-replace",
+            "Key path cannot be empty",
+            position.line,
+            position.column,
+        ));
+    }
+
+    match update_map_path(&mut entries, &final_path, value_expr) {
+        Ok(true) => {}
+        Ok(false) => {
+            return Err(Error::function_error(
+                "map-replace",
+                format!("Key path '{}' not found in map", final_path.join(" -> ")),
+                position.line,
+                position.column,
+            ));
+        }
+        Err(message) => {
+            return Err(Error::function_error(
+                "map-replace",
+                message,
+                position.line,
+                position.column,
+            ));
+        }
+    }
+
+    Ok(Expression::MapLiteral {
+        entries,
+        position: position.clone(),
+    })
+}
+
 fn map_remove_function(args: &[Expression], position: &Position) -> Result<Expression> {
     if args.len() < 2 {
         return Err(Error::function_error(
@@ -1546,6 +1792,56 @@ fn map_remove_function(args: &[Expression], position: &Position) -> Result<Expre
         RemoveMapPathResult::IntermediateNotMap(key) => {
             return Err(Error::function_error(
                 "map-remove",
+                format!("Intermediate key '{}' is not a map", key),
+                position.line,
+                position.column,
+            ));
+        }
+    }
+
+    Ok(Expression::MapLiteral {
+        entries,
+        position: position.clone(),
+    })
+}
+
+fn map_deep_remove_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    if args.len() < 2 {
+        return Err(Error::function_error(
+            "map-deep-remove",
+            "Expected at least 2 arguments (map, key...)",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let mut entries = match &args[0] {
+        Expression::MapLiteral { entries, .. } => entries.clone(),
+        _ => {
+            return Err(Error::function_error(
+                "map-deep-remove",
+                "First argument must be a map",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let path = map_path_keys(args, 1);
+    if path.is_empty() {
+        return Err(Error::function_error(
+            "map-deep-remove",
+            "Key path cannot be empty",
+            position.line,
+            position.column,
+        ));
+    }
+
+    match deep_remove_map_path(&mut entries, &path) {
+        RemoveMapPathResult::Removed | RemoveMapPathResult::Missing => {}
+        RemoveMapPathResult::IntermediateNotMap(key) => {
+            return Err(Error::function_error(
+                "map-deep-remove",
                 format!("Intermediate key '{}' is not a map", key),
                 position.line,
                 position.column,
@@ -2895,10 +3191,7 @@ mod tests {
                         position: pos.clone(),
                     },
                 ),
-                (
-                    "columns".to_string(),
-                    Expression::number(12.0, pos.clone()),
-                ),
+                ("columns".to_string(), Expression::number(12.0, pos.clone())),
             ],
             position: pos.clone(),
         };
@@ -2974,6 +3267,48 @@ mod tests {
         } else {
             panic!("Expected map result from map-remove");
         }
+
+        let deep_removed = registry
+            .call(
+                "map-deep-remove",
+                &[
+                    Expression::MapLiteral {
+                        entries: vec![
+                            (
+                                "a".to_string(),
+                                Expression::MapLiteral {
+                                    entries: vec![(
+                                        "b".to_string(),
+                                        Expression::MapLiteral {
+                                            entries: vec![(
+                                                "c".to_string(),
+                                                Expression::number(1.0, pos.clone()),
+                                            )],
+                                            position: pos.clone(),
+                                        },
+                                    )],
+                                    position: pos.clone(),
+                                },
+                            ),
+                            ("keep".to_string(), Expression::number(2.0, pos.clone())),
+                        ],
+                        position: pos.clone(),
+                    },
+                    Expression::identifier("a".to_string(), pos.clone()),
+                    Expression::identifier("b".to_string(), pos.clone()),
+                    Expression::identifier("c".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+
+        if let Expression::MapLiteral { entries, .. } = deep_removed {
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].0, "keep");
+            assert_eq!(entries[0].1.to_css(), "2");
+        } else {
+            panic!("Expected map result from map-deep-remove");
+        }
     }
 
     #[test]
@@ -2986,7 +3321,10 @@ mod tests {
                 "config".to_string(),
                 Expression::MapLiteral {
                     entries: vec![
-                        ("theme".to_string(), Expression::identifier("light".to_string(), pos.clone())),
+                        (
+                            "theme".to_string(),
+                            Expression::identifier("light".to_string(), pos.clone()),
+                        ),
                         ("spacing".to_string(), Expression::number(8.0, pos.clone())),
                     ],
                     position: pos.clone(),
@@ -3027,7 +3365,10 @@ mod tests {
                 Expression::MapLiteral {
                     entries: vec![
                         ("spacing".to_string(), Expression::number(10.0, pos.clone())),
-                        ("density".to_string(), Expression::identifier("compact".to_string(), pos.clone())),
+                        (
+                            "density".to_string(),
+                            Expression::identifier("compact".to_string(), pos.clone()),
+                        ),
                     ],
                     position: pos.clone(),
                 },
@@ -3080,15 +3421,266 @@ mod tests {
     }
 
     #[test]
+    fn test_map_deep_merge_boundary_semantics() {
+        let registry = FunctionRegistry::new();
+        let pos = Position::new(1, 1);
+
+        let base = Expression::MapLiteral {
+            entries: vec![
+                (
+                    "theme".to_string(),
+                    Expression::MapLiteral {
+                        entries: vec![(
+                            "name".to_string(),
+                            Expression::identifier("light".to_string(), pos.clone()),
+                        )],
+                        position: pos.clone(),
+                    },
+                ),
+                ("mode".to_string(), Expression::number(1.0, pos.clone())),
+            ],
+            position: pos.clone(),
+        };
+
+        let override_map = Expression::MapLiteral {
+            entries: vec![
+                (
+                    "theme".to_string(),
+                    Expression::identifier("flat".to_string(), pos.clone()),
+                ),
+                (
+                    "mode".to_string(),
+                    Expression::MapLiteral {
+                        entries: vec![(
+                            "nested".to_string(),
+                            Expression::identifier("yes".to_string(), pos.clone()),
+                        )],
+                        position: pos.clone(),
+                    },
+                ),
+            ],
+            position: pos.clone(),
+        };
+
+        let merged = registry
+            .call("map-deep-merge", &[base.clone(), override_map], &pos)
+            .unwrap();
+
+        let merged_theme = registry
+            .call(
+                "map-get",
+                &[
+                    merged.clone(),
+                    Expression::identifier("theme".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        assert_eq!(merged_theme.to_css(), "flat");
+
+        let merged_mode_nested = registry
+            .call(
+                "map-get",
+                &[
+                    merged,
+                    Expression::identifier("mode".to_string(), pos.clone()),
+                    Expression::identifier("nested".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        assert_eq!(merged_mode_nested.to_css(), "yes");
+
+        let base_theme = registry
+            .call(
+                "map-get",
+                &[
+                    base.clone(),
+                    Expression::identifier("theme".to_string(), pos.clone()),
+                    Expression::identifier("name".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        assert_eq!(base_theme.to_css(), "light");
+
+        let base_mode = registry
+            .call(
+                "map-get",
+                &[
+                    base,
+                    Expression::identifier("mode".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        assert_eq!(base_mode.to_css(), "1");
+    }
+
+    #[test]
+    fn test_map_deep_merge_override_order() {
+        let registry = FunctionRegistry::new();
+        let pos = Position::new(1, 1);
+
+        let base = Expression::MapLiteral {
+            entries: vec![(
+                "config".to_string(),
+                Expression::MapLiteral {
+                    entries: vec![("a".to_string(), Expression::number(1.0, pos.clone()))],
+                    position: pos.clone(),
+                },
+            )],
+            position: pos.clone(),
+        };
+
+        let override1 = Expression::MapLiteral {
+            entries: vec![(
+                "config".to_string(),
+                Expression::MapLiteral {
+                    entries: vec![
+                        ("a".to_string(), Expression::number(2.0, pos.clone())),
+                        ("b".to_string(), Expression::number(3.0, pos.clone())),
+                    ],
+                    position: pos.clone(),
+                },
+            )],
+            position: pos.clone(),
+        };
+
+        let override2 = Expression::MapLiteral {
+            entries: vec![(
+                "config".to_string(),
+                Expression::MapLiteral {
+                    entries: vec![("b".to_string(), Expression::number(4.0, pos.clone()))],
+                    position: pos.clone(),
+                },
+            )],
+            position: pos.clone(),
+        };
+
+        let merged = registry
+            .call("map-deep-merge", &[base, override1, override2], &pos)
+            .unwrap();
+
+        let a = registry
+            .call(
+                "map-get",
+                &[
+                    merged.clone(),
+                    Expression::identifier("config".to_string(), pos.clone()),
+                    Expression::identifier("a".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        assert_eq!(a.to_css(), "2");
+
+        let b = registry
+            .call(
+                "map-get",
+                &[
+                    merged,
+                    Expression::identifier("config".to_string(), pos.clone()),
+                    Expression::identifier("b".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        assert_eq!(b.to_css(), "4");
+    }
+
+    #[test]
+    fn test_map_update_and_replace_functions() {
+        let registry = FunctionRegistry::new();
+        let pos = Position::new(1, 1);
+
+        let base = Expression::MapLiteral {
+            entries: vec![(
+                "config".to_string(),
+                Expression::MapLiteral {
+                    entries: vec![
+                        (
+                            "theme".to_string(),
+                            Expression::identifier("light".to_string(), pos.clone()),
+                        ),
+                        ("spacing".to_string(), Expression::number(8.0, pos.clone())),
+                    ],
+                    position: pos.clone(),
+                },
+            )],
+            position: pos.clone(),
+        };
+
+        let updated_theme = registry
+            .call(
+                "map-update",
+                &[
+                    base.clone(),
+                    Expression::identifier("config".to_string(), pos.clone()),
+                    Expression::identifier("theme".to_string(), pos.clone()),
+                    Expression::identifier("dark".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        let theme = registry
+            .call(
+                "map-get",
+                &[
+                    updated_theme.clone(),
+                    Expression::identifier("config".to_string(), pos.clone()),
+                    Expression::identifier("theme".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        assert_eq!(theme.to_css(), "dark");
+
+        let replaced_spacing = registry
+            .call(
+                "map-replace",
+                &[
+                    updated_theme,
+                    Expression::identifier("config".to_string(), pos.clone()),
+                    Expression::identifier("spacing".to_string(), pos.clone()),
+                    Expression::number(12.0, pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        let spacing = registry
+            .call(
+                "map-get",
+                &[
+                    replaced_spacing,
+                    Expression::identifier("config".to_string(), pos.clone()),
+                    Expression::identifier("spacing".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap();
+        assert_eq!(spacing.to_css(), "12");
+    }
+
+    #[test]
     fn test_map_key_normalization_string_identifier_number() {
         let registry = FunctionRegistry::new();
         let pos = Position::new(1, 1);
 
         let map = Expression::MapLiteral {
             entries: vec![
-                ("name".to_string(), Expression::identifier("alpha".to_string(), pos.clone())),
-                ("3".to_string(), Expression::number_with_unit(30.0, "px", pos.clone())),
-                ("4px".to_string(), Expression::identifier("hit".to_string(), pos.clone())),
+                (
+                    "name".to_string(),
+                    Expression::identifier("alpha".to_string(), pos.clone()),
+                ),
+                (
+                    "3".to_string(),
+                    Expression::number_with_unit(30.0, "px", pos.clone()),
+                ),
+                (
+                    "4px".to_string(),
+                    Expression::identifier("hit".to_string(), pos.clone()),
+                ),
             ],
             position: pos.clone(),
         };
@@ -3096,7 +3688,10 @@ mod tests {
         let by_identifier = registry
             .call(
                 "map-get",
-                &[map.clone(), Expression::identifier("name".to_string(), pos.clone())],
+                &[
+                    map.clone(),
+                    Expression::identifier("name".to_string(), pos.clone()),
+                ],
                 &pos,
             )
             .unwrap();
@@ -3105,7 +3700,10 @@ mod tests {
         let by_string = registry
             .call(
                 "map-get",
-                &[map.clone(), Expression::string("name".to_string(), pos.clone())],
+                &[
+                    map.clone(),
+                    Expression::string("name".to_string(), pos.clone()),
+                ],
                 &pos,
             )
             .unwrap();
@@ -3236,7 +3834,7 @@ mod tests {
             .call(
                 "map-get",
                 &[
-                    nested,
+                    nested.clone(),
                     Expression::identifier("a".to_string(), pos.clone()),
                     Expression::identifier("b".to_string(), pos.clone()),
                 ],
@@ -3250,6 +3848,106 @@ mod tests {
                 message,
                 ..
             } if function == "map-get" && message.contains("Intermediate key 'a' is not a map")
+        ));
+
+        let update_not_found_err = registry
+            .call(
+                "map-update",
+                &[
+                    nested.clone(),
+                    Expression::identifier("missing".to_string(), pos.clone()),
+                    Expression::number(2.0, pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            update_not_found_err,
+            Error::FunctionError {
+                function,
+                message,
+                ..
+            } if function == "map-update" && message.contains("not found in map")
+        ));
+
+        let replace_intermediate_err = registry
+            .call(
+                "map-replace",
+                &[
+                    nested.clone(),
+                    Expression::identifier("a".to_string(), pos.clone()),
+                    Expression::identifier("b".to_string(), pos.clone()),
+                    Expression::number(2.0, pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            replace_intermediate_err,
+            Error::FunctionError {
+                function,
+                message,
+                ..
+            } if function == "map-replace" && message.contains("Intermediate key 'a' is not a map")
+        ));
+
+        let update_non_map_err = registry
+            .call(
+                "map-update",
+                &[
+                    Expression::number(1.0, pos.clone()),
+                    Expression::identifier("k".to_string(), pos.clone()),
+                    Expression::number(2.0, pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            update_non_map_err,
+            Error::FunctionError {
+                function,
+                message,
+                ..
+            } if function == "map-update" && message.contains("First argument must be a map")
+        ));
+
+        let deep_remove_non_map_err = registry
+            .call(
+                "map-deep-remove",
+                &[
+                    Expression::number(1.0, pos.clone()),
+                    Expression::identifier("k".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            deep_remove_non_map_err,
+            Error::FunctionError {
+                function,
+                message,
+                ..
+            } if function == "map-deep-remove" && message.contains("First argument must be a map")
+        ));
+
+        let deep_remove_intermediate_err = registry
+            .call(
+                "map-deep-remove",
+                &[
+                    nested.clone(),
+                    Expression::identifier("a".to_string(), pos.clone()),
+                    Expression::identifier("b".to_string(), pos.clone()),
+                ],
+                &pos,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            deep_remove_intermediate_err,
+            Error::FunctionError {
+                function,
+                message,
+                ..
+            } if function == "map-deep-remove" && message.contains("Intermediate key 'a' is not a map")
         ));
     }
 }

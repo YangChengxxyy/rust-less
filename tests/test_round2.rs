@@ -313,6 +313,7 @@ fn test_import_optional_missing_file() {
 fn test_compile_with_options_source_map() {
     let options = rust_less::CompilerOptions {
         source_map: true,
+        source_map_lessjs_compat: false,
         compress: false,
         include_paths: vec![],
     };
@@ -499,6 +500,27 @@ fn test_map_set_function() {
 }
 
 #[test]
+fn test_map_update_and_replace_function() {
+    let less = r#"
+@base: {
+    config: {
+        theme: light;
+        spacing: 8;
+    };
+};
+@updated: map-update(@base, config, theme, dark);
+@replaced: map-replace(@updated, config, spacing, 10);
+.test {
+    theme: map-get(@replaced, config, theme);
+    spacing: map-get(@replaced, config, spacing);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("theme: dark"), "Got: {}", css);
+    assert!(css.contains("spacing: 10"), "Got: {}", css);
+}
+
+#[test]
 fn test_map_deep_merge_function() {
     let less = r#"
 @base: {
@@ -527,6 +549,66 @@ fn test_map_deep_merge_function() {
 }
 
 #[test]
+fn test_map_deep_merge_boundary_conflicts_and_immutability() {
+    let less = r#"
+@base: {
+    theme: {
+        name: light;
+    };
+    mode: 1;
+};
+@override: {
+    theme: flat;
+    mode: {
+        nested: yes;
+    };
+};
+@merged: map-deep-merge(@base, @override);
+.test {
+    merged_theme: map-get(@merged, theme);
+    merged_mode_nested: map-get(@merged, mode, nested);
+    base_theme_name: map-get(@base, theme, name);
+    base_mode: map-get(@base, mode);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("merged_theme: flat"), "Got: {}", css);
+    assert!(css.contains("merged_mode_nested: yes"), "Got: {}", css);
+    assert!(css.contains("base_theme_name: light"), "Got: {}", css);
+    assert!(css.contains("base_mode: 1"), "Got: {}", css);
+}
+
+#[test]
+fn test_map_deep_merge_override_order() {
+    let less = r#"
+@base: {
+    config: {
+        a: 1;
+    };
+};
+@ov1: {
+    config: {
+        a: 2;
+        b: 3;
+    };
+};
+@ov2: {
+    config: {
+        b: 4;
+    };
+};
+@merged: map-deep-merge(@base, @ov1, @ov2);
+.test {
+    a: map-get(@merged, config, a);
+    b: map-get(@merged, config, b);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("a: 2"), "Got: {}", css);
+    assert!(css.contains("b: 4"), "Got: {}", css);
+}
+
+#[test]
 fn test_map_key_normalization_consistency() {
     let less = r#"
 @tokens: {
@@ -548,6 +630,91 @@ fn test_map_key_normalization_consistency() {
     assert!(css.contains("by_number: 30px"), "Got: {}", css);
     assert!(css.contains("by_bracket: 30px"), "Got: {}", css);
     assert!(css.contains("has_number_string: true"), "Got: {}", css);
+}
+
+#[test]
+fn test_map_deep_nested_read_write_delete_combo() {
+    let less = r#"
+@base: {
+    ui: {
+        theme: {
+            palette: {
+                primary: 11;
+                secondary: 22;
+            };
+        };
+    };
+    keep: 9;
+};
+@set: map-set(@base, ui, theme, palette, accent, 33);
+@updated: map-update(@set, ui, theme, palette, primary, 10);
+@removed: map-deep-remove(@updated, ui, theme, palette, secondary);
+.test {
+    accent: map-get(@set, ui, theme, palette, accent);
+    primary_updated: map-get(@updated, ui, theme, palette, primary);
+    has_secondary_removed: map-has-key(@removed, ui, theme, palette, secondary);
+    original_secondary: map-get(@base, ui, theme, palette, secondary);
+    keep: map-get(@removed, keep);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("accent: 33"), "Got: {}", css);
+    assert!(css.contains("primary_updated: 10"), "Got: {}", css);
+    assert!(css.contains("has_secondary_removed: false"), "Got: {}", css);
+    assert!(css.contains("original_secondary: 22"), "Got: {}", css);
+    assert!(css.contains("keep: 9"), "Got: {}", css);
+}
+
+#[test]
+fn test_map_key_normalization_for_set_update_replace_paths() {
+    let less = r#"
+@base: {
+    "3": {
+        "name": 1;
+    };
+};
+@set: map-set(@base, 3, name, 2);
+@updated: map-update(@set, "3", "name", 4);
+@replaced: map-replace(@updated, 3, "name", 5);
+.test {
+    final_value: map-get(@replaced, "3", name);
+    original_value: map-get(@base, "3", "name");
+    has_numeric_key: map-has-key(@replaced, 3);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("final_value: 5"), "Got: {}", css);
+    assert!(css.contains("original_value: 1"), "Got: {}", css);
+    assert!(css.contains("has_numeric_key: true"), "Got: {}", css);
+}
+
+#[test]
+fn test_map_deep_remove_prunes_only_empty_branches() {
+    let less = r#"
+@base: {
+    a: {
+        b: {
+            c: {
+                d: 1;
+            };
+            x: 2;
+        };
+    };
+    keep: 9;
+};
+@removed: map-deep-remove(@base, a, b, c, d);
+.test {
+    has_c: map-has-key(@removed, a, b, c);
+    has_a: map-has-key(@removed, a);
+    x: map-get(@removed, a, b, x);
+    keep: map-get(@removed, keep);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("has_c: false"), "Got: {}", css);
+    assert!(css.contains("has_a: true"), "Got: {}", css);
+    assert!(css.contains("x: 2"), "Got: {}", css);
+    assert!(css.contains("keep: 9"), "Got: {}", css);
 }
 
 #[test]
@@ -599,6 +766,146 @@ fn test_map_error_empty_path() {
 }
 
 #[test]
+fn test_map_update_error_non_map_argument() {
+    let less = r#"
+@value: 1;
+.test {
+    x: map-update(@value, a, 2);
+}
+"#;
+    let err = compile(less).unwrap_err().to_string();
+    assert!(err.contains("First argument must be a map"), "Got: {}", err);
+}
+
+#[test]
+fn test_map_update_error_key_not_found() {
+    let less = r#"
+@tokens: {
+    config: {
+        theme: light;
+    };
+};
+.test {
+    x: map-update(@tokens, config, density, compact);
+}
+"#;
+    let err = compile(less).unwrap_err().to_string();
+    assert!(err.contains("not found in map"), "Got: {}", err);
+}
+
+#[test]
+fn test_map_update_error_deep_intermediate_path_not_map() {
+    let less = r#"
+@tokens: {
+    a: {
+        b: 1;
+    };
+};
+.test {
+    x: map-update(@tokens, a, b, c, 2);
+}
+"#;
+    let err = compile(less).unwrap_err().to_string();
+    assert!(
+        err.contains("Intermediate key 'b' is not a map"),
+        "Got: {}",
+        err
+    );
+}
+
+#[test]
+fn test_map_replace_error_intermediate_path_not_map() {
+    let less = r#"
+@tokens: {
+    a: 1;
+};
+.test {
+    x: map-replace(@tokens, a, b, 2);
+}
+"#;
+    let err = compile(less).unwrap_err().to_string();
+    assert!(
+        err.contains("Intermediate key 'a' is not a map"),
+        "Got: {}",
+        err
+    );
+}
+
+#[test]
+fn test_map_deep_remove_function() {
+    let less = r#"
+@tokens: {
+    config: {
+        colors: {
+            primary: #111;
+            secondary: #222;
+        };
+    };
+};
+@clean: map-deep-remove(@tokens, config, colors, primary);
+.test {
+    has_primary: map-has-key(@clean, config, colors, primary);
+    has_secondary: map-has-key(@clean, config, colors, secondary);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("has_primary: false"), "Got: {}", css);
+    assert!(css.contains("has_secondary: true"), "Got: {}", css);
+}
+
+#[test]
+fn test_map_deep_remove_prunes_empty_parents() {
+    let less = r#"
+@tokens: {
+    a: {
+        b: {
+            c: 1;
+        };
+    };
+    keep: 2;
+};
+@clean: map-deep-remove(@tokens, a, b, c);
+.test {
+    has_a: map-has-key(@clean, a);
+    keep: map-get(@clean, keep);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("has_a: false"), "Got: {}", css);
+    assert!(css.contains("keep: 2"), "Got: {}", css);
+}
+
+#[test]
+fn test_map_deep_remove_error_non_map_argument() {
+    let less = r#"
+@value: 1;
+.test {
+    x: map-deep-remove(@value, a);
+}
+"#;
+    let err = compile(less).unwrap_err().to_string();
+    assert!(err.contains("First argument must be a map"), "Got: {}", err);
+}
+
+#[test]
+fn test_map_deep_remove_error_intermediate_path_not_map() {
+    let less = r#"
+@tokens: {
+    a: 1;
+};
+.test {
+    x: map-deep-remove(@tokens, a, b);
+}
+"#;
+    let err = compile(less).unwrap_err().to_string();
+    assert!(
+        err.contains("Intermediate key 'a' is not a map"),
+        "Got: {}",
+        err
+    );
+}
+
+#[test]
 fn test_map_remove_error_empty_path() {
     let less = r#"
 @tokens: {
@@ -631,4 +938,27 @@ each(a, b, c, {
     assert!(css.contains(".item-a"), "Got: {}", css);
     assert!(css.contains(".item-b"), "Got: {}", css);
     assert!(css.contains(".item-c"), "Got: {}", css);
+}
+
+#[test]
+fn test_each_map_key_value_index() {
+    let less = r#"
+@tokens: {
+    primary: #111;
+    secondary: #222;
+};
+each(@tokens, {
+    .item-@{key} {
+        color: @value;
+        order: @index;
+    }
+});
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains(".item-primary"), "Got: {}", css);
+    assert!(css.contains(".item-secondary"), "Got: {}", css);
+    assert!(css.contains("color: #111"), "Got: {}", css);
+    assert!(css.contains("color: #222"), "Got: {}", css);
+    assert!(css.contains("order: 1"), "Got: {}", css);
+    assert!(css.contains("order: 2"), "Got: {}", css);
 }

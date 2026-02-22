@@ -9,6 +9,12 @@
 
 Rust LESS 是一个用 Rust 编写的高性能 LESS 编译器，旨在提供与官方 LESS 编译器高度兼容的功能，同时带来显著的性能提升。
 
+**质量基线（2026-02-21）**:
+- `cargo test --quiet`: 326 passed, 0 failed, 0 ignored
+- `cargo test --all-features --quiet`: 336 passed, 0 failed, 0 ignored
+- `bash tools/status-check/run-status-check.sh`: 默认启用 `--strict --strict-mappings`，门禁全绿
+- `bash tools/perf-check/run-perf-check.sh`: 基于 `docs/PERF_BASELINE.json` 的性能阈值回归门禁
+
 ## 🎯 核心功能实现状态
 
 ### ✅ 已完全实现的功能
@@ -26,7 +32,7 @@ Rust LESS 是一个用 Rust 编写的高性能 LESS 编译器，旨在提供与�
 | **颜色函数** | 100% | 支持 RGB/HSL 转换、alpha 通道操作、mix 和 spin 等 |
 | **数学函数** | 100% | round()、ceil()、floor()、percentage() 等 |
 | **字符串函数** | 100% | e()、replace() 支持变量插值和转义 |
-| **Maps 基础函数** | 55% | 已支持 map-get/map-has-key/map-keys/map-values/map-merge/map-deep-merge/map-set/map-remove，高级语义补齐中 |
+| **Maps 基础函数** | 85% | 已支持 map-get/map-has-key/map-keys/map-values/map-merge/map-deep-merge/map-set/map-update/map-replace/map-remove/map-deep-remove，并支持 each(map, ...) |
 | **文件系统导入** | 100% | 支持文件读取、相对路径、循环检测、Reference导入 |
 | **错误处理** | 100% | 错误类型匹配准确 (UndefinedMixin等) |
 | **Unicode支持** | 100% | 支持 Unicode 标识符（包括 Emoji） |
@@ -37,7 +43,7 @@ Rust LESS 是一个用 Rust 编写的高性能 LESS 编译器，旨在提供与�
 | 功能 | 优先级 | 预计工作量 | 说明 |
 |------|--------|------------|------|
 | **映射(Maps)高级能力** | 高 | 4-6周 | 嵌套读写、边界行为与 LESS 4.x 完整对齐 |
-| **源码映射完善** | 中 | 2-4周 | 已有基础映射，待补全覆盖与跨文件精度 |
+| **源码映射完善** | 中 | 2-4周 | 已有主链路映射、兼容模式与 strict 门禁，待扩展复杂跨文件场景 |
 | **插件系统** | 中 | 4-8周 | 扩展解析/编译阶段能力 |
 
 ---
@@ -406,11 +412,20 @@ Statement <|-- Extend
 #### 里程碑 3.2: 源码映射
 - [x] 基础 source map 生成
 - [x] 规则/声明/at-rule 映射接入
-- [ ] 跨文件映射精度完善
+- [x] 跨文件 token lookup 回归（imported mixin/keyframes/bubbled at-rule）
+- [x] source map less.js 兼容模式（`--source-map-lessjs-compat`）
+- [x] `mappings` 对齐开关（`--observe-mappings` / `--strict-mappings`）
+- [x] 现有对照用例的 `mappings` strict 结果收敛（`fail=0`）
+- [x] `status-check` 默认启用 strict mappings 门禁（可通过 `--observe-mappings` 观测降级）
 
 ### 阶段四：高级数据结构与扩展 (远期)
-- [x] Maps 基础函数（`map-get`、`map-has-key`、`map-keys`、`map-values`、`map-merge`、`map-deep-merge`、`map-set`、`map-remove`）
-- [ ] Maps 高级能力（嵌套结构操作与完整语义对齐）
+- [x] Maps 基础函数（`map-get`、`map-has-key`、`map-keys`、`map-values`、`map-merge`、`map-deep-merge`、`map-set`、`map-update`、`map-replace`、`map-remove`、`map-deep-remove`）
+- [ ] Maps 高级能力（`each(map, {...})` 与 `map-deep-merge` 边界策略已支持；less.js 规则持续对齐）
+- [x] 复杂嵌套 map 读写/删除回归（3 层以上路径组合）
+- [x] `each(map, {...})` 语义对齐（`@key`/`@value`/`@index`）
+- [x] Maps 与 less.js 对照兼容性清单（已接入并实跑 `tools/lessjs-compat/run-lessjs-compat.js`；当前 `pass=70/observed=0/fail=0/unsupported=14`，详见 `docs/LESSJS_DIFF_REPORT.md`）
+- [x] 统一质量门禁脚本（`tools/status-check/run-status-check.sh`）
+- [x] 性能回归门禁（`tools/perf-check/run-perf-check.sh` + `docs/PERF_BASELINE.json`）
 - [ ] 插件系统草案
 
 ---

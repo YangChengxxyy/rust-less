@@ -94,8 +94,13 @@ impl RuleCompiler for Compiler {
         if has_declarations || has_mixin_calls || has_comments {
             // Source map: map rule selector to source position
             let rule_name = current_selectors.join(", ");
-            self.add_mapping(&rule.position, Some(&rule_name));
-            self.add_indent();
+            if self.source_map_lessjs_compat {
+                self.add_indent();
+                self.add_mapping(&rule.position, Some(&rule_name));
+            } else {
+                self.add_mapping(&rule.position, Some(&rule_name));
+                self.add_indent();
+            }
             self.write_str(&rule_name);
             self.add_space();
             self.write_char('{');
@@ -221,21 +226,8 @@ impl RuleCompiler for Compiler {
             let new_queries: Vec<_> = self.pending_media_queries.drain(pending_before..).collect();
             let saved_selectors = self.current_selectors.clone();
             self.current_selectors = Vec::new();
-            for (media_query, statements) in new_queries {
-                self.write_str(&media_query);
-                self.add_space();
-                self.write_char('{');
-                self.add_newline();
-
-                self.indent_level += 1;
-                for statement in &statements {
-                    self.compile_statement(statement)?;
-                }
-                self.indent_level -= 1;
-
-                self.add_indent();
-                self.write_char('}');
-                self.add_newline();
+            for query in new_queries {
+                self.emit_pending_media_query(query)?;
             }
             self.current_selectors = saved_selectors;
         }
@@ -379,8 +371,13 @@ impl RuleCompiler for Compiler {
         }
 
         // Source map: map property declaration to source position
-        self.add_mapping(&declaration.position, Some(&property));
-        self.add_indent();
+        if self.source_map_lessjs_compat {
+            self.add_indent();
+            self.add_mapping(&declaration.position, Some(&property));
+        } else {
+            self.add_mapping(&declaration.position, Some(&property));
+            self.add_indent();
+        }
         self.write_str(&property);
         self.write_char(':');
         self.add_space();
@@ -392,6 +389,10 @@ impl RuleCompiler for Compiler {
             self.write_str("!important");
         }
 
+        // less.js emits an additional declaration segment around the semicolon in sourcemap mode.
+        if self.source_map_lessjs_compat {
+            self.add_mapping(&declaration.position, Some(&property));
+        }
         self.write_char(';');
         self.add_newline();
 

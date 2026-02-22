@@ -567,34 +567,30 @@ impl Parser {
 
         // Parse prelude (everything until { or ;)
         let mut prelude = String::new();
-        let mut need_space = false;
+        let mut prev_line: Option<usize> = None;
+        let mut prev_end_col: usize = 0;
         while !self.is_at_end()
             && !matches!(
                 self.current_token().token_type,
                 TokenType::LeftBrace | TokenType::Semicolon
             )
         {
-            // Skip whitespace tokens but preserve spaces in the prelude
-            if matches!(self.current_token().token_type, TokenType::Whitespace) {
-                need_space = true;
-                self.advance();
-            } else {
-                // Add space before token if needed
-                if need_space && !prelude.is_empty() {
-                    prelude.push(' ');
+            let token = self.current_token().clone();
+
+            if !prelude.is_empty() {
+                if let Some(prev_line_value) = prev_line {
+                    if token.position.line > prev_line_value
+                        || token.position.column > prev_end_col
+                    {
+                        prelude.push(' ');
+                    }
                 }
-
-                // Add the token
-                prelude.push_str(&self.current_token().lexeme);
-
-                // Add space after colon for media queries
-                if matches!(self.current_token().token_type, TokenType::Colon) {
-                    prelude.push(' ');
-                }
-
-                need_space = false;
-                self.advance();
             }
+
+            prelude.push_str(&token.lexeme);
+            prev_line = Some(token.position.line);
+            prev_end_col = token.position.column + token.lexeme.chars().count();
+            self.advance();
         }
 
         let mut at_rule = AtRule::new(name, position);
@@ -3012,7 +3008,8 @@ impl Parser {
                 Some(key)
             }
             TokenType::String(value) => {
-                let key = value.clone();
+                // Preserve quoted key identity to align map native access semantics.
+                let key = format!("\"{}\"", value);
                 self.advance();
                 Some(key)
             }

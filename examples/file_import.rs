@@ -84,6 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = CompilerOptions {
         compress: true,
         source_map: false,
+        source_map_lessjs_compat: false,
         include_paths: vec![fixtures_path.to_string_lossy().to_string()],
     };
 

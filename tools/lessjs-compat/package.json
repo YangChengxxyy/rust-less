@@ -1,0 +1,14 @@
+{
+  "name": "rust-less-lessjs-compat",
+  "private": true,
+  "version": "0.1.0",
+  "description": "less.js 对照脚本依赖",
+  "license": "MIT",
+  "scripts": {
+    "run": "node run-lessjs-compat.js",
+    "run:strict": "node run-lessjs-compat.js --strict"
+  },
+  "dependencies": {
+    "less": "^4.2.2"
+  }
+}
