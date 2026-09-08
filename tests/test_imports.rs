@@ -407,7 +407,7 @@ mod compiler_options {
 
         let imported_color_line = css
             .lines()
-            .position(|line| line.contains("color: #00f;"))
+            .position(|line| line.contains("color: #0000ff;"))
             .expect("Expected imported color line") as u32;
 
         let token = sm

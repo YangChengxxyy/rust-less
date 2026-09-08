@@ -329,7 +329,7 @@ mod operations {
 "#;
         let expected = r#".theme {
   color: #333;
-  background: #666;
+  background: #666666;
   border: #1a1a1a;
 }"#;
         let result = compile(less).unwrap();

@@ -1,0 +1,8 @@
+@themes: {
+  dark: { primary: black; bg: #111; };
+  light: { primary: white; };
+};
+.test {
+  a: @themes[dark][primary];
+  b: @themes[light][primary];
+}

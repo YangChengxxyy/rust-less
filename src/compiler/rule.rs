@@ -94,8 +94,12 @@ impl RuleCompiler for Compiler {
             .nested_rules
             .iter()
             .any(|stmt| matches!(stmt, Statement::Comment(_)));
+        let has_each_calls = rule
+            .nested_rules
+            .iter()
+            .any(|stmt| matches!(stmt, Statement::EachCall(_)));
 
-        if has_declarations || has_mixin_calls || has_dr_calls || has_comments {
+        if has_declarations || has_mixin_calls || has_dr_calls || has_comments || has_each_calls {
             // Source map: map rule selector to source position
             let rule_name = current_selectors.join(", ");
             if self.source_map_lessjs_compat {
@@ -119,6 +123,7 @@ impl RuleCompiler for Compiler {
                 MixinCall(MixinCall),
                 Comment(Comment),
                 DetachedRulesetCall(DetachedRulesetCall),
+                EachCall(EachCall),
             }
 
             // Collect all declarations, mixin calls, and comments with their positions
@@ -157,6 +162,13 @@ impl RuleCompiler for Compiler {
                             RuleItem::DetachedRulesetCall(call.clone()),
                         ));
                     }
+                    Statement::EachCall(each_call) => {
+                        items.push((
+                            each_call.position.line,
+                            each_call.position.column,
+                            RuleItem::EachCall(each_call.clone()),
+                        ));
+                    }
                     _ => {}
                 }
             }
@@ -172,6 +184,7 @@ impl RuleCompiler for Compiler {
                     RuleItem::DetachedRulesetCall(call) => {
                         self.compile_detached_ruleset_call(&call)?
                     }
+                    RuleItem::EachCall(each_call) => self.compile_each_call(&each_call)?,
                 }
             }
 
@@ -204,6 +217,10 @@ impl RuleCompiler for Compiler {
                     continue;
                 }
                 Statement::DetachedRulesetCall(_) => {
+                    // Already processed above inside the block
+                    continue;
+                }
+                Statement::EachCall(_) => {
                     // Already processed above inside the block
                     continue;
                 }
@@ -358,64 +375,15 @@ impl RuleCompiler for Compiler {
     }
 
     fn compile_declaration(&mut self, declaration: &Declaration) -> Result<()> {
-        // Resolve property name interpolation (@{var} patterns)
-        let property = if declaration.property.contains("@{") {
-            self.resolve_property_interpolation(&declaration.property)?
-        } else {
-            declaration.property.clone()
-        };
-
-        let value = self.evaluate_expression(&declaration.value)?;
-        let value_str = value.to_css();
-
-        // Handle property merge (+: and +_: syntax)
-        if let Some(merge_type) = &declaration.merge {
-            let important = declaration.important || self.force_important;
-            let entry = self
-                .pending_merges
-                .entry(property.clone())
-                .or_insert_with(|| {
-                    (
-                        Vec::new(),
-                        merge_type.clone(),
-                        false,
-                        declaration.position.clone(),
-                    )
-                });
-            entry.0.push(value_str);
-            if important {
-                entry.2 = true;
-            }
-            return Ok(());
+        // Declarations expanded from mixins/detached rulesets keep the
+        // definition file for source-map attribution (matches less.js).
+        let previous_file = self.current_file.clone();
+        if let Some(source_file) = &declaration.source_file {
+            self.current_file = source_file.clone();
         }
-
-        // Source map: map property declaration to source position
-        if self.source_map_lessjs_compat {
-            self.add_indent();
-            self.add_mapping(&declaration.position, Some(&property));
-        } else {
-            self.add_mapping(&declaration.position, Some(&property));
-            self.add_indent();
-        }
-        self.write_str(&property);
-        self.write_char(':');
-        self.add_space();
-
-        self.write_str(&value_str);
-
-        if declaration.important || self.force_important {
-            self.add_space();
-            self.write_str("!important");
-        }
-
-        // less.js emits an additional declaration segment around the semicolon in sourcemap mode.
-        if self.source_map_lessjs_compat {
-            self.add_mapping(&declaration.position, Some(&property));
-        }
-        self.write_char(';');
-        self.add_newline();
-
-        Ok(())
+        let result = self.compile_declaration_inner(declaration);
+        self.current_file = previous_file;
+        result
     }
 
     fn compile_comment(&mut self, comment: &Comment) -> Result<()> {
@@ -487,5 +455,74 @@ impl RuleCompiler for Compiler {
         }
 
         Ok(result)
+    }
+}
+
+impl Compiler {
+    fn compile_declaration_inner(&mut self, declaration: &Declaration) -> Result<()> {
+        // Resolve property name interpolation (@{var} patterns)
+        let property = if declaration.property.contains("@{") {
+            self.resolve_property_interpolation(&declaration.property)?
+        } else {
+            declaration.property.clone()
+        };
+
+        let value = self.evaluate_expression(&declaration.value)?;
+        let value_str = value.to_css();
+
+        // Handle property merge (+: and +_: syntax)
+        if let Some(merge_type) = &declaration.merge {
+            let important = declaration.important || self.force_important;
+            let entry = self
+                .pending_merges
+                .entry(property.clone())
+                .or_insert_with(|| {
+                    (
+                        Vec::new(),
+                        merge_type.clone(),
+                        false,
+                        declaration.position.clone(),
+                    )
+                });
+            entry.0.push(value_str);
+            if important {
+                entry.2 = true;
+            }
+            return Ok(());
+        }
+
+        // Source map: map property declaration to source position
+        if self.source_map_lessjs_compat {
+            self.add_indent();
+            self.add_mapping(&declaration.position, Some(&property));
+        } else {
+            self.add_mapping(&declaration.position, Some(&property));
+            self.add_indent();
+        }
+        self.write_str(&property);
+        self.write_char(':');
+        self.add_space();
+
+        // less.js emits an extra mapping at the start of function-call values
+        if self.source_map_lessjs_compat {
+            if let Expression::FunctionCall { position, .. } = &declaration.value {
+                self.add_mapping(position, Some(&property));
+            }
+        }
+        self.write_str(&value_str);
+
+        if declaration.important || self.force_important {
+            self.add_space();
+            self.write_str("!important");
+        }
+
+        // less.js emits an additional declaration segment around the semicolon in sourcemap mode.
+        if self.source_map_lessjs_compat {
+            self.add_mapping(&declaration.position, Some(&property));
+        }
+        self.write_char(';');
+        self.add_newline();
+
+        Ok(())
     }
 }

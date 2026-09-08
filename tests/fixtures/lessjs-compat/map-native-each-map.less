@@ -1,0 +1,10 @@
+@colors: {
+  primary: blue;
+  secondary: gray;
+};
+each(@colors, {
+  .color-@{key} {
+    color: @value;
+    order: @index;
+  }
+});

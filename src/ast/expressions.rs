@@ -39,6 +39,8 @@ pub enum Expression {
         blue: u8,
         /// Alpha component (0.0-1.0)
         alpha: f64,
+        /// Original source text for hex literals (preserves shorthand like `#f00`)
+        original: Option<String>,
         /// Source position of this color
         position: Position,
     },
@@ -175,8 +177,8 @@ pub enum Expression {
 
     /// Map literal: { key: value; key2: value2; }
     MapLiteral {
-        /// Key-value pairs
-        entries: Vec<(String, Expression)>,
+        /// Key-value pairs with the source position of each key
+        entries: Vec<(String, Expression, Position)>,
         /// Source position
         position: Position,
     },
@@ -306,6 +308,7 @@ impl Expression {
             green,
             blue,
             alpha: 1.0,
+            original: None,
             position,
         }
     }
@@ -317,12 +320,14 @@ impl Expression {
             green,
             blue,
             alpha,
+            original: None,
             position,
         }
     }
 
     /// Create a color from hex string
     pub fn color_hex(hex: &str, position: Position) -> Result<Self, &'static str> {
+        let original = format!("#{}", hex.trim_start_matches('#'));
         let hex = hex.trim_start_matches('#');
 
         let (red, green, blue, alpha) = match hex.len() {
@@ -369,6 +374,7 @@ impl Expression {
             green,
             blue,
             alpha,
+            original: Some(original),
             position,
         })
     }
@@ -543,8 +549,12 @@ impl Expression {
                 green,
                 blue,
                 alpha,
+                original,
                 position,
             } => {
+                if let Some(original) = original {
+                    return original.clone();
+                }
                 use crate::ast::values::Color;
                 let color = Color {
                     red: *red,
@@ -693,7 +703,7 @@ impl super::Visitable for Expression {
                 object.accept(visitor);
             }
             Expression::MapLiteral { entries, .. } => {
-                for (_, value) in entries {
+                for (_, value, _) in entries {
                     value.accept(visitor);
                 }
             }
@@ -744,7 +754,8 @@ mod tests {
         let pos = Position::new(1, 1);
         let expr = Expression::color_rgb(255, 0, 0, pos);
 
-        assert_eq!(expr.to_css(), "#f00");
+        // Computed colors emit full 6-digit hex, matching less.js
+        assert_eq!(expr.to_css(), "#ff0000");
         assert!(expr.is_literal());
     }
 

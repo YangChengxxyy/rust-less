@@ -193,7 +193,10 @@ fn test_quoted_key_map_literal() {
     // In LESS, unquoted key access on quoted key map should fail
     // The behavior depends on whether the compiler normalizes keys
     let ok = result.is_err()
-        || result.as_ref().map(|s| !s.contains("val: alpha")).unwrap_or(false);
+        || result
+            .as_ref()
+            .map(|s| !s.contains("val: alpha"))
+            .unwrap_or(false);
     assert!(ok, "Got: {:?}", result);
 }
 

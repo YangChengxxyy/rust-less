@@ -19,6 +19,11 @@
 当前覆盖：
 - `maps-native-unquoted-key`
 - `maps-native-quoted-key`
+- `maps-native-each-map`（`each(@map, ...)` 迭代，`@value`/`@key`/`@index`）
+- `maps-native-each-list`（`each()` 遍历列表变量）
+- `maps-native-each-in-rule`（规则体内 `each()` 展开声明）
+- `maps-native-map-override`（变量后声明覆盖）
+- `maps-native-media-prelude`（@media prelude 中 map 访问求值）
 
 门禁策略：
 - A 类场景出现差异，计入 `fail`，阻断 strict 门禁。
@@ -36,6 +41,8 @@
 - `maps-map-update-missing-error`
 - `maps-map-replace-missing-error`
 - `maps-map-intermediate-not-map-error`
+- `maps-map-variable-key-access`（`@map[@key]` 变量 key 访问；less.js 报 NameError）
+- `maps-map-nested-bracket-access`（`@map[a][b]` 链式访问；less.js 报 SyntaxError）
 
 门禁策略：
 - B 类场景在对照报告中计为 `unsupported`。

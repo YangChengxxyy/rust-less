@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-02-22T02:39:38.751Z",
+  "generatedAt": "2026-09-07T12:42:53.388Z",
   "environment": {
-    "nodeVersion": "v20.19.6",
+    "nodeVersion": "v24.14.1",
     "lessVersion": "4.5.1",
     "rustLessBin": "/Users/cc/projects/rust-less/target/debug/rust-less",
     "tempRoot": "/Users/cc/projects/rust-less/target/lessjs-compat",
@@ -10,13 +10,13 @@
     "observeMappings": false
   },
   "summary": {
-    "total": 84,
-    "pass": 70,
+    "total": 96,
+    "pass": 80,
     "observed": 0,
     "observedStructural": 0,
     "observedEncoding": 0,
     "fail": 0,
-    "unsupported": 14,
+    "unsupported": 16,
     "blocked": 0
   },
   "results": [
@@ -452,6 +452,185 @@
         "details": {
           "rustError": "Error: FunctionError { function: \"map-replace\", message: \"Intermediate key 'a' is not a map\", line: 5, column: 8 }",
           "lessError": null
+        }
+      }
+    },
+    {
+      "id": "maps-native-each-map",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".color-primary{color:blue;order:1;}.color-secondary{color:gray;order:2;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-each-map.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-each-map/rust/map-native-each-map.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".color-primary{color:blue;order:1}.color-secondary{color:gray;order:2}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-each-list",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".m-1{margin:10px;}.m-2{margin:20px;}.m-3{margin:30px;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-each-list.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-each-list/rust/map-native-each-list.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".m-1{margin:10px}.m-2{margin:20px}.m-3{margin:30px}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-each-in-rule",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".demo{c-red:#f00;c-blue:#00f;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-each-in-rule.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-each-in-rule/rust/map-native-each-in-rule.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".demo{c-red:#f00;c-blue:#00f}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-map-override",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".test{a:beta;b:1;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-map-override.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-map-override/rust/map-native-map-override.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".test{a:beta;b:1}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-media-prelude",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".container{width:768px;}@media (min-width: 1024px){.container{padding:16px;}}@media (min-width: 768px){.top{margin:0;}}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-media-prelude.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-media-prelude/rust/map-native-media-prelude.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".container{width:768px}@media (min-width:1024px){.container{padding:16px}}@media (min-width:768px){.top{margin:0}}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-map-variable-key-access",
+      "category": "maps",
+      "baseline": "extension",
+      "status": "unsupported",
+      "reason": "less.js does not natively support rust-less map extension functions",
+      "rust": {
+        "ok": true,
+        "css": ".test{a:alpha;b:alpha;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-variable-key-access.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-map-variable-key-access/rust/map-variable-key-access.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": false,
+        "error": "Name: variable @k not found (map-variable-key-access.less) line 7 col 12"
+      },
+      "compare": {
+        "status": "unsupported",
+        "reason": "less.js does not natively support rust-less map extension functions",
+        "rustOk": true,
+        "lessOk": false,
+        "details": {
+          "rustError": null,
+          "lessError": "Name: variable @k not found (map-variable-key-access.less) line 7 col 12"
+        }
+      }
+    },
+    {
+      "id": "maps-map-nested-bracket-access",
+      "category": "maps",
+      "baseline": "extension",
+      "status": "unsupported",
+      "reason": "less.js does not natively support rust-less map extension functions",
+      "rust": {
+        "ok": true,
+        "css": ".test{a:black;b:white;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-nested-bracket-access.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-map-nested-bracket-access/rust/map-nested-bracket-access.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": false,
+        "error": "Syntax: Could not evaluate variable call @themes (map-nested-bracket-access.less) line 6 col 2"
+      },
+      "compare": {
+        "status": "unsupported",
+        "reason": "less.js does not natively support rust-less map extension functions",
+        "rustOk": true,
+        "lessOk": false,
+        "details": {
+          "rustError": null,
+          "lessError": "Syntax: Could not evaluate variable call @themes (map-nested-bracket-access.less) line 6 col 2"
         }
       }
     },
@@ -5118,6 +5297,348 @@
               "sourceRoot": null,
               "mappingsLength": 98,
               "mappingsHash": "982f17c8"
+            },
+            "strictMappings": true,
+            "observations": [],
+            "structuralObservations": [],
+            "encodingObservations": []
+          }
+        }
+      }
+    },
+    {
+      "id": "sourcemap-triple-chain-mixed-atrule",
+      "category": "source-map",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".triple-deep {\n  color: #000001;\n}\n@media (min-width: 500px) {\n  @supports (display: grid) {\n    .triple-deep {\n      color: #000002;\n    }\n  }\n}\n@keyframes tripleSpin {\n  from {\n    transform: rotate(0deg);\n  }\n  to {\n    transform: rotate(360deg);\n  }\n}\n.triple-entry {\n  letter-spacing: 1px;\n}\n@media (min-width: 800px) {\n  .triple-entry {\n    letter-spacing: 1px;\n  }\n}\n/*# sourceMappingURL=sourcemap-triple-chain-entry.css.map */\n",
+        "map": "{\"version\":3,\"file\":\"/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-triple-chain-mixed-atrule/rust/sourcemap-triple-chain-entry.css\",\"sources\":[\"sourcemap-triple/level3.less\",\"sourcemap-triple/level1.less\",\"sourcemap-triple-chain-entry.less\",\"sourcemap-triple/level2.less\"],\"names\":[],\"mappings\":\"AAAA;EACI,cAAA;;AACA,QAA0B;EACtB;IAAA;MACI,cAAA;;;;ACHZ;EACI;IAAO,WAAW,YAAX;;EACP;IAAK,WAAW,cAAX;;;ACFT;ECCI,mBAAA;;ADCA,QAA0B;EAA1B;ICDA,mBAAA\"}",
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-triple-chain-entry.less -o /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-triple-chain-mixed-atrule/rust/sourcemap-triple-chain-entry.css --source-map --source-map-file /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-triple-chain-mixed-atrule/rust/sourcemap-triple-chain-entry.css.map --source-map-lessjs-compat --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".triple-deep {\n  color: #000001;\n}\n@media (min-width: 500px) {\n  @supports (display: grid) {\n    .triple-deep {\n      color: #000002;\n    }\n  }\n}\n@keyframes tripleSpin {\n  from {\n    transform: rotate(0deg);\n  }\n  to {\n    transform: rotate(360deg);\n  }\n}\n.triple-entry {\n  letter-spacing: 1px;\n}\n@media (min-width: 800px) {\n  .triple-entry {\n    letter-spacing: 1px;\n  }\n}\n/*# sourceMappingURL=sourcemap-triple-chain-entry.css.map */",
+        "map": "{\"version\":3,\"sources\":[\"sourcemap-triple/level3.less\",\"sourcemap-triple/level1.less\",\"sourcemap-triple-chain-entry.less\",\"sourcemap-triple/level2.less\"],\"names\":[],\"mappings\":\"AAAA;EACI,cAAA;;AACA,QAA0B;EACtB;IAAA;MACI,cAAA;;;;ACHZ;EACI;IAAO,WAAW,YAAX;;EACP;IAAK,WAAW,cAAX;;;ACFT;ECCI,mBAAA;;ADCA,QAA0B;EAA1B;ICDA,mBAAA\",\"file\":\"/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-triple-chain-entry.css\"}"
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": {
+          "sourceMap": {
+            "rust": {
+              "sources": [
+                "sourcemap-triple/level3.less",
+                "sourcemap-triple/level1.less",
+                "sourcemap-triple-chain-entry.less",
+                "sourcemap-triple/level2.less"
+              ],
+              "sourceBaseNames": [
+                "level1.less",
+                "level2.less",
+                "level3.less",
+                "sourcemap-triple-chain-entry.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-triple-chain-mixed-atrule/rust/sourcemap-triple-chain-entry.css",
+              "fileBaseName": "sourcemap-triple-chain-entry.css",
+              "sourceRoot": null,
+              "mappingsLength": 143,
+              "mappingsHash": "f96e5763"
+            },
+            "less": {
+              "sources": [
+                "sourcemap-triple/level3.less",
+                "sourcemap-triple/level1.less",
+                "sourcemap-triple-chain-entry.less",
+                "sourcemap-triple/level2.less"
+              ],
+              "sourceBaseNames": [
+                "level1.less",
+                "level2.less",
+                "level3.less",
+                "sourcemap-triple-chain-entry.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-triple-chain-entry.css",
+              "fileBaseName": "sourcemap-triple-chain-entry.css",
+              "sourceRoot": null,
+              "mappingsLength": 143,
+              "mappingsHash": "f96e5763"
+            },
+            "strictMappings": true,
+            "observations": [],
+            "structuralObservations": [],
+            "encodingObservations": []
+          }
+        }
+      }
+    },
+    {
+      "id": "sourcemap-triple-chain-mixed-atrule-source-root",
+      "category": "source-map",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".triple-deep {\n  color: #000001;\n}\n@media (min-width: 500px) {\n  @supports (display: grid) {\n    .triple-deep {\n      color: #000002;\n    }\n  }\n}\n@keyframes tripleSpin {\n  from {\n    transform: rotate(0deg);\n  }\n  to {\n    transform: rotate(360deg);\n  }\n}\n.triple-entry {\n  letter-spacing: 1px;\n}\n@media (min-width: 800px) {\n  .triple-entry {\n    letter-spacing: 1px;\n  }\n}\n/*# sourceMappingURL=sourcemap-triple-chain-entry.css.map */\n",
+        "map": "{\"version\":3,\"file\":\"/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-triple-chain-mixed-atrule-source-root/rust/sourcemap-triple-chain-entry.css\",\"sources\":[\"/workspace/src/sourcemap-triple/level3.less\",\"/workspace/src/sourcemap-triple/level1.less\",\"/workspace/src/sourcemap-triple-chain-entry.less\",\"/workspace/src/sourcemap-triple/level2.less\"],\"names\":[],\"mappings\":\"AAAA;EACI,cAAA;;AACA,QAA0B;EACtB;IAAA;MACI,cAAA;;;;ACHZ;EACI;IAAO,WAAW,YAAX;;EACP;IAAK,WAAW,cAAX;;;ACFT;ECCI,mBAAA;;ADCA,QAA0B;EAA1B;ICDA,mBAAA\"}",
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-triple-chain-entry.less -o /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-triple-chain-mixed-atrule-source-root/rust/sourcemap-triple-chain-entry.css --source-map --source-map-file /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-triple-chain-mixed-atrule-source-root/rust/sourcemap-triple-chain-entry.css.map --source-map-root /workspace/src --source-map-lessjs-compat --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".triple-deep {\n  color: #000001;\n}\n@media (min-width: 500px) {\n  @supports (display: grid) {\n    .triple-deep {\n      color: #000002;\n    }\n  }\n}\n@keyframes tripleSpin {\n  from {\n    transform: rotate(0deg);\n  }\n  to {\n    transform: rotate(360deg);\n  }\n}\n.triple-entry {\n  letter-spacing: 1px;\n}\n@media (min-width: 800px) {\n  .triple-entry {\n    letter-spacing: 1px;\n  }\n}\n/*# sourceMappingURL=sourcemap-triple-chain-entry.css.map */",
+        "map": "{\"version\":3,\"sources\":[\"/workspace/src/sourcemap-triple/level3.less\",\"/workspace/src/sourcemap-triple/level1.less\",\"/workspace/src/sourcemap-triple-chain-entry.less\",\"/workspace/src/sourcemap-triple/level2.less\"],\"names\":[],\"mappings\":\"AAAA;EACI,cAAA;;AACA,QAA0B;EACtB;IAAA;MACI,cAAA;;;;ACHZ;EACI;IAAO,WAAW,YAAX;;EACP;IAAK,WAAW,cAAX;;;ACFT;ECCI,mBAAA;;ADCA,QAA0B;EAA1B;ICDA,mBAAA\",\"file\":\"/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-triple-chain-entry.css\"}"
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": {
+          "sourceMap": {
+            "rust": {
+              "sources": [
+                "/workspace/src/sourcemap-triple/level3.less",
+                "/workspace/src/sourcemap-triple/level1.less",
+                "/workspace/src/sourcemap-triple-chain-entry.less",
+                "/workspace/src/sourcemap-triple/level2.less"
+              ],
+              "sourceBaseNames": [
+                "level1.less",
+                "level2.less",
+                "level3.less",
+                "sourcemap-triple-chain-entry.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-triple-chain-mixed-atrule-source-root/rust/sourcemap-triple-chain-entry.css",
+              "fileBaseName": "sourcemap-triple-chain-entry.css",
+              "sourceRoot": null,
+              "mappingsLength": 143,
+              "mappingsHash": "f96e5763"
+            },
+            "less": {
+              "sources": [
+                "/workspace/src/sourcemap-triple/level3.less",
+                "/workspace/src/sourcemap-triple/level1.less",
+                "/workspace/src/sourcemap-triple-chain-entry.less",
+                "/workspace/src/sourcemap-triple/level2.less"
+              ],
+              "sourceBaseNames": [
+                "level1.less",
+                "level2.less",
+                "level3.less",
+                "sourcemap-triple-chain-entry.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-triple-chain-entry.css",
+              "fileBaseName": "sourcemap-triple-chain-entry.css",
+              "sourceRoot": null,
+              "mappingsLength": 143,
+              "mappingsHash": "f96e5763"
+            },
+            "strictMappings": true,
+            "observations": [],
+            "structuralObservations": [],
+            "encodingObservations": []
+          }
+        }
+      }
+    },
+    {
+      "id": "sourcemap-detached-ruleset-import",
+      "category": "source-map",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".dr-entry {\n  color: #aabbcc;\n  margin: 2px;\n}\n@media (min-width: 640px) {\n  .dr-media {\n    color: #aabbcc;\n    margin: 2px;\n  }\n}\n/*# sourceMappingURL=sourcemap-detached-ruleset-entry.css.map */\n",
+        "map": "{\"version\":3,\"file\":\"/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-detached-ruleset-import/rust/sourcemap-detached-ruleset-entry.css\",\"sources\":[\"sourcemap-detached-ruleset-entry.less\",\"sourcemap-dr/lib.less\"],\"names\":[],\"mappings\":\"AACA;ECAI,cAAA;EACA,WAAA;;ADEJ,QAA0B;EACtB;ICJA,cAAA;IACA,WAAA\"}",
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-detached-ruleset-entry.less -o /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-detached-ruleset-import/rust/sourcemap-detached-ruleset-entry.css --source-map --source-map-file /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-detached-ruleset-import/rust/sourcemap-detached-ruleset-entry.css.map --source-map-lessjs-compat --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".dr-entry {\n  color: #aabbcc;\n  margin: 2px;\n}\n@media (min-width: 640px) {\n  .dr-media {\n    color: #aabbcc;\n    margin: 2px;\n  }\n}\n/*# sourceMappingURL=sourcemap-detached-ruleset-entry.css.map */",
+        "map": "{\"version\":3,\"sources\":[\"sourcemap-detached-ruleset-entry.less\",\"sourcemap-dr/lib.less\"],\"names\":[],\"mappings\":\"AACA;ECAI,cAAA;EACA,WAAA;;ADEJ,QAA0B;EACtB;ICJA,cAAA;IACA,WAAA\",\"file\":\"/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-detached-ruleset-entry.css\"}"
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": {
+          "sourceMap": {
+            "rust": {
+              "sources": [
+                "sourcemap-detached-ruleset-entry.less",
+                "sourcemap-dr/lib.less"
+              ],
+              "sourceBaseNames": [
+                "lib.less",
+                "sourcemap-detached-ruleset-entry.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-detached-ruleset-import/rust/sourcemap-detached-ruleset-entry.css",
+              "fileBaseName": "sourcemap-detached-ruleset-entry.css",
+              "sourceRoot": null,
+              "mappingsLength": 62,
+              "mappingsHash": "96ba9bd0"
+            },
+            "less": {
+              "sources": [
+                "sourcemap-detached-ruleset-entry.less",
+                "sourcemap-dr/lib.less"
+              ],
+              "sourceBaseNames": [
+                "lib.less",
+                "sourcemap-detached-ruleset-entry.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-detached-ruleset-entry.css",
+              "fileBaseName": "sourcemap-detached-ruleset-entry.css",
+              "sourceRoot": null,
+              "mappingsLength": 62,
+              "mappingsHash": "96ba9bd0"
+            },
+            "strictMappings": true,
+            "observations": [],
+            "structuralObservations": [],
+            "encodingObservations": []
+          }
+        }
+      }
+    },
+    {
+      "id": "sourcemap-detached-ruleset-import-source-root",
+      "category": "source-map",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".dr-entry {\n  color: #aabbcc;\n  margin: 2px;\n}\n@media (min-width: 640px) {\n  .dr-media {\n    color: #aabbcc;\n    margin: 2px;\n  }\n}\n/*# sourceMappingURL=sourcemap-detached-ruleset-entry.css.map */\n",
+        "map": "{\"version\":3,\"file\":\"/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-detached-ruleset-import-source-root/rust/sourcemap-detached-ruleset-entry.css\",\"sources\":[\"/workspace/src/sourcemap-detached-ruleset-entry.less\",\"/workspace/src/sourcemap-dr/lib.less\"],\"names\":[],\"mappings\":\"AACA;ECAI,cAAA;EACA,WAAA;;ADEJ,QAA0B;EACtB;ICJA,cAAA;IACA,WAAA\"}",
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-detached-ruleset-entry.less -o /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-detached-ruleset-import-source-root/rust/sourcemap-detached-ruleset-entry.css --source-map --source-map-file /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-detached-ruleset-import-source-root/rust/sourcemap-detached-ruleset-entry.css.map --source-map-root /workspace/src --source-map-lessjs-compat --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".dr-entry {\n  color: #aabbcc;\n  margin: 2px;\n}\n@media (min-width: 640px) {\n  .dr-media {\n    color: #aabbcc;\n    margin: 2px;\n  }\n}\n/*# sourceMappingURL=sourcemap-detached-ruleset-entry.css.map */",
+        "map": "{\"version\":3,\"sources\":[\"/workspace/src/sourcemap-detached-ruleset-entry.less\",\"/workspace/src/sourcemap-dr/lib.less\"],\"names\":[],\"mappings\":\"AACA;ECAI,cAAA;EACA,WAAA;;ADEJ,QAA0B;EACtB;ICJA,cAAA;IACA,WAAA\",\"file\":\"/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-detached-ruleset-entry.css\"}"
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": {
+          "sourceMap": {
+            "rust": {
+              "sources": [
+                "/workspace/src/sourcemap-detached-ruleset-entry.less",
+                "/workspace/src/sourcemap-dr/lib.less"
+              ],
+              "sourceBaseNames": [
+                "lib.less",
+                "sourcemap-detached-ruleset-entry.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-detached-ruleset-import-source-root/rust/sourcemap-detached-ruleset-entry.css",
+              "fileBaseName": "sourcemap-detached-ruleset-entry.css",
+              "sourceRoot": null,
+              "mappingsLength": 62,
+              "mappingsHash": "96ba9bd0"
+            },
+            "less": {
+              "sources": [
+                "/workspace/src/sourcemap-detached-ruleset-entry.less",
+                "/workspace/src/sourcemap-dr/lib.less"
+              ],
+              "sourceBaseNames": [
+                "lib.less",
+                "sourcemap-detached-ruleset-entry.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-detached-ruleset-entry.css",
+              "fileBaseName": "sourcemap-detached-ruleset-entry.css",
+              "sourceRoot": null,
+              "mappingsLength": 62,
+              "mappingsHash": "96ba9bd0"
+            },
+            "strictMappings": true,
+            "observations": [],
+            "structuralObservations": [],
+            "encodingObservations": []
+          }
+        }
+      }
+    },
+    {
+      "id": "sourcemap-media-prelude-var",
+      "category": "source-map",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": "@media (min-width: 768px) {\n  .pv {\n    width: 1px;\n  }\n}\n/*# sourceMappingURL=sourcemap-media-prelude-var.css.map */\n",
+        "map": "{\"version\":3,\"file\":\"/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-media-prelude-var/rust/sourcemap-media-prelude-var.css\",\"sources\":[\"sourcemap-media-prelude-var.less\"],\"names\":[],\"mappings\":\"AACA,QAAwB;EACpB;IACI,UAAA\"}",
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-media-prelude-var.less -o /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-media-prelude-var/rust/sourcemap-media-prelude-var.css --source-map --source-map-file /Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-media-prelude-var/rust/sourcemap-media-prelude-var.css.map --source-map-lessjs-compat --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": "@media (min-width: 768px) {\n  .pv {\n    width: 1px;\n  }\n}\n/*# sourceMappingURL=sourcemap-media-prelude-var.css.map */",
+        "map": "{\"version\":3,\"sources\":[\"sourcemap-media-prelude-var.less\"],\"names\":[],\"mappings\":\"AACA,QAAwB;EACpB;IACI,UAAA\",\"file\":\"/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-media-prelude-var.css\"}"
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": {
+          "sourceMap": {
+            "rust": {
+              "sources": [
+                "sourcemap-media-prelude-var.less"
+              ],
+              "sourceBaseNames": [
+                "sourcemap-media-prelude-var.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/target/lessjs-compat/sourcemap-media-prelude-var/rust/sourcemap-media-prelude-var.css",
+              "fileBaseName": "sourcemap-media-prelude-var.css",
+              "sourceRoot": null,
+              "mappingsLength": 26,
+              "mappingsHash": "d9e784f0"
+            },
+            "less": {
+              "sources": [
+                "sourcemap-media-prelude-var.less"
+              ],
+              "sourceBaseNames": [
+                "sourcemap-media-prelude-var.less"
+              ],
+              "names": [],
+              "namesCount": 0,
+              "file": "/Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/sourcemap-media-prelude-var.css",
+              "fileBaseName": "sourcemap-media-prelude-var.css",
+              "sourceRoot": null,
+              "mappingsLength": 26,
+              "mappingsHash": "d9e784f0"
             },
             "strictMappings": true,
             "observations": [],

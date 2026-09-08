@@ -121,12 +121,14 @@ impl ExpressionCompiler for Compiler {
                 }
                 Ok(Expression::string(result, position.clone()))
             }
-            Expression::MapLiteral { entries, position } => {
+            Expression::MapLiteral {
+                entries, position, ..
+            } => {
                 // Evaluate all values in the map
                 let mut eval_entries = Vec::new();
-                for (key, value) in entries {
+                for (key, value, key_position) in entries {
                     let eval_value = self.evaluate_expression(value)?;
-                    eval_entries.push((key.clone(), eval_value));
+                    eval_entries.push((key.clone(), eval_value, key_position.clone()));
                 }
                 Ok(Expression::MapLiteral {
                     entries: eval_entries,
@@ -139,7 +141,7 @@ impl ExpressionCompiler for Compiler {
                 let key_str = normalize_map_key(&key_val);
 
                 if let Expression::MapLiteral { entries, .. } = &map_val {
-                    for (k, v) in entries {
+                    for (k, v, _) in entries {
                         if k == &key_str {
                             return Ok(v.clone());
                         }
@@ -175,19 +177,7 @@ impl ExpressionCompiler for Compiler {
                     value.to_string()
                 }
             }
-            Expression::Color {
-                red,
-                green,
-                blue,
-                alpha,
-                ..
-            } => {
-                if alpha == 1.0 {
-                    format!("#{:02x}{:02x}{:02x}", red, green, blue)
-                } else {
-                    format!("rgba({}, {}, {}, {})", red, green, blue, alpha)
-                }
-            }
+            color @ Expression::Color { .. } => color.to_css(),
             Expression::Boolean(b, _) => b.to_string(),
             _ => {
                 // For other types, format as string
@@ -366,6 +356,7 @@ impl ExpressionCompiler for Compiler {
                     green: (*g1 as u16 + *g2 as u16).min(255) as u8,
                     blue: (*b1 as u16 + *b2 as u16).min(255) as u8,
                     alpha: *a1,
+                    original: None,
                     position: position.clone(),
                 }),
                 BinaryOperator::Subtract => Ok(Expression::Color {
@@ -373,6 +364,7 @@ impl ExpressionCompiler for Compiler {
                     green: (*g1 as i16 - *g2 as i16).max(0) as u8,
                     blue: (*b1 as i16 - *b2 as i16).max(0) as u8,
                     alpha: *a1,
+                    original: None,
                     position: position.clone(),
                 }),
                 BinaryOperator::Multiply => Ok(Expression::Color {
@@ -380,6 +372,7 @@ impl ExpressionCompiler for Compiler {
                     green: ((*g1 as u16) * (*g2 as u16) / 255).min(255) as u8,
                     blue: ((*b1 as u16) * (*b2 as u16) / 255).min(255) as u8,
                     alpha: *a1,
+                    original: None,
                     position: position.clone(),
                 }),
                 BinaryOperator::Equal => {
@@ -413,6 +406,7 @@ impl ExpressionCompiler for Compiler {
                     green: ((*green as f64) * num).round().clamp(0.0, 255.0) as u8,
                     blue: ((*blue as f64) * num).round().clamp(0.0, 255.0) as u8,
                     alpha: *alpha,
+                    original: None,
                     position: position.clone(),
                 }),
                 BinaryOperator::Divide => {
@@ -424,6 +418,7 @@ impl ExpressionCompiler for Compiler {
                         green: ((*green as f64) / num).round().clamp(0.0, 255.0) as u8,
                         blue: ((*blue as f64) / num).round().clamp(0.0, 255.0) as u8,
                         alpha: *alpha,
+                        original: None,
                         position: position.clone(),
                     })
                 }
@@ -432,6 +427,7 @@ impl ExpressionCompiler for Compiler {
                     green: ((*green as f64) + num).round().clamp(0.0, 255.0) as u8,
                     blue: ((*blue as f64) + num).round().clamp(0.0, 255.0) as u8,
                     alpha: *alpha,
+                    original: None,
                     position: position.clone(),
                 }),
                 BinaryOperator::Subtract => Ok(Expression::Color {
@@ -439,6 +435,7 @@ impl ExpressionCompiler for Compiler {
                     green: ((*green as f64) - num).round().clamp(0.0, 255.0) as u8,
                     blue: ((*blue as f64) - num).round().clamp(0.0, 255.0) as u8,
                     alpha: *alpha,
+                    original: None,
                     position: position.clone(),
                 }),
                 _ => Ok(Expression::binary_op(
@@ -463,6 +460,7 @@ impl ExpressionCompiler for Compiler {
                 green: ((*green as f64) * num).round().clamp(0.0, 255.0) as u8,
                 blue: ((*blue as f64) * num).round().clamp(0.0, 255.0) as u8,
                 alpha: *alpha,
+                original: None,
                 position: position.clone(),
             }),
             // Boolean logical operators

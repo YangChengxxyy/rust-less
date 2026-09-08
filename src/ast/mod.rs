@@ -200,6 +200,9 @@ pub struct Declaration {
     pub important: bool,
     /// Property merge type (None for normal, Some for +: or +_:)
     pub merge: Option<MergeType>,
+    /// Source file override for source-map attribution (set when a declaration
+    /// originates from a mixin/detached-ruleset defined in another file)
+    pub source_file: Option<String>,
     /// Source position
     pub position: Position,
 }
@@ -212,6 +215,7 @@ impl Declaration {
             value,
             important: false,
             merge: None,
+            source_file: None,
             position,
         }
     }
@@ -625,6 +629,8 @@ pub struct Scope {
     pub variables: HashMap<String, Expression>,
     /// Mixins defined in this scope
     pub mixins: HashMap<String, Vec<MixinDefinition>>,
+    /// Source file where each variable was defined (for source maps)
+    pub variable_files: HashMap<String, String>,
     /// Parent scope for variable lookup
     pub parent: Option<Box<Scope>>,
 }
@@ -640,6 +646,7 @@ impl Scope {
         Self {
             variables: HashMap::new(),
             mixins: HashMap::new(),
+            variable_files: HashMap::new(),
             parent: Some(Box::new(parent)),
         }
     }
@@ -647,6 +654,20 @@ impl Scope {
     /// Define a variable in this scope
     pub fn define_variable(&mut self, name: String, value: Expression) {
         self.variables.insert(name, value);
+    }
+
+    /// Record the source file where a variable was defined
+    pub fn define_variable_file(&mut self, name: String, source_file: String) {
+        self.variable_files.insert(name, source_file);
+    }
+
+    /// Look up the source file where a variable was defined
+    pub fn lookup_variable_file(&self, name: &str) -> Option<&String> {
+        self.variable_files.get(name).or_else(|| {
+            self.parent
+                .as_ref()
+                .and_then(|p| p.lookup_variable_file(name))
+        })
     }
 
     /// Define a mixin in this scope

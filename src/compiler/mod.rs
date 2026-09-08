@@ -80,6 +80,10 @@ pub struct Compiler {
     /// 属性值合并缓冲区: property -> (values, merge_type, important, first_position)
     pub(crate) pending_merges:
         std::collections::HashMap<String, (Vec<String>, MergeType, bool, Position)>,
+    /// Original (unresolved) at-rule prelude of the at-rule currently being
+    /// compiled; used to keep source-map columns anchored to source text when
+    /// the emitted prelude has variables resolved.
+    pub(crate) original_at_rule_prelude: Option<String>,
 }
 
 impl Compiler {
@@ -108,6 +112,7 @@ impl Compiler {
             suppress_output: false,
             force_important: false,
             pending_merges: std::collections::HashMap::new(),
+            original_at_rule_prelude: None,
         }
     }
 
@@ -136,6 +141,7 @@ impl Compiler {
             suppress_output: false,
             force_important: false,
             pending_merges: std::collections::HashMap::new(),
+            original_at_rule_prelude: None,
         }
     }
 
@@ -143,6 +149,17 @@ impl Compiler {
     pub fn with_source_map(mut self, enabled: bool) -> Self {
         self.source_map_generator = SourceMapGenerator::new(enabled);
         self
+    }
+
+    /// 注册自定义函数，编译期间可通过 `@name(...)` 调用。
+    ///
+    /// 后注册的同名函数覆盖内置实现；函数必须是纯求值。
+    /// 这是插件钩子设计草案（docs/PLUGIN_HOOKS_DESIGN.md）中函数插件的最小落地形态。
+    pub fn register_function<F>(&mut self, name: &str, func: Box<F>)
+    where
+        F: Fn(&[Expression], &Position) -> Result<Expression> + 'static,
+    {
+        self.function_registry.register(name, func);
     }
 
     /// 获取生成的源码映射
@@ -261,7 +278,8 @@ impl Compiler {
 
             if !mapping_info.media_feature_mappings.is_empty() {
                 let line_start_col = self.current_col;
-                for (generated_col_delta, source_col_delta) in &mapping_info.media_feature_mappings {
+                for (generated_col_delta, source_col_delta) in &mapping_info.media_feature_mappings
+                {
                     let gen_col = line_start_col.saturating_add(*generated_col_delta as u32);
                     let mut source_pos = mapping_info.position.clone();
                     source_pos.column = source_pos.column.saturating_add(*source_col_delta);
@@ -509,7 +527,7 @@ impl Compiler {
             let iterations: Vec<(Expression, Expression)> = match &list {
                 Expression::MapLiteral { entries, .. } => entries
                     .iter()
-                    .map(|(key, value)| {
+                    .map(|(key, value, _)| {
                         (
                             Expression::identifier(key.clone(), each_call.position.clone()),
                             value.clone(),
@@ -585,25 +603,49 @@ impl Compiler {
                 ));
             };
 
-            // Confirm it's a detached ruleset
-            if let Expression::DetachedRuleset { body, .. } = value {
-                // Push a new scope and compile the body
-                self.push_scope();
-                for statement in &body {
-                    self.compile_statement(statement)?;
-                }
-                self.pop_scope();
-                Ok(())
-            } else {
-                Err(Error::semantic_error(
-                    format!(
-                        "@{}() is not a detached ruleset",
-                        call.name
-                    ),
-                    call.position.line,
-                    call.position.column,
-                ))
+            // Attribute expanded declarations to the definition file
+            let definition_file = self
+                .current_scope()
+                .lookup_variable_file(&call.name)
+                .cloned();
+            let previous_file = self.current_file.clone();
+            if let Some(file) = definition_file {
+                self.current_file = file;
             }
+
+            let expand_result = (|| -> Result<()> {
+                // Confirm it's a detached ruleset
+                if let Expression::DetachedRuleset { body, .. } = value {
+                    // Push a new scope and compile the body
+                    self.push_scope();
+                    for statement in &body {
+                        self.compile_statement(statement)?;
+                    }
+                    self.pop_scope();
+                    Ok(())
+                } else if let Expression::MapLiteral { entries, .. } = value {
+                    // A map literal invoked as `@map()` expands its entries as
+                    // declarations, matching less.js where maps are rulesets.
+                    for (key, entry_value, key_position) in entries {
+                        let declaration = Declaration::new(
+                            key.clone(),
+                            entry_value.clone(),
+                            key_position.clone(),
+                        );
+                        self.compile_declaration(&declaration)?;
+                    }
+                    Ok(())
+                } else {
+                    Err(Error::semantic_error(
+                        format!("@{}() is not a detached ruleset", call.name),
+                        call.position.line,
+                        call.position.column,
+                    ))
+                }
+            })();
+
+            self.current_file = previous_file;
+            expand_result
         })();
 
         self.recursion_depth -= 1;
@@ -645,8 +687,12 @@ impl Compiler {
     /// Compile a variable declaration
     pub(crate) fn compile_variable_declaration(&mut self, var: &VariableDeclaration) -> Result<()> {
         let value = self.evaluate_expression(&var.value)?;
-        self.current_scope()
-            .define_variable(var.name.clone(), value);
+        let current_file = self.current_file.clone();
+        let scope = self.current_scope();
+        scope.define_variable(var.name.clone(), value);
+        // Remember the definition file for source-map attribution when the
+        // variable (e.g. a detached ruleset or map) is expanded elsewhere.
+        scope.define_variable_file(var.name.clone(), current_file);
         // Variables don't produce CSS output
         Ok(())
     }

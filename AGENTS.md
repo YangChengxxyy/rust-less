@@ -35,11 +35,11 @@
 - CLI usage examples live in `README.md`; keep them in sync with behavior.
 
 ## Current Status & Roadmap
-- Current version: 0.2.3; test suite reports 140 passing tests with a few ignored advanced cases (see `README.md`).
+- Current version: 0.2.4; test suite reports 353 passing tests; less.js compat gate: 80 pass / 0 fail under strict-mappings (see `README.md`).
 - Near-term focus: finish string function parsing edge cases and tighten error reporting.
 - Planned features: source maps, Maps data structure, and a plugin system; WASM build is supported via `./build-wasm.sh`.
 ## Milestone Checklist (Synced With README)
 - v0.2.4 (1-2 weeks): fix string function parsing (`e()`, `replace()`), add edge-case tests, improve error details, run perf baselines.
 - v0.3.0 (1-2 months): ship minimal source maps, refine `@import` options, align CLI flags with library config.
-- v0.4.0 (2-3 months): Maps data structure, full source map outputs, draft plugin hook design.
+- v0.4.0 ✅ done: Maps data structure, deep source map alignment (strict-mappings), plugin hook design (`docs/PLUGIN_HOOKS_DESIGN.md`, `Compiler::register_function`).
 - v1.0.0 (6-12 months): LSP, build-tool plugins, standardized WASM release flow, versioned plugin API.

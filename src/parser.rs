@@ -391,7 +391,7 @@ impl Parser {
 
         self.consume(TokenType::Colon, "Expected ':' after variable name")?;
 
-        let value = self.parse_expression()?;
+        let value = self.parse_declaration_value()?;
 
         // Check for !default
         let default = self.match_token(TokenType::Default);
@@ -583,8 +583,7 @@ impl Parser {
 
             if !prelude.is_empty() {
                 if let Some(prev_line_value) = prev_line {
-                    if token.position.line > prev_line_value
-                        || token.position.column > prev_end_col
+                    if token.position.line > prev_line_value || token.position.column > prev_end_col
                     {
                         prelude.push(' ');
                     }
@@ -1910,30 +1909,18 @@ impl Parser {
             value,
             important,
             merge,
+            source_file: None,
             position,
         })
     }
 
-    /// Parse a declaration value (supports space-separated values)
+    /// Parse a declaration value (supports space-separated values and comma-separated groups)
     fn parse_declaration_value(&mut self) -> Result<Expression> {
-        let mut values = Vec::new();
         let position = self.current_position();
 
-        // Skip leading whitespace
-        while matches!(self.current_token().token_type, TokenType::Whitespace) {
-            self.advance();
-        }
+        // Comma-separated groups; each group holds space-separated expressions.
+        let mut groups: Vec<Vec<Expression>> = vec![Vec::new()];
 
-        // Parse first expression
-        if !self.is_at_end()
-            && !self.check(&TokenType::Semicolon)
-            && !self.check(&TokenType::Important)
-            && !self.check(&TokenType::RightBrace)
-        {
-            values.push(self.parse_expression()?);
-        }
-
-        // Parse additional space-separated values
         loop {
             // Skip whitespace
             while matches!(self.current_token().token_type, TokenType::Whitespace) {
@@ -1944,28 +1931,103 @@ impl Parser {
             if self.is_at_end()
                 || self.check(&TokenType::Semicolon)
                 || self.check(&TokenType::Important)
+                || self.check(&TokenType::Default)
                 || self.check(&TokenType::RightBrace)
             {
                 break;
             }
 
-            // Try to parse another expression
-            let next_expr = self.parse_expression()?;
-            values.push(next_expr);
+            // A comma starts a new group (trailing comma is tolerated)
+            if self.check(&TokenType::Comma) {
+                self.advance();
+                groups.push(Vec::new());
+                continue;
+            }
+
+            // Stop when the next token cannot start a value expression
+            // (e.g. a new statement after a semicolon-less map/detached ruleset)
+            if !self.is_expression_start() {
+                break;
+            }
+
+            let expr = self.parse_expression()?;
+            // Comma lists expanded inside primary-expression parsing
+            // (e.g. `Arial, sans-serif`) map to successive groups so the
+            // commas are preserved in the final value.
+            if let Expression::List {
+                values: inner,
+                separator: ListSeparator::Comma,
+                ..
+            } = expr
+            {
+                let mut iter = inner.into_iter();
+                if let Some(first) = iter.next() {
+                    groups
+                        .last_mut()
+                        .expect("groups is never empty")
+                        .push(first);
+                }
+                for item in iter {
+                    groups.push(vec![item]);
+                }
+            } else {
+                groups.last_mut().expect("groups is never empty").push(expr);
+            }
         }
 
-        // Return single expression or list
-        if values.len() == 1 {
-            Ok(values.into_iter().next().unwrap())
-        } else if values.is_empty() {
-            Err(Error::parse_error(
-                "Expected declaration value",
-                position.line,
-                position.column,
-            ))
+        let group_to_expr = |mut group: Vec<Expression>| -> Option<Expression> {
+            match group.len() {
+                0 => None,
+                1 => Some(group.pop().expect("len checked")),
+                _ => Some(Expression::list(
+                    group,
+                    ListSeparator::Space,
+                    position.clone(),
+                )),
+            }
+        };
+
+        if groups.len() == 1 {
+            let group = groups.pop().expect("groups is never empty");
+            match group_to_expr(group) {
+                Some(expr) => Ok(expr),
+                None => Err(Error::parse_error(
+                    "Expected declaration value",
+                    position.line,
+                    position.column,
+                )),
+            }
         } else {
-            Ok(Expression::list(values, ListSeparator::Space, position))
+            let values: Vec<Expression> = groups.into_iter().filter_map(group_to_expr).collect();
+            match values.len() {
+                0 => Err(Error::parse_error(
+                    "Expected declaration value",
+                    position.line,
+                    position.column,
+                )),
+                1 => Ok(values.into_iter().next().expect("len checked")),
+                _ => Ok(Expression::list(values, ListSeparator::Comma, position)),
+            }
         }
+    }
+
+    /// Check if the current token can start a value expression
+    fn is_expression_start(&self) -> bool {
+        matches!(
+            self.current_token().token_type,
+            TokenType::Number(_)
+                | TokenType::Percentage(_)
+                | TokenType::Identifier(_)
+                | TokenType::AtKeyword(_)
+                | TokenType::String(_)
+                | TokenType::Hash(_)
+                | TokenType::VariableInterpolation(_)
+                | TokenType::LeftParen
+                | TokenType::LeftBrace
+                | TokenType::Minus
+                | TokenType::Plus
+                | TokenType::Not
+        )
     }
 
     /// Parse an expression
@@ -2789,8 +2851,10 @@ impl Parser {
                         // Parse next value
                         match &self.current_token().token_type {
                             TokenType::Identifier(id) => {
-                                values
-                                    .push(Expression::string(id.clone(), self.current_position()));
+                                values.push(Expression::identifier(
+                                    id.clone(),
+                                    self.current_position(),
+                                ));
                                 self.advance();
                             }
                             TokenType::AtKeyword(var) => {
@@ -2843,10 +2907,7 @@ impl Parser {
                             body.push(statement);
                         }
                     }
-                    self.consume(
-                        TokenType::RightBrace,
-                        "Expected '}' after detached ruleset",
-                    )?;
+                    self.consume(TokenType::RightBrace, "Expected '}' after detached ruleset")?;
                     Ok(Expression::DetachedRuleset { body, position })
                 } else {
                     // Map literal: { key: value; key2: value2; }
@@ -2888,7 +2949,10 @@ impl Parser {
                         // Skip whitespace to find the real previous token
                         let mut la_prev = lookahead as i64 - 1;
                         while la_prev >= 0
-                            && matches!(self.tokens[la_prev as usize].token_type, TokenType::Whitespace)
+                            && matches!(
+                                self.tokens[la_prev as usize].token_type,
+                                TokenType::Whitespace
+                            )
                         {
                             la_prev -= 1;
                         }
@@ -2901,7 +2965,9 @@ impl Parser {
                                     // This `{` is a nested map value, continue scanning
                                 }
                                 // `.class`, `#id`, `&`, `@keyword` followed by `{` → DR
-                                TokenType::Dot | TokenType::Ampersand | TokenType::Hash(_)
+                                TokenType::Dot
+                                | TokenType::Ampersand
+                                | TokenType::Hash(_)
                                 | TokenType::AtKeyword(_) => {
                                     return true;
                                 }
@@ -2913,12 +2979,18 @@ impl Parser {
                                     // Actually, we need to check TWO tokens back
                                     let mut la_prev2 = la_prev - 1;
                                     while la_prev2 >= 0
-                                        && matches!(self.tokens[la_prev2 as usize].token_type, TokenType::Whitespace)
+                                        && matches!(
+                                            self.tokens[la_prev2 as usize].token_type,
+                                            TokenType::Whitespace
+                                        )
                                     {
                                         la_prev2 -= 1;
                                     }
                                     if la_prev2 >= 0
-                                        && !matches!(self.tokens[la_prev2 as usize].token_type, TokenType::Colon)
+                                        && !matches!(
+                                            self.tokens[la_prev2 as usize].token_type,
+                                            TokenType::Colon
+                                        )
                                     {
                                         // `identifier` without preceding `:` followed by `{`
                                         // This is likely a selector like `div { }`
@@ -2988,8 +3060,17 @@ impl Parser {
         if let TokenType::AtKeyword(name) = &self.current_token().token_type {
             // Skip known at-rules that take `(...)` syntax
             let known_at_rules = [
-                "import", "media", "supports", "keyframes", "font-face", "charset", "namespace",
-                "page", "counter-style", "document", "layer",
+                "import",
+                "media",
+                "supports",
+                "keyframes",
+                "font-face",
+                "charset",
+                "namespace",
+                "page",
+                "counter-style",
+                "document",
+                "layer",
             ];
             if known_at_rules.contains(&name.as_str()) {
                 return false;
@@ -3195,7 +3276,7 @@ impl Parser {
     }
 
     /// Parse map entries: key: value; key2: value2;
-    fn parse_map_entries(&mut self) -> Result<Vec<(String, Expression)>> {
+    fn parse_map_entries(&mut self) -> Result<Vec<(String, Expression, Position)>> {
         let mut entries = Vec::new();
 
         loop {
@@ -3228,7 +3309,7 @@ impl Parser {
             // Parse value
             let value = self.parse_declaration_value()?;
 
-            entries.push((key, value));
+            entries.push((key, value, key_position));
 
             // Consume semicolon
             self.match_token(TokenType::Semicolon);

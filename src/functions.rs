@@ -410,6 +410,7 @@ fn lighten_function(args: &[Expression], position: &Position) -> Result<Expressi
         green: g,
         blue: b,
         alpha,
+        original: None,
         position: position.clone(),
     })
 }
@@ -442,6 +443,7 @@ fn darken_function(args: &[Expression], position: &Position) -> Result<Expressio
         green: g,
         blue: b,
         alpha,
+        original: None,
         position: position.clone(),
     })
 }
@@ -474,6 +476,7 @@ fn saturate_function(args: &[Expression], position: &Position) -> Result<Express
         green: g,
         blue: b,
         alpha,
+        original: None,
         position: position.clone(),
     })
 }
@@ -506,6 +509,7 @@ fn desaturate_function(args: &[Expression], position: &Position) -> Result<Expre
         green: g,
         blue: b,
         alpha,
+        original: None,
         position: position.clone(),
     })
 }
@@ -528,6 +532,7 @@ fn fade_function(args: &[Expression], position: &Position) -> Result<Expression>
         green,
         blue,
         alpha: alpha.clamp(0.0, 1.0),
+        original: None,
         position: position.clone(),
     })
 }
@@ -550,6 +555,7 @@ fn fadeout_function(args: &[Expression], position: &Position) -> Result<Expressi
         green,
         blue,
         alpha: (alpha - amount).max(0.0),
+        original: None,
         position: position.clone(),
     })
 }
@@ -572,6 +578,7 @@ fn fadein_function(args: &[Expression], position: &Position) -> Result<Expressio
         green,
         blue,
         alpha: (alpha + amount).min(1.0),
+        original: None,
         position: position.clone(),
     })
 }
@@ -619,6 +626,7 @@ fn spin_function(args: &[Expression], position: &Position) -> Result<Expression>
         green: g,
         blue: b,
         alpha,
+        original: None,
         position: position.clone(),
     })
 }
@@ -667,6 +675,7 @@ fn mix_function(args: &[Expression], position: &Position) -> Result<Expression> 
         green: g,
         blue: b,
         alpha,
+        original: None,
         position: position.clone(),
     })
 }
@@ -704,6 +713,7 @@ fn rgb_function(args: &[Expression], position: &Position) -> Result<Expression> 
         green: rgb_values[1],
         blue: rgb_values[2],
         alpha: 1.0,
+        original: None,
         position: position.clone(),
     })
 }
@@ -747,6 +757,7 @@ fn rgba_function(args: &[Expression], position: &Position) -> Result<Expression>
         green: rgb_values[1],
         blue: rgb_values[2],
         alpha,
+        original: None,
         position: position.clone(),
     })
 }
@@ -783,6 +794,7 @@ fn hsl_function(args: &[Expression], position: &Position) -> Result<Expression> 
         green,
         blue,
         alpha: 1.0,
+        original: None,
         position: position.clone(),
     })
 }
@@ -832,6 +844,7 @@ fn hsla_function(args: &[Expression], position: &Position) -> Result<Expression>
         green,
         blue,
         alpha,
+        original: None,
         position: position.clone(),
     })
 }
@@ -1027,13 +1040,14 @@ fn map_path_keys(args: &[Expression], start: usize) -> Vec<String> {
 }
 
 fn map_lookup_path<'a>(
-    entries: &'a [(String, Expression)],
+    entries: &'a [(String, Expression, Position)],
     path: &[String],
 ) -> std::result::Result<Option<&'a Expression>, String> {
     let mut current_entries = entries;
     for (index, key) in path.iter().enumerate() {
-        let value = if let Some((_, value)) =
-            current_entries.iter().find(|(k, _)| map_keys_equal(k, key))
+        let value = if let Some((_, value, _)) = current_entries
+            .iter()
+            .find(|(k, _, _)| map_keys_equal(k, key))
         {
             value
         } else {
@@ -1065,7 +1079,7 @@ enum RemoveMapPathResult {
 }
 
 fn remove_map_path(
-    entries: &mut Vec<(String, Expression)>,
+    entries: &mut Vec<(String, Expression, Position)>,
     path: &[String],
 ) -> RemoveMapPathResult {
     if path.is_empty() {
@@ -1075,7 +1089,7 @@ fn remove_map_path(
     if path.len() == 1 {
         if let Some(index) = entries
             .iter()
-            .position(|(k, _)| map_keys_equal(k, &path[0]))
+            .position(|(k, _, _)| map_keys_equal(k, &path[0]))
         {
             entries.remove(index);
             return RemoveMapPathResult::Removed;
@@ -1089,14 +1103,15 @@ fn remove_map_path(
             entries: nested_entries,
             ..
         },
+        _,
     )) = entries
         .iter_mut()
-        .find(|(k, _)| map_keys_equal(k, &path[0]))
+        .find(|(k, _, _)| map_keys_equal(k, &path[0]))
     {
         return remove_map_path(nested_entries, &path[1..]);
     }
 
-    if entries.iter().any(|(k, _)| map_keys_equal(k, &path[0])) {
+    if entries.iter().any(|(k, _, _)| map_keys_equal(k, &path[0])) {
         return RemoveMapPathResult::IntermediateNotMap(path[0].clone());
     }
 
@@ -1104,7 +1119,7 @@ fn remove_map_path(
 }
 
 fn deep_remove_map_path(
-    entries: &mut Vec<(String, Expression)>,
+    entries: &mut Vec<(String, Expression, Position)>,
     path: &[String],
 ) -> RemoveMapPathResult {
     if path.is_empty() {
@@ -1114,7 +1129,7 @@ fn deep_remove_map_path(
     if path.len() == 1 {
         if let Some(index) = entries
             .iter()
-            .position(|(k, _)| map_keys_equal(k, &path[0]))
+            .position(|(k, _, _)| map_keys_equal(k, &path[0]))
         {
             entries.remove(index);
             return RemoveMapPathResult::Removed;
@@ -1124,7 +1139,7 @@ fn deep_remove_map_path(
 
     let Some(index) = entries
         .iter()
-        .position(|(k, _)| map_keys_equal(k, &path[0]))
+        .position(|(k, _, _)| map_keys_equal(k, &path[0]))
     else {
         return RemoveMapPathResult::Missing;
     };
@@ -1152,7 +1167,7 @@ fn deep_remove_map_path(
 }
 
 fn set_map_path(
-    entries: &mut Vec<(String, Expression)>,
+    entries: &mut Vec<(String, Expression, Position)>,
     path: &[String],
     value: &Expression,
     position: &Position,
@@ -1162,20 +1177,20 @@ fn set_map_path(
     }
 
     if path.len() == 1 {
-        if let Some((_, existing)) = entries
+        if let Some((_, existing, _)) = entries
             .iter_mut()
-            .find(|(k, _)| map_keys_equal(k, &path[0]))
+            .find(|(k, _, _)| map_keys_equal(k, &path[0]))
         {
             *existing = value.clone();
         } else {
-            entries.push((path[0].clone(), value.clone()));
+            entries.push((path[0].clone(), value.clone(), position.clone()));
         }
         return Ok(());
     }
 
-    if let Some((_, existing)) = entries
+    if let Some((_, existing, _)) = entries
         .iter_mut()
-        .find(|(k, _)| map_keys_equal(k, &path[0]))
+        .find(|(k, _, _)| map_keys_equal(k, &path[0]))
     {
         if let Expression::MapLiteral {
             entries: nested_entries,
@@ -1194,6 +1209,7 @@ fn set_map_path(
             entries: Vec::new(),
             position: position.clone(),
         },
+        position.clone(),
     ));
 
     if let Some((
@@ -1202,6 +1218,7 @@ fn set_map_path(
             entries: nested_entries,
             ..
         },
+        _,
     )) = entries.last_mut()
     {
         set_map_path(nested_entries, &path[1..], value, position)
@@ -1211,7 +1228,7 @@ fn set_map_path(
 }
 
 fn update_map_path(
-    entries: &mut [(String, Expression)],
+    entries: &mut [(String, Expression, Position)],
     path: &[String],
     value: &Expression,
 ) -> std::result::Result<bool, String> {
@@ -1220,9 +1237,9 @@ fn update_map_path(
     }
 
     if path.len() == 1 {
-        if let Some((_, existing)) = entries
+        if let Some((_, existing, _)) = entries
             .iter_mut()
-            .find(|(k, _)| map_keys_equal(k, &path[0]))
+            .find(|(k, _, _)| map_keys_equal(k, &path[0]))
         {
             *existing = value.clone();
             return Ok(true);
@@ -1230,9 +1247,9 @@ fn update_map_path(
         return Ok(false);
     }
 
-    if let Some((_, existing)) = entries
+    if let Some((_, existing, _)) = entries
         .iter_mut()
-        .find(|(k, _)| map_keys_equal(k, &path[0]))
+        .find(|(k, _, _)| map_keys_equal(k, &path[0]))
     {
         if let Expression::MapLiteral {
             entries: nested_entries,
@@ -1247,9 +1264,12 @@ fn update_map_path(
     Ok(false)
 }
 
-fn deep_merge_entries(target: &mut Vec<(String, Expression)>, source: &[(String, Expression)]) {
-    for (key, value) in source {
-        if let Some((_, existing)) = target.iter_mut().find(|(k, _)| map_keys_equal(k, key)) {
+fn deep_merge_entries(
+    target: &mut Vec<(String, Expression, Position)>,
+    source: &[(String, Expression, Position)],
+) {
+    for (key, value, key_position) in source {
+        if let Some((_, existing, _)) = target.iter_mut().find(|(k, _, _)| map_keys_equal(k, key)) {
             if let Expression::MapLiteral {
                 entries: target_nested,
                 ..
@@ -1267,7 +1287,7 @@ fn deep_merge_entries(target: &mut Vec<(String, Expression)>, source: &[(String,
 
             *existing = value.clone();
         } else {
-            target.push((key.clone(), value.clone()));
+            target.push((key.clone(), value.clone(), key_position.clone()));
         }
     }
 }
@@ -1472,7 +1492,7 @@ fn map_keys_function(args: &[Expression], position: &Position) -> Result<Express
 
     let values = entries
         .iter()
-        .map(|(k, _)| {
+        .map(|(k, _, _)| {
             if let Some(unquoted) = unquote_map_key(k) {
                 Expression::string(unquoted.to_string(), position.clone())
             } else {
@@ -1501,7 +1521,7 @@ fn map_values_function(args: &[Expression], position: &Position) -> Result<Expre
         }
     };
 
-    let values = entries.iter().map(|(_, v)| v.clone()).collect();
+    let values = entries.iter().map(|(_, v, _)| v.clone()).collect();
     Ok(Expression::list(
         values,
         crate::ast::ListSeparator::Comma,
@@ -1519,7 +1539,7 @@ fn map_merge_function(args: &[Expression], position: &Position) -> Result<Expres
         ));
     }
 
-    let mut merged: Vec<(String, Expression)> = Vec::new();
+    let mut merged: Vec<(String, Expression, Position)> = Vec::new();
     for arg in args {
         let entries = match arg {
             Expression::MapLiteral { entries, .. } => entries,
@@ -1533,11 +1553,13 @@ fn map_merge_function(args: &[Expression], position: &Position) -> Result<Expres
             }
         };
 
-        for (key, value) in entries {
-            if let Some((_, existing)) = merged.iter_mut().find(|(k, _)| map_keys_equal(k, key)) {
+        for (key, value, key_position) in entries {
+            if let Some((_, existing, _)) =
+                merged.iter_mut().find(|(k, _, _)| map_keys_equal(k, key))
+            {
                 *existing = value.clone();
             } else {
-                merged.push((key.clone(), value.clone()));
+                merged.push((key.clone(), value.clone(), key_position.clone()));
             }
         }
     }
@@ -2179,7 +2201,7 @@ fn scale_function(args: &[Expression], position: &Position) -> Result<Expression
         format!("scale({})", values.join(", "))
     };
 
-    Ok(Expression::string(scale_str, position.clone()))
+    Ok(Expression::identifier(scale_str, position.clone()))
 }
 
 /// Transform function: translateX()
@@ -2197,11 +2219,11 @@ fn translate_x_function(args: &[Expression], position: &Position) -> Result<Expr
         Expression::Number { value, unit, .. } => {
             let unit_str = unit.as_deref().unwrap_or("");
             let translate_str = format!("translateX({}{})", value, unit_str);
-            Ok(Expression::string(translate_str, position.clone()))
+            Ok(Expression::identifier(translate_str, position.clone()))
         }
         Expression::String { value, .. } => {
             let translate_str = format!("translateX({})", value);
-            Ok(Expression::string(translate_str, position.clone()))
+            Ok(Expression::identifier(translate_str, position.clone()))
         }
         _ => Err(Error::function_error(
             "translateX",
@@ -2227,11 +2249,11 @@ fn translate_y_function(args: &[Expression], position: &Position) -> Result<Expr
         Expression::Number { value, unit, .. } => {
             let unit_str = unit.as_deref().unwrap_or("");
             let translate_str = format!("translateY({}{})", value, unit_str);
-            Ok(Expression::string(translate_str, position.clone()))
+            Ok(Expression::identifier(translate_str, position.clone()))
         }
         Expression::String { value, .. } => {
             let translate_str = format!("translateY({})", value);
-            Ok(Expression::string(translate_str, position.clone()))
+            Ok(Expression::identifier(translate_str, position.clone()))
         }
         _ => Err(Error::function_error(
             "translateY",
@@ -2255,13 +2277,13 @@ fn rotate_function(args: &[Expression], position: &Position) -> Result<Expressio
 
     match &args[0] {
         Expression::Number { value, unit, .. } => {
-            let unit_str = unit.as_deref().unwrap_or("deg");
+            let unit_str = unit.as_deref().unwrap_or("");
             let rotate_str = format!("rotate({}{})", value, unit_str);
-            Ok(Expression::string(rotate_str, position.clone()))
+            Ok(Expression::identifier(rotate_str, position.clone()))
         }
         Expression::String { value, .. } => {
             let rotate_str = format!("rotate({})", value);
-            Ok(Expression::string(rotate_str, position.clone()))
+            Ok(Expression::identifier(rotate_str, position.clone()))
         }
         _ => Err(Error::function_error(
             "rotate",
@@ -2629,6 +2651,7 @@ fn blend_colors(
         green: g,
         blue: b,
         alpha: 1.0,
+        original: None,
         position: position.clone(),
     })
 }
@@ -2708,6 +2731,7 @@ fn tint_function(args: &[Expression], position: &Position) -> Result<Expression>
         green: 255,
         blue: 255,
         alpha: 1.0,
+        original: None,
         position: position.clone(),
     };
     let mix_args = vec![white, args[0].clone(), args[1].clone()];
@@ -2729,6 +2753,7 @@ fn shade_function(args: &[Expression], position: &Position) -> Result<Expression
         green: 0,
         blue: 0,
         alpha: 1.0,
+        original: None,
         position: position.clone(),
     };
     let mix_args = vec![black, args[0].clone(), args[1].clone()];
@@ -2755,6 +2780,7 @@ fn contrast_function(args: &[Expression], position: &Position) -> Result<Express
             green: 0,
             blue: 0,
             alpha: 1.0,
+            original: None,
             position: position.clone(),
         }
     };
@@ -2767,6 +2793,7 @@ fn contrast_function(args: &[Expression], position: &Position) -> Result<Express
             green: 255,
             blue: 255,
             alpha: 1.0,
+            original: None,
             position: position.clone(),
         }
     };
@@ -3096,10 +3123,12 @@ mod tests {
                 (
                     "small".to_string(),
                     Expression::number_with_unit(10.0, "px", pos.clone()),
+                    pos.clone(),
                 ),
                 (
                     "medium".to_string(),
                     Expression::number_with_unit(20.0, "px", pos.clone()),
+                    pos.clone(),
                 ),
             ],
             position: pos.clone(),
@@ -3122,10 +3151,12 @@ mod tests {
                 (
                     "small".to_string(),
                     Expression::number_with_unit(10.0, "px", pos.clone()),
+                    pos.clone(),
                 ),
                 (
                     "medium".to_string(),
                     Expression::number_with_unit(20.0, "px", pos.clone()),
+                    pos.clone(),
                 ),
             ],
             position: pos.clone(),
@@ -3135,10 +3166,12 @@ mod tests {
                 (
                     "medium".to_string(),
                     Expression::number_with_unit(22.0, "px", pos.clone()),
+                    pos.clone(),
                 ),
                 (
                     "large".to_string(),
                     Expression::number_with_unit(30.0, "px", pos.clone()),
+                    pos.clone(),
                 ),
             ],
             position: pos.clone(),
@@ -3182,16 +3215,23 @@ mod tests {
                             (
                                 "sm".to_string(),
                                 Expression::number_with_unit(480.0, "px", pos.clone()),
+                                pos.clone(),
                             ),
                             (
                                 "md".to_string(),
                                 Expression::number_with_unit(768.0, "px", pos.clone()),
+                                pos.clone(),
                             ),
                         ],
                         position: pos.clone(),
                     },
+                    pos.clone(),
                 ),
-                ("columns".to_string(), Expression::number(12.0, pos.clone())),
+                (
+                    "columns".to_string(),
+                    Expression::number(12.0, pos.clone()),
+                    pos.clone(),
+                ),
             ],
             position: pos.clone(),
         };
@@ -3251,7 +3291,7 @@ mod tests {
             assert_eq!(entries.len(), 2);
             let breakpoints = entries
                 .iter()
-                .find(|(k, _)| k == "breakpoints")
+                .find(|(k, _, _)| k == "breakpoints")
                 .expect("breakpoints should exist");
             if let Expression::MapLiteral {
                 entries: nested_entries,
@@ -3283,14 +3323,21 @@ mod tests {
                                             entries: vec![(
                                                 "c".to_string(),
                                                 Expression::number(1.0, pos.clone()),
+                                                pos.clone(),
                                             )],
                                             position: pos.clone(),
                                         },
+                                        pos.clone(),
                                     )],
                                     position: pos.clone(),
                                 },
+                                pos.clone(),
                             ),
-                            ("keep".to_string(), Expression::number(2.0, pos.clone())),
+                            (
+                                "keep".to_string(),
+                                Expression::number(2.0, pos.clone()),
+                                pos.clone(),
+                            ),
                         ],
                         position: pos.clone(),
                     },
@@ -3324,11 +3371,17 @@ mod tests {
                         (
                             "theme".to_string(),
                             Expression::identifier("light".to_string(), pos.clone()),
+                            pos.clone(),
                         ),
-                        ("spacing".to_string(), Expression::number(8.0, pos.clone())),
+                        (
+                            "spacing".to_string(),
+                            Expression::number(8.0, pos.clone()),
+                            pos.clone(),
+                        ),
                     ],
                     position: pos.clone(),
                 },
+                pos.clone(),
             )],
             position: pos.clone(),
         };
@@ -3364,14 +3417,20 @@ mod tests {
                 "config".to_string(),
                 Expression::MapLiteral {
                     entries: vec![
-                        ("spacing".to_string(), Expression::number(10.0, pos.clone())),
+                        (
+                            "spacing".to_string(),
+                            Expression::number(10.0, pos.clone()),
+                            pos.clone(),
+                        ),
                         (
                             "density".to_string(),
                             Expression::identifier("compact".to_string(), pos.clone()),
+                            pos.clone(),
                         ),
                     ],
                     position: pos.clone(),
                 },
+                pos.clone(),
             )],
             position: pos.clone(),
         };
@@ -3433,11 +3492,17 @@ mod tests {
                         entries: vec![(
                             "name".to_string(),
                             Expression::identifier("light".to_string(), pos.clone()),
+                            pos.clone(),
                         )],
                         position: pos.clone(),
                     },
+                    pos.clone(),
                 ),
-                ("mode".to_string(), Expression::number(1.0, pos.clone())),
+                (
+                    "mode".to_string(),
+                    Expression::number(1.0, pos.clone()),
+                    pos.clone(),
+                ),
             ],
             position: pos.clone(),
         };
@@ -3447,6 +3512,7 @@ mod tests {
                 (
                     "theme".to_string(),
                     Expression::identifier("flat".to_string(), pos.clone()),
+                    pos.clone(),
                 ),
                 (
                     "mode".to_string(),
@@ -3454,9 +3520,11 @@ mod tests {
                         entries: vec![(
                             "nested".to_string(),
                             Expression::identifier("yes".to_string(), pos.clone()),
+                            pos.clone(),
                         )],
                         position: pos.clone(),
                     },
+                    pos.clone(),
                 ),
             ],
             position: pos.clone(),
@@ -3526,9 +3594,14 @@ mod tests {
             entries: vec![(
                 "config".to_string(),
                 Expression::MapLiteral {
-                    entries: vec![("a".to_string(), Expression::number(1.0, pos.clone()))],
+                    entries: vec![(
+                        "a".to_string(),
+                        Expression::number(1.0, pos.clone()),
+                        pos.clone(),
+                    )],
                     position: pos.clone(),
                 },
+                pos.clone(),
             )],
             position: pos.clone(),
         };
@@ -3538,11 +3611,20 @@ mod tests {
                 "config".to_string(),
                 Expression::MapLiteral {
                     entries: vec![
-                        ("a".to_string(), Expression::number(2.0, pos.clone())),
-                        ("b".to_string(), Expression::number(3.0, pos.clone())),
+                        (
+                            "a".to_string(),
+                            Expression::number(2.0, pos.clone()),
+                            pos.clone(),
+                        ),
+                        (
+                            "b".to_string(),
+                            Expression::number(3.0, pos.clone()),
+                            pos.clone(),
+                        ),
                     ],
                     position: pos.clone(),
                 },
+                pos.clone(),
             )],
             position: pos.clone(),
         };
@@ -3551,9 +3633,14 @@ mod tests {
             entries: vec![(
                 "config".to_string(),
                 Expression::MapLiteral {
-                    entries: vec![("b".to_string(), Expression::number(4.0, pos.clone()))],
+                    entries: vec![(
+                        "b".to_string(),
+                        Expression::number(4.0, pos.clone()),
+                        pos.clone(),
+                    )],
                     position: pos.clone(),
                 },
+                pos.clone(),
             )],
             position: pos.clone(),
         };
@@ -3602,11 +3689,17 @@ mod tests {
                         (
                             "theme".to_string(),
                             Expression::identifier("light".to_string(), pos.clone()),
+                            pos.clone(),
                         ),
-                        ("spacing".to_string(), Expression::number(8.0, pos.clone())),
+                        (
+                            "spacing".to_string(),
+                            Expression::number(8.0, pos.clone()),
+                            pos.clone(),
+                        ),
                     ],
                     position: pos.clone(),
                 },
+                pos.clone(),
             )],
             position: pos.clone(),
         };
@@ -3672,14 +3765,17 @@ mod tests {
                 (
                     "name".to_string(),
                     Expression::identifier("alpha".to_string(), pos.clone()),
+                    pos.clone(),
                 ),
                 (
                     "3".to_string(),
                     Expression::number_with_unit(30.0, "px", pos.clone()),
+                    pos.clone(),
                 ),
                 (
                     "4px".to_string(),
                     Expression::identifier("hit".to_string(), pos.clone()),
+                    pos.clone(),
                 ),
             ],
             position: pos.clone(),
@@ -3733,7 +3829,11 @@ mod tests {
         let registry = FunctionRegistry::new();
         let pos = Position::new(1, 1);
         let nested = Expression::MapLiteral {
-            entries: vec![("a".to_string(), Expression::number(1.0, pos.clone()))],
+            entries: vec![(
+                "a".to_string(),
+                Expression::number(1.0, pos.clone()),
+                pos.clone(),
+            )],
             position: pos.clone(),
         };
 

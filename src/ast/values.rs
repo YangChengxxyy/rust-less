@@ -502,20 +502,8 @@ impl Color {
                 (self.alpha * 255.0) as u8
             )
         } else {
-            // Check if we can use short form (e.g., #333 instead of #333333)
-            if self.red.is_multiple_of(17)
-                && self.green.is_multiple_of(17)
-                && self.blue.is_multiple_of(17)
-            {
-                format!(
-                    "#{:x}{:x}{:x}",
-                    self.red / 17,
-                    self.green / 17,
-                    self.blue / 17
-                )
-            } else {
-                format!("#{:02x}{:02x}{:02x}", self.red, self.green, self.blue)
-            }
+            // less.js always emits the full 6-digit form for computed colors
+            format!("#{:02x}{:02x}{:02x}", self.red, self.green, self.blue)
         }
     }
 

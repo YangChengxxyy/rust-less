@@ -1,17 +1,17 @@
 # less.js 实编译对照差异报告
 
-- 生成时间: 2026-02-22T02:39:38.751Z
-- Node.js: v20.19.6
+- 生成时间: 2026-09-07T12:42:53.388Z
+- Node.js: v24.14.1
 - less.js: 4.5.1
 - rust-less CLI: /Users/cc/projects/rust-less/target/debug/rust-less
 - 选项: strict=on, strictMappings=on, observeMappings=off
-- 总用例: 84
-- 通过: 70
+- 总用例: 96
+- 通过: 80
 - 观测差异（非失败）: 0
 - 观测差异（结构）: 0
 - 观测差异（编码）: 0
 - 失败: 0
-- 不支持（扩展语义）: 14
+- 不支持（扩展语义）: 16
 - 阻塞: 0
 
 ## 用例结果
@@ -34,6 +34,13 @@
 | maps-map-set-empty-path-error | maps | extension | unsupported | less.js does not natively support rust-less map extension functions |
 | maps-map-update-non-map-argument-error | maps | extension | unsupported | less.js does not natively support rust-less map extension functions |
 | maps-map-replace-intermediate-not-map-error | maps | extension | unsupported | less.js does not natively support rust-less map extension functions |
+| maps-native-each-map | maps | lessjs-native | pass | output matched |
+| maps-native-each-list | maps | lessjs-native | pass | output matched |
+| maps-native-each-in-rule | maps | lessjs-native | pass | output matched |
+| maps-native-map-override | maps | lessjs-native | pass | output matched |
+| maps-native-media-prelude | maps | lessjs-native | pass | output matched |
+| maps-map-variable-key-access | maps | extension | unsupported | less.js does not natively support rust-less map extension functions |
+| maps-map-nested-bracket-access | maps | extension | unsupported | less.js does not natively support rust-less map extension functions |
 | sourcemap-imported-keyframes | source-map | lessjs-native | pass | output matched |
 | sourcemap-imported-keyframes-source-root | source-map | lessjs-native | pass | output matched |
 | sourcemap-media-bubble-import | source-map | lessjs-native | pass | output matched |
@@ -102,6 +109,11 @@
 | sourcemap-duplicate-chain-media-orientation-resolution-source-root | source-map | lessjs-native | pass | output matched |
 | sourcemap-parent-deep-media-custom-func | source-map | lessjs-native | pass | output matched |
 | sourcemap-parent-deep-media-custom-func-source-root | source-map | lessjs-native | pass | output matched |
+| sourcemap-triple-chain-mixed-atrule | source-map | lessjs-native | pass | output matched |
+| sourcemap-triple-chain-mixed-atrule-source-root | source-map | lessjs-native | pass | output matched |
+| sourcemap-detached-ruleset-import | source-map | lessjs-native | pass | output matched |
+| sourcemap-detached-ruleset-import-source-root | source-map | lessjs-native | pass | output matched |
+| sourcemap-media-prelude-var | source-map | lessjs-native | pass | output matched |
 
 ## 失败/阻塞/不支持详情
 
@@ -196,6 +208,20 @@
 - 原因: less.js does not natively support rust-less map extension functions
 - rust 命令: `/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-replace-intermediate-not-map.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-map-replace-intermediate-not-map-error/rust/map-replace-intermediate-not-map.css --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat`
 - rust 错误: Error: FunctionError { function: "map-replace", message: "Intermediate key 'a' is not a map", line: 5, column: 8 }
+
+### maps-map-variable-key-access
+
+- 状态: unsupported
+- 原因: less.js does not natively support rust-less map extension functions
+- rust 命令: `/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-variable-key-access.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-map-variable-key-access/rust/map-variable-key-access.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat`
+- less.js 错误: Name: variable @k not found (map-variable-key-access.less) line 7 col 12
+
+### maps-map-nested-bracket-access
+
+- 状态: unsupported
+- 原因: less.js does not natively support rust-less map extension functions
+- rust 命令: `/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-nested-bracket-access.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-map-nested-bracket-access/rust/map-nested-bracket-access.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat`
+- less.js 错误: Syntax: Could not evaluate variable call @themes (map-nested-bracket-access.less) line 6 col 2
 
 ## Source Map 观测差异（非失败）
 

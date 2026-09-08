@@ -1,6 +1,6 @@
 # 项目当前状态
 
-**更新日期**: 2026-02-22
+**更新日期**: 2026-09-07
 **版本**: 0.2.4
 **状态**: 🟢 积极开发中
 
@@ -9,11 +9,11 @@
 | 类型 | 通过 | 失败 | 忽略 | 通过率 |
 |------|------|------|------|--------|
 | 单元测试 | 106 | 0 | 0 | 100% |
-| 集成测试 | 239 | 0 | 0 | 100% |
+| 集成测试 | 246 | 0 | 0 | 100% |
 | Doc测试 | 1 | 0 | 0 | 100% |
-| **总计** | **346** | **0** | **0** | **100%** |
+| **总计** | **353** | **0** | **0** | **100%** |
 
-> 统计口径说明（2026-02-22）：测试数字来自本地执行 `cargo test --quiet`（346）与 `cargo test --all-features --quiet`（356）；兼容性数字来自 `docs/LESSJS_DIFF_REPORT.json`（`pass=70/fail=0/unsupported=14`）。
+> 统计口径说明（2026-09-07）：测试数字来自本地执行 `cargo test`（353）；兼容性数字来自 `docs/LESSJS_DIFF_REPORT.json`（`pass=80/fail=0/unsupported=16`）。
 
 ## 编译状态
 
@@ -40,9 +40,7 @@
 
 ### 🔴 高优先级
 
-1. **源码映射深度对齐**
-   - 扩展 less.js 原生可比场景（复杂导入链、嵌套 at-rule）
-   - 保持 `mappings` 严格门禁默认开启，并继续扩展覆盖场景
+1. ~~源码映射深度对齐~~（✅ v0.4.0 完成：复杂导入链、嵌套 at-rule、跨文件 mixin/DR、prelude 变量求值全部纳入 strict-mappings 门禁，80 pass / 0 fail）
 
 ### 🟡 中优先级
 
@@ -75,8 +73,8 @@
 | 命名空间 | 100% | ✅ |
 | 循环/递归混合器 | 100% | ✅ |
 | 字符串函数 | 100% | ✅ |
-| Maps | 85% | 🔧 已支持 `map-get`/`map-has-key`/`map-keys`/`map-values`/`map-merge`/`map-deep-merge`/`map-set`/`map-update`/`map-replace`/`map-remove`/`map-deep-remove`，并支持 `each(map, ...)` 迭代 |
-| 源码映射 | 80% | 🔧 已接入规则/声明/at-rule，覆盖 imported mixin/keyframes 跨文件归属、`token.name` 一致性与 CLI 外部 `.map` 输出链路，支持 less.js 兼容模式 |
+| Maps | 95% | 🔧 已支持 `map-get`/`map-has-key`/`map-keys`/`map-values`/`map-merge`/`map-deep-merge`/`map-set`/`map-update`/`map-replace`/`map-remove`/`map-deep-remove`，并支持 `each(map, ...)` 迭代 |
+| 源码映射 | 95% | 🔧 已接入规则/声明/at-rule，覆盖 imported mixin/keyframes 跨文件归属、`token.name` 一致性与 CLI 外部 `.map` 输出链路，支持 less.js 兼容模式 |
 
 ## 版本规划
 
@@ -92,11 +90,11 @@
 - [x] @import 选项完善 (`reference`, `inline`, `optional`, `once`, `multiple`)
 - [x] CLI 功能对齐（`--include-path`, `--source-map`）
 
-### v0.4.0 (2-3 月)
+### v0.4.0 ✅ 已完成
 - [x] Maps 基础函数（`map-get`, `map-has-key`, `map-keys`, `map-values`, `map-merge`, `map-deep-merge`, `map-set`, `map-update`, `map-replace`, `map-remove`, `map-deep-remove`）
-- [ ] Maps 高级能力（嵌套结构读写、规则对齐；`map-update`/`map-replace`/`map-deep-remove`、`each(map, ...)` 与 `map-deep-merge` 边界策略已完成）
-- [ ] 完整源码映射（当前已覆盖主链路，`mappings` strict 门禁已默认开启；待扩展复杂对照用例）
-- [ ] 插件钩子设计
+- [x] Maps 高级能力（`each(map, ...)`、嵌套读写、媒体查询 prelude 求值；less.js 原生语义 strict 门禁全过）
+- [x] 完整源码映射（复杂导入链/嵌套 at-rule/跨文件 mixin 与 detached ruleset/prelude 变量求值，strict-mappings 字节级对齐）
+- [x] 插件钩子设计（`docs/PLUGIN_HOOKS_DESIGN.md`；`Compiler::register_function` 已落地）
 
 ## 下一阶段执行计划 (v0.2.5, 2-4周)
 

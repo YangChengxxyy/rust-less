@@ -1,0 +1,6 @@
+@tokens: { name: alpha; };
+@tokens: { name: beta; extra: 1; };
+.test {
+  a: @tokens[name];
+  b: @tokens[extra];
+}

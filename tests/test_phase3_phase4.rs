@@ -273,10 +273,10 @@ mod media_source_map {
         let source_map = compiler.generate_source_map().unwrap();
         let sm = SourceMap::from_slice(source_map.as_bytes()).expect("Expected valid source map");
 
-        let generated_line = css
-            .lines()
-            .position(|line| line.contains("@media screen"))
-            .expect("Expected @media header line in generated CSS") as u32;
+        let generated_line =
+            css.lines()
+                .position(|line| line.contains("@media screen"))
+                .expect("Expected @media header line in generated CSS") as u32;
 
         let mut header_cols = Vec::new();
         for token in sm.tokens() {
@@ -324,10 +324,10 @@ mod media_source_map {
         let source_map = compiler.generate_source_map().unwrap();
         let sm = SourceMap::from_slice(source_map.as_bytes()).expect("Expected valid source map");
 
-        let generated_line = css
-            .lines()
-            .position(|line| line.contains("@media (max-width: 900px)"))
-            .expect("Expected @media header line in generated CSS") as u32;
+        let generated_line =
+            css.lines()
+                .position(|line| line.contains("@media (max-width: 900px)"))
+                .expect("Expected @media header line in generated CSS") as u32;
 
         let mut header_cols = Vec::new();
         for token in sm.tokens() {
@@ -375,10 +375,10 @@ mod media_source_map {
         let source_map = compiler.generate_source_map().unwrap();
         let sm = SourceMap::from_slice(source_map.as_bytes()).expect("Expected valid source map");
 
-        let generated_line = css
-            .lines()
-            .position(|line| line.contains("@media screen and (max-width"))
-            .expect("Expected @media header line in generated CSS") as u32;
+        let generated_line =
+            css.lines()
+                .position(|line| line.contains("@media screen and (max-width"))
+                .expect("Expected @media header line in generated CSS") as u32;
 
         let mut header_cols = Vec::new();
         for token in sm.tokens() {
@@ -429,10 +429,10 @@ mod media_source_map {
         let source_map = compiler.generate_source_map().unwrap();
         let sm = SourceMap::from_slice(source_map.as_bytes()).expect("Expected valid source map");
 
-        let generated_line = css
-            .lines()
-            .position(|line| line.contains("@media only screen and (max-width"))
-            .expect("Expected @media header line in generated CSS") as u32;
+        let generated_line =
+            css.lines()
+                .position(|line| line.contains("@media only screen and (max-width"))
+                .expect("Expected @media header line in generated CSS") as u32;
 
         let mut header_cols = Vec::new();
         for token in sm.tokens() {
@@ -480,7 +480,11 @@ mod media_source_map {
 
         let expected_src_line = input
             .lines()
-            .position(|line| line.contains("@media only screen and (max-width: 900px), not print and (min-width: 1200px)"))
+            .position(|line| {
+                line.contains(
+                    "@media only screen and (max-width: 900px), not print and (min-width: 1200px)",
+                )
+            })
             .expect("Expected @media header line in input") as u32;
 
         let mut compiler = Compiler::new().with_source_map(true);
@@ -489,10 +493,10 @@ mod media_source_map {
         let source_map = compiler.generate_source_map().unwrap();
         let sm = SourceMap::from_slice(source_map.as_bytes()).expect("Expected valid source map");
 
-        let generated_line = css
-            .lines()
-            .position(|line| line.contains("@media only screen and (max-width"))
-            .expect("Expected @media header line in generated CSS") as u32;
+        let generated_line =
+            css.lines()
+                .position(|line| line.contains("@media only screen and (max-width"))
+                .expect("Expected @media header line in generated CSS") as u32;
 
         let mut header_cols = Vec::new();
         for token in sm.tokens() {
@@ -597,17 +601,18 @@ mod media_source_map {
             7 + prelude
                 .find("calc(")
                 .expect("Expected first calc() in prelude") as u32,
-            7 + prelude.find("var(").expect("Expected first var() in prelude") as u32,
+            7 + prelude
+                .find("var(")
+                .expect("Expected first var() in prelude") as u32,
             8 + prelude
                 .find("(background-image")
-                .expect("Expected background-image media feature in prelude") as u32,
+                .expect("Expected background-image media feature in prelude")
+                as u32,
             8 + prelude.find("url(").expect("Expected url() in prelude") as u32 + 3,
             8 + prelude
                 .find("(max-width")
                 .expect("Expected max-width media feature in prelude") as u32,
-            7 + prelude
-                .rfind("max(")
-                .expect("Expected max() in prelude") as u32,
+            7 + prelude.rfind("max(").expect("Expected max() in prelude") as u32,
             7 + prelude
                 .rfind("calc(")
                 .expect("Expected second calc() in prelude") as u32,
@@ -675,13 +680,13 @@ mod media_source_map {
             8 + prelude
                 .find("(min-width")
                 .expect("Expected min-width media feature in prelude") as u32,
-            7 + prelude
-                .find("clamp(")
-                .expect("Expected clamp() in prelude") as u32,
+            7 + prelude.find("clamp(").expect("Expected clamp() in prelude") as u32,
             7 + prelude
                 .find("calc(")
                 .expect("Expected first calc() in prelude") as u32,
-            7 + prelude.find("var(").expect("Expected first var() in prelude") as u32,
+            7 + prelude
+                .find("var(")
+                .expect("Expected first var() in prelude") as u32,
             8 + prelude
                 .find("(max-width")
                 .expect("Expected max-width media feature in prelude") as u32,
@@ -824,13 +829,13 @@ mod media_source_map {
             8 + prelude
                 .find("(min-width")
                 .expect("Expected min-width media feature in prelude") as u32,
-            7 + prelude
-                .find("clamp(")
-                .expect("Expected clamp() in prelude") as u32,
+            7 + prelude.find("clamp(").expect("Expected clamp() in prelude") as u32,
             7 + prelude
                 .find("viewport-step(")
                 .expect("Expected viewport-step() in prelude") as u32,
-            7 + prelude.find("var(").expect("Expected first var() in prelude") as u32,
+            7 + prelude
+                .find("var(")
+                .expect("Expected first var() in prelude") as u32,
             8 + prelude
                 .find("(hover")
                 .expect("Expected hover media feature in prelude") as u32,
@@ -838,9 +843,7 @@ mod media_source_map {
                 .find("(max-width")
                 .expect("Expected max-width media feature in prelude") as u32,
             7 + prelude.find("min(").expect("Expected min() in prelude") as u32,
-            7 + prelude
-                .rfind("calc(")
-                .expect("Expected calc() in prelude") as u32,
+            7 + prelude.rfind("calc(").expect("Expected calc() in prelude") as u32,
             7 + prelude
                 .rfind("var(")
                 .expect("Expected second var() in prelude") as u32,

@@ -180,3 +180,128 @@ fn test_lessjs_native_map_access_identifier_does_not_match_quoted_key() {
     let err = compile(less).unwrap_err().to_string();
     assert!(err.contains("not found in map"), "Got: {}", err);
 }
+
+#[test]
+fn test_lessjs_compat_each_over_map_native() {
+    let less = r#"
+@colors: {
+    primary: blue;
+    secondary: gray;
+};
+each(@colors, {
+    .color-@{key} {
+        color: @value;
+        order: @index;
+    }
+});
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains(".color-primary"), "Got: {}", css);
+    assert!(css.contains("color: blue"), "Got: {}", css);
+    assert!(css.contains("order: 2"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_each_over_list_variable() {
+    let less = r#"
+@sizes: 10px 20px;
+each(@sizes, {
+    .m-@{index} {
+        margin: @value;
+    }
+});
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains(".m-1"), "Got: {}", css);
+    assert!(css.contains("margin: 20px"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_each_inside_rule_body() {
+    let less = r#"
+@colors: {
+    red: #f00;
+    blue: #00f;
+};
+.demo {
+    each(@colors, {
+        c-@{key}: @value;
+    });
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("c-red: #f00"), "Got: {}", css);
+    assert!(css.contains("c-blue: #00f"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_map_access_in_media_prelude() {
+    let less = r#"
+@sizes: {
+    tablet: 768px;
+};
+.container {
+    @media (min-width: @sizes[tablet]) {
+        width: 100px;
+    }
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("@media (min-width: 768px)"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_map_called_as_detached_ruleset() {
+    let less = r#"
+@lib: {
+    color: red;
+    margin: 0;
+};
+.test {
+    @lib();
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("color: red"), "Got: {}", css);
+    assert!(css.contains("margin: 0"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_space_and_comma_variable_values() {
+    let less = r#"
+@margin: 10px 20px;
+@font: Arial, sans-serif;
+.test {
+    margin: @margin;
+    font-family: @font;
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("margin: 10px 20px"), "Got: {}", css);
+    assert!(
+        css.contains("font-family: Arial, sans-serif"),
+        "Got: {}",
+        css
+    );
+}
+
+#[test]
+fn test_lessjs_compat_mixin_call_inside_media_keeps_selector() {
+    let less = r#"
+.mix() {
+    letter-spacing: 1px;
+}
+.entry {
+    @media (min-width: 800px) {
+        .mix();
+    }
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(
+        css.contains("@media (min-width: 800px) {\n  .entry {"),
+        "Got: {}",
+        css
+    );
+    assert!(css.contains("letter-spacing: 1px"), "Got: {}", css);
+}

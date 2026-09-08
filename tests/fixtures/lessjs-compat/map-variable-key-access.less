@@ -1,0 +1,9 @@
+@tokens: {
+  name: alpha;
+  size: 30px;
+};
+@k: name;
+.test {
+  a: @tokens[@k];
+  b: @tokens[name];
+}

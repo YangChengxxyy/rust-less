@@ -403,15 +403,15 @@ bash tools/status-check/run-status-check.sh --with-perf
 - [x] 导入解析策略完善（`@import (reference|inline|optional|once|multiple)`）
 - [x] CLI 关键参数补齐（`--include-path`、`--source-map`）
 
-### 第三阶段：高级功能 (v0.4.0) - 2-3个月
+### 第三阶段：高级功能 (v0.4.0) - ✅ 已完成
 - [x] 循环和递归混合器
 - [x] 命名空间支持
 - [x] Maps 基础函数接口（`map-get`、`map-has-key`、`map-keys`、`map-values`、`map-merge`、`map-deep-merge`、`map-set`、`map-update`、`map-replace`、`map-remove`、`map-deep-remove`）
-- [ ] Maps 高级能力（`each(map, ...)` 与 `map-deep-merge` 边界策略已支持；待补 less.js 规则完全对齐）
+- [x] Maps 高级能力（`each(map, ...)`、`map-deep-merge` 边界策略，与 less.js 原生语义完全对齐：strict 门禁 80 pass / 0 fail）
 - [x] Maps 兼容性扩展（已建立并接入实编译对照，见 `docs/LESSJS_COMPAT_STATUS.md`）
 - [x] 源码映射支持（已支持外部 `.map` 输出与 `--source-map-lessjs-compat`）
-- [ ] 源码映射深度对齐（复杂导入链/嵌套 at-rule 的覆盖扩展；`mappings` strict 门禁已默认启用）
-- [ ] 插件钩子设计草案（解析/编译扩展点）
+- [x] 源码映射深度对齐（复杂导入链/嵌套 at-rule/跨文件 mixin 与 detached ruleset/prelude 变量求值场景全部纳入 strict-mappings 门禁）
+- [x] 插件钩子设计草案（见 `docs/PLUGIN_HOOKS_DESIGN.md`，函数插件注册路径 `Compiler::register_function` 已落地）
 
 ### 第四阶段：生态系统 (v1.0.0) - 6-12个月
 - [ ] Language Server Protocol
