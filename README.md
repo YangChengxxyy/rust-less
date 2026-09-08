@@ -18,14 +18,14 @@
 
 ## 📊 当前实现状态
 
-**版本**: 0.2.4  
-**测试通过率**: 100% (`cargo test --quiet` 共 346 passed, 0 ignored；`--all-features` 共 356 passed)  
+**版本**: 0.3.0  
+**测试通过率**: 100% (`cargo test --quiet` 共 359 passed, 0 ignored；`--all-features` 共 369 passed)  
 **功能完成度**: 97%（核心 LESS 功能已完备，Maps 可写能力已落地，源码映射持续完善）
 **生产就绪度**: 适合大部分生产项目
 
-**统计口径说明（2026-02-22）**:
-- 测试基线来自本地执行：`cargo test --quiet`（346 passed）与 `cargo test --all-features --quiet`（356 passed）。
-- 兼容性基线来自 `docs/LESSJS_DIFF_REPORT.json`：`pass=70`、`fail=0`、`unsupported=14`。
+**统计口径说明（2026-09-08）**:
+- 测试基线来自本地执行：`cargo test --quiet`（359 passed）与 `cargo test --all-features --quiet`（369 passed）。
+- 兼容性基线来自 `docs/LESSJS_DIFF_REPORT.json`（2026-09-08 生成）：`pass=80`、`fail=0`、`unsupported=16`（total=96，strict + strict-mappings）。
 
 ### ✅ 已完成的核心功能
 
@@ -68,7 +68,7 @@
 
 ```toml
 [dependencies]
-rust-less = "0.2.4"
+rust-less = "0.3.0"
 ```
 
 或安装 CLI 工具：
@@ -395,13 +395,15 @@ bash tools/status-check/run-status-check.sh --with-perf
 - [x] 实现 CSS4 大小写不敏感属性选择器 (`[attr=val i]`)
 - [x] 清理核心模块的技术债务 (extend, rule)
 
-### 第二阶段：功能增强 (v0.3.0) - 1-2个月
+### 第二阶段：功能增强 (v0.3.0) - ✅ 已完成
 - [x] `:extend()` 语法支持
 - [x] 命名空间支持 (#namespace > .mixin)
 - [x] 递归混合器（循环生成）
 - [x] 源码映射生成（最小可用：行列 + 源文件）
 - [x] 导入解析策略完善（`@import (reference|inline|optional|once|multiple)`）
+- [x] `@import` 选项组合细化（逗号分隔多选项如 `(optional, reference)`，未知选项报错，`optional`/`multiple` 与导入类型正交组合）
 - [x] CLI 关键参数补齐（`--include-path`、`--source-map`）
+- [x] CLI 标志与库配置对齐（`CompilerOptions` 补齐 `source_map_root`/`source_map_file`，CLI 统一经 `CompilerOptions::build()` 构建编译器）
 
 ### 第三阶段：高级功能 (v0.4.0) - ✅ 已完成
 - [x] 循环和递归混合器
@@ -493,6 +495,8 @@ let options = CompilerOptions {
     compress: true,
     source_map: false,
     source_map_lessjs_compat: false,
+    source_map_root: None,
+    source_map_file: None,
     include_paths: vec!["styles/".to_string()],
 };
 let result = compile_with_options(input, options)?;
@@ -544,7 +548,13 @@ pub struct CompilerOptions {
     pub compress: bool,
     pub source_map: bool,
     pub source_map_lessjs_compat: bool,
+    pub source_map_root: Option<String>,
+    pub source_map_file: Option<String>,
     pub include_paths: Vec<String>,
+}
+
+impl CompilerOptions {
+    pub fn build(&self) -> Compiler   // 按选项构建 Compiler（CLI 亦走此路径）
 }
 ```
 

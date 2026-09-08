@@ -376,6 +376,10 @@ pub struct Import {
     pub path: String,
     /// Type of import
     pub import_type: ImportType,
+    /// 可选导入 (@import (optional) ...) - 文件不存在时静默跳过
+    pub optional: bool,
+    /// 多次导入 (@import (multiple) ...) - 允许同一文件被多次引入
+    pub multiple: bool,
     /// Media query condition
     pub media: Option<String>,
     /// Source position
@@ -383,22 +387,19 @@ pub struct Import {
 }
 
 /// Type of import statement
+///
+/// `optional`/`multiple` 等正交选项见 [`Import::optional`] / [`Import::multiple`]，
+/// 可与任意类型组合（less.js 允许 `@import (optional, reference) "file"` 这类写法）。
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImportType {
-    /// 作为 LESS 导入 (@import "file.less")
+    /// 作为 LESS 导入 (@import "file.less")，默认 once 语义
     Less,
     /// 作为 CSS 导入 (@import "file.css")
     Css,
     /// 内联导入 (@import (inline) "file.css")
     Inline,
-    /// 单次导入 (@import (once) "file.less")
-    Once,
-    /// 多次导入 (@import (multiple) "file.less")
-    Multiple,
     /// 引用导入 (@import (reference) "file.less")
     Reference,
-    /// 可选导入 (@import (optional) "file.less") - 文件不存在时静默跳过
-    Optional,
 }
 
 impl Import {
@@ -407,9 +408,23 @@ impl Import {
         Self {
             path,
             import_type,
+            optional: false,
+            multiple: false,
             media: None,
             position,
         }
+    }
+
+    /// Mark this import as optional (silently skipped when the file is missing)
+    pub fn with_optional(mut self, optional: bool) -> Self {
+        self.optional = optional;
+        self
+    }
+
+    /// Mark this import as allowing multiple inclusions of the same file
+    pub fn with_multiple(mut self, multiple: bool) -> Self {
+        self.multiple = multiple;
+        self
     }
 
     /// Add media query to this import
@@ -863,10 +878,7 @@ impl fmt::Display for ImportType {
             ImportType::Less => write!(f, "less"),
             ImportType::Css => write!(f, "css"),
             ImportType::Inline => write!(f, "inline"),
-            ImportType::Once => write!(f, "once"),
-            ImportType::Multiple => write!(f, "multiple"),
             ImportType::Reference => write!(f, "reference"),
-            ImportType::Optional => write!(f, "optional"),
         }
     }
 }

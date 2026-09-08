@@ -316,6 +316,7 @@ fn test_compile_with_options_source_map() {
         source_map_lessjs_compat: false,
         compress: false,
         include_paths: vec![],
+        ..Default::default()
     };
     let result = rust_less::compile_with_options(".test { color: red; }", options);
     assert!(result.is_ok(), "Got: {:?}", result);

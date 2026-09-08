@@ -20,13 +20,18 @@ pub trait ImportCompiler {
 
     /// 编译内联导入
     fn compile_inline_import(&mut self, import: &Import) -> Result<()>;
-
-    /// 编译多次导入
-    fn compile_less_import_multiple(&mut self, import: &Import) -> Result<()>;
 }
 
 impl ImportCompiler for Compiler {
     fn compile_import(&mut self, import: &Import) -> Result<()> {
+        // Optional imports are silently skipped when the target file is missing
+        // (CSS pass-through imports never touch the filesystem, so they are exempt).
+        if import.optional && import.import_type != ImportType::Css {
+            if let Err(Error::ImportError { .. }) = self.resolve_import_path(&import.path) {
+                return Ok(());
+            }
+        }
+
         match import.import_type {
             ImportType::Css => {
                 // CSS imports are passed through as-is
@@ -41,7 +46,7 @@ impl ImportCompiler for Compiler {
                 self.write_char(';');
                 self.add_newline();
             }
-            ImportType::Less | ImportType::Once => {
+            ImportType::Less => {
                 // LESS imports - read and compile the file
                 self.compile_less_import(import)?;
             }
@@ -52,20 +57,6 @@ impl ImportCompiler for Compiler {
             ImportType::Inline => {
                 // Inline imports - include file content without processing
                 self.compile_inline_import(import)?;
-            }
-            ImportType::Multiple => {
-                // Multiple imports - allow importing same file multiple times
-                self.compile_less_import_multiple(import)?;
-            }
-            ImportType::Optional => {
-                // Optional imports - silently skip if file not found
-                match self.compile_less_import(import) {
-                    Ok(()) => {}
-                    Err(Error::ImportError { .. }) => {
-                        // File not found, silently skip
-                    }
-                    Err(e) => return Err(e),
-                }
             }
         }
         Ok(())
@@ -132,14 +123,16 @@ impl ImportCompiler for Compiler {
             }
         })?;
 
-        // 检查循环依赖
-        if self.imported_files.contains(&resolved_path) {
-            // 对于普通导入和 Once 导入，跳过已导入的文件
-            return Ok(());
-        }
+        // 检查循环依赖（multiple 导入允许同一文件多次引入）
+        if !import.multiple {
+            if self.imported_files.contains(&resolved_path) {
+                // 默认 once 语义：跳过已导入的文件
+                return Ok(());
+            }
 
-        // 添加到已导入集合
-        self.imported_files.insert(resolved_path.clone());
+            // 添加到已导入集合
+            self.imported_files.insert(resolved_path.clone());
+        }
 
         // 保存当前基础路径和源文件
         let old_base_path = self.base_path.clone();
@@ -197,12 +190,14 @@ impl ImportCompiler for Compiler {
             }
         })?;
 
-        // 检查循环依赖
-        if self.imported_files.contains(&resolved_path) {
-            return Ok(());
-        }
+        // 检查循环依赖（multiple 导入允许同一文件多次引入）
+        if !import.multiple {
+            if self.imported_files.contains(&resolved_path) {
+                return Ok(());
+            }
 
-        self.imported_files.insert(resolved_path.clone());
+            self.imported_files.insert(resolved_path.clone());
+        }
 
         let old_base_path = self.base_path.clone();
         let old_file = self.current_file.clone();
@@ -286,55 +281,6 @@ impl ImportCompiler for Compiler {
             self.add_newline();
         }
 
-        self.current_file = old_file;
-
-        Ok(())
-    }
-
-    fn compile_less_import_multiple(&mut self, import: &Import) -> Result<()> {
-        let resolved_path = self.resolve_import_path(&import.path).map_err(|e| {
-            if let Error::ImportError { path, reason, .. } = e {
-                Error::import_error(&path, reason, import.position.line, import.position.column)
-            } else {
-                e
-            }
-        })?;
-
-        // 不检查循环依赖，允许多次导入
-        let old_base_path = self.base_path.clone();
-        let old_file = self.current_file.clone();
-        self.base_path = resolved_path.parent().map(|p| p.to_path_buf());
-        self.current_file = resolved_path.display().to_string();
-
-        let content = std::fs::read_to_string(&resolved_path).map_err(|e| {
-            Error::import_error(
-                &import.path,
-                e.to_string(),
-                import.position.line,
-                import.position.column,
-            )
-        })?;
-
-        let mut parser = Parser::from_string(content).map_err(|e| {
-            Error::import_error(
-                &import.path,
-                format!("Parse error: {}", e),
-                import.position.line,
-                import.position.column,
-            )
-        })?;
-
-        let stylesheet = parser.parse().map_err(|e| {
-            Error::import_error(
-                &import.path,
-                format!("Parse error: {}", e),
-                import.position.line,
-                import.position.column,
-            )
-        })?;
-
-        self.compile_stylesheet(&stylesheet)?;
-        self.base_path = old_base_path;
         self.current_file = old_file;
 
         Ok(())

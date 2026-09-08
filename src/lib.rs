@@ -73,25 +73,13 @@ pub fn compile_file_with_options<P: AsRef<Path>>(
 }
 
 fn build_compiler_from_options(options: &CompilerOptions) -> Compiler {
-    let mut compiler = if options.compress {
-        Compiler::compressed()
-    } else {
-        Compiler::new()
-    };
-
-    if options.source_map {
-        compiler = compiler.with_source_map(true);
-        compiler.set_source_map_lessjs_compat(options.source_map_lessjs_compat);
-    }
-
-    for include_path in &options.include_paths {
-        compiler.add_include_path(include_path);
-    }
-
-    compiler
+    options.build()
 }
 
 /// 编译器配置选项
+///
+/// 与 CLI 标志一一对应：`compress`/`source_map`/`source_map_lessjs_compat`/
+/// `source_map_root`/`source_map_file`/`include_paths`。
 #[derive(Debug, Clone, Default)]
 pub struct CompilerOptions {
     /// 是否压缩输出的 CSS
@@ -100,8 +88,40 @@ pub struct CompilerOptions {
     pub source_map: bool,
     /// source map 输出为 less.js 兼容模式（保留默认行为为 false）
     pub source_map_lessjs_compat: bool,
+    /// source map 的 sourceRoot 字段（对应 CLI `--source-map-root`）
+    pub source_map_root: Option<String>,
+    /// source map 的 file 字段，通常为生成的 CSS 文件路径（对应 CLI 输出文件名）
+    pub source_map_file: Option<String>,
     /// 导入的额外包含路径
     pub include_paths: Vec<String>,
+}
+
+impl CompilerOptions {
+    /// 按当前选项构建配置好的 [`Compiler`]
+    pub fn build(&self) -> Compiler {
+        let mut compiler = if self.compress {
+            Compiler::compressed()
+        } else {
+            Compiler::new()
+        };
+
+        if self.source_map {
+            compiler = compiler.with_source_map(true);
+            compiler.set_source_map_lessjs_compat(self.source_map_lessjs_compat);
+            if let Some(source_root) = &self.source_map_root {
+                compiler.set_source_map_source_root(Some(source_root.clone()));
+            }
+            if let Some(file) = &self.source_map_file {
+                compiler.set_source_map_file(Some(file.clone()));
+            }
+        }
+
+        for include_path in &self.include_paths {
+            compiler.add_include_path(include_path);
+        }
+
+        compiler
+    }
 }
 
 #[cfg(test)]
@@ -128,6 +148,7 @@ mod tests {
             source_map: true,
             source_map_lessjs_compat: false,
             include_paths: vec![],
+            ..Default::default()
         };
         let mut compiler = build_compiler_from_options(&options);
         compiler.compile(".test { color: red; }").unwrap();
@@ -147,6 +168,7 @@ mod tests {
             source_map: true,
             source_map_lessjs_compat: false,
             include_paths: vec![],
+            ..Default::default()
         };
         let result = compile_file_with_options(&file_path, options);
         assert!(

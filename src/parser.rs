@@ -420,32 +420,59 @@ impl Parser {
             self.advance();
         }
 
-        // Parse optional import keyword: (optional), (reference), (inline), (once), (multiple), (less), (css)
+        // Parse optional import option list: (optional), (reference), (inline),
+        // (once), (multiple), (less), (css) — less.js 允许逗号分隔的组合，
+        // 如 `@import (optional, reference) "file.less"`。
         let mut explicit_import_type = None;
+        let mut optional = false;
+        let mut multiple = false;
         if self.check(&TokenType::LeftParen) {
             self.advance(); // consume '('
-                            // Skip whitespace
-            while matches!(self.current_token().token_type, TokenType::Whitespace) {
-                self.advance();
+            loop {
+                // Skip whitespace
+                while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                    self.advance();
+                }
+                match &self.current_token().token_type {
+                    TokenType::Identifier(keyword) => {
+                        match keyword.as_str() {
+                            "optional" => optional = true,
+                            "reference" => explicit_import_type = Some(ImportType::Reference),
+                            "inline" => explicit_import_type = Some(ImportType::Inline),
+                            "once" => multiple = false,
+                            "multiple" => multiple = true,
+                            "less" => explicit_import_type = Some(ImportType::Less),
+                            "css" => explicit_import_type = Some(ImportType::Css),
+                            other => {
+                                let pos = self.current_position();
+                                return Err(Error::parse_error(
+                                    format!("unrecognised @import option '{}'", other),
+                                    pos.line,
+                                    pos.column,
+                                ));
+                            }
+                        }
+                        self.advance();
+                    }
+                    _ => {
+                        return Err(Error::parse_error(
+                            "Expected import option keyword",
+                            self.current_position().line,
+                            self.current_position().column,
+                        ));
+                    }
+                }
+                // Skip whitespace
+                while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                    self.advance();
+                }
+                // More options follow a comma
+                if self.match_token(TokenType::Comma) {
+                    continue;
+                }
+                break;
             }
-            if let TokenType::Identifier(keyword) = &self.current_token().token_type {
-                explicit_import_type = match keyword.as_str() {
-                    "optional" => Some(ImportType::Optional),
-                    "reference" => Some(ImportType::Reference),
-                    "inline" => Some(ImportType::Inline),
-                    "once" => Some(ImportType::Once),
-                    "multiple" => Some(ImportType::Multiple),
-                    "less" => Some(ImportType::Less),
-                    "css" => Some(ImportType::Css),
-                    _ => None,
-                };
-                self.advance();
-            }
-            // Skip whitespace
-            while matches!(self.current_token().token_type, TokenType::Whitespace) {
-                self.advance();
-            }
-            self.consume(TokenType::RightParen, "Expected ')' after import keyword")?;
+            self.consume(TokenType::RightParen, "Expected ')' after import options")?;
             // Skip whitespace
             while matches!(self.current_token().token_type, TokenType::Whitespace) {
                 self.advance();
@@ -545,7 +572,9 @@ impl Parser {
             ImportType::Less
         };
 
-        let mut import = Import::new(path, import_type, position);
+        let mut import = Import::new(path, import_type, position)
+            .with_optional(optional)
+            .with_multiple(multiple);
         if let Some(m) = media {
             import = import.with_media(m);
         }

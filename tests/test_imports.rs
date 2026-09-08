@@ -138,6 +138,7 @@ mod import_resolution {
             source_map: false,
             source_map_lessjs_compat: false,
             include_paths: vec![fixtures_path().to_string_lossy().to_string()],
+            ..Default::default()
         };
 
         let result = rust_less::compile_with_options(less, options);
@@ -247,6 +248,7 @@ mod compiler_options {
             source_map: false,
             source_map_lessjs_compat: false,
             include_paths: vec![],
+            ..Default::default()
         };
 
         let result = compile_file_with_options(&path, options);
@@ -282,6 +284,7 @@ mod compiler_options {
             source_map: true,
             source_map_lessjs_compat: false,
             include_paths: vec![],
+            ..Default::default()
         };
 
         let result = compile_file_with_options(&path, options);
@@ -874,5 +877,97 @@ mod integration {
             "Override not applied. CSS output: {}",
             css
         );
+    }
+}
+
+#[cfg(test)]
+mod import_option_combinations {
+    use super::*;
+
+    fn compile_with_fixtures(less: &str) -> rust_less::Result<String> {
+        rust_less::compile_with_options(
+            less,
+            CompilerOptions {
+                include_paths: vec![fixtures_path().to_string_lossy().to_string()],
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test]
+    fn test_import_optional_reference_combination() {
+        // (optional, reference)：变量可用但不产生额外规则输出
+        let less = r#"
+@import (optional, reference) "variables.less";
+
+.test {
+    color: @primary-color;
+}
+"#;
+        let css = compile_with_fixtures(less).expect("combined options should compile");
+        assert!(css.contains("color: #007bff"), "Got: {}", css);
+        assert!(!css.contains(".border-radius"), "Got: {}", css);
+    }
+
+    #[test]
+    fn test_import_optional_reference_missing_file_skipped() {
+        let less = r#"
+@import (optional, reference) "nonexistent-file.less";
+
+.test {
+    color: red;
+}
+"#;
+        let css = compile_with_fixtures(less).expect("optional import should be skipped");
+        assert!(css.contains("color: red"), "Got: {}", css);
+    }
+
+    #[test]
+    fn test_import_optional_inline_missing_file_skipped() {
+        let less = r#"
+@import (optional, inline) "nonexistent-file.css";
+
+.test {
+    color: red;
+}
+"#;
+        let css = compile_with_fixtures(less).expect("optional inline import should be skipped");
+        assert!(css.contains("color: red"), "Got: {}", css);
+    }
+
+    #[test]
+    fn test_import_multiple_repeats_output() {
+        let less = r#"
+@import "emit.less";
+@import (multiple) "emit.less";
+"#;
+        let css = compile_with_fixtures(less).expect("multiple import should compile");
+        let occurrences = css.matches(".emit {").count();
+        assert_eq!(occurrences, 2, "Expected file emitted twice. Got: {}", css);
+    }
+
+    #[test]
+    fn test_import_once_after_multiple_still_dedupes() {
+        // (once) 显式关闭 multiple：默认导入后再次 once 导入不再重复输出
+        let less = r#"
+@import "emit.less";
+@import (once) "emit.less";
+"#;
+        let css = compile_with_fixtures(less).expect("once import should compile");
+        let occurrences = css.matches(".emit {").count();
+        assert_eq!(occurrences, 1, "Expected file emitted once. Got: {}", css);
+    }
+
+    #[test]
+    fn test_import_unknown_option_is_rejected() {
+        let result = compile_with_fixtures(r#"@import (bogus) "emit.less";"#);
+        match result {
+            Err(err) => assert!(
+                err.message().contains("unrecognised @import option 'bogus'"),
+                "Unexpected error: {}",
+                err.message()
+            ),
+            Ok(css) => panic!("unknown import option should fail, got CSS: {}", css),
+        }
     }
 }

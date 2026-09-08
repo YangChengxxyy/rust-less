@@ -1,7 +1,7 @@
 # 项目当前状态
 
-**更新日期**: 2026-09-07
-**版本**: 0.2.4
+**更新日期**: 2026-09-08
+**版本**: 0.3.0
 **状态**: 🟢 积极开发中
 
 ## 测试状态
@@ -9,11 +9,11 @@
 | 类型 | 通过 | 失败 | 忽略 | 通过率 |
 |------|------|------|------|--------|
 | 单元测试 | 106 | 0 | 0 | 100% |
-| 集成测试 | 246 | 0 | 0 | 100% |
+| 集成测试 | 252 | 0 | 0 | 100% |
 | Doc测试 | 1 | 0 | 0 | 100% |
-| **总计** | **353** | **0** | **0** | **100%** |
+| **总计** | **359** | **0** | **0** | **100%** |
 
-> 统计口径说明（2026-09-07）：测试数字来自本地执行 `cargo test`（353）；兼容性数字来自 `docs/LESSJS_DIFF_REPORT.json`（`pass=80/fail=0/unsupported=16`）。
+> 统计口径说明（2026-09-08）：测试数字来自本地执行 `cargo test`（359）；兼容性数字来自 `docs/LESSJS_DIFF_REPORT.json`（`pass=80/fail=0/unsupported=16`）。
 
 ## 编译状态
 
@@ -78,17 +78,19 @@
 
 ## 版本规划
 
-### v0.2.4 (当前版本)
+### v0.2.4
 - [x] 清理技术债务 (extend.rs hack, rule.rs TODO)
 - [x] 完善字符串函数
 - [x] 实现属性选择器 `i` 标志
 - [x] 清理编译警告 (unused imports/variables)
 - [x] 性能基准测试（已补跑，存在回归趋势）
 
-### v0.3.0 (1-2 月)
+### v0.3.0 ✅ 已完成 (2026-09-08)
 - [x] 最小可用源码映射
 - [x] @import 选项完善 (`reference`, `inline`, `optional`, `once`, `multiple`)
+- [x] @import 选项组合细化（逗号分隔多选项、未知选项报错、`optional`/`multiple` 与类型正交组合）
 - [x] CLI 功能对齐（`--include-path`, `--source-map`）
+- [x] CLI 标志与库配置对齐（`CompilerOptions` 补齐 `source_map_root`/`source_map_file`，统一 `CompilerOptions::build()` 构建路径）
 
 ### v0.4.0 ✅ 已完成
 - [x] Maps 基础函数（`map-get`, `map-has-key`, `map-keys`, `map-values`, `map-merge`, `map-deep-merge`, `map-set`, `map-update`, `map-replace`, `map-remove`, `map-deep-remove`）

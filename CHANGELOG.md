@@ -5,9 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-08
 
 ### 🎉 新增功能 (Added)
+
+- **@import 选项组合细化**:
+  - 支持逗号分隔的多选项写法，如 `@import (optional, reference) "file.less"`
+  - 未知导入选项报解析错误（`unrecognised @import option`，对齐 less.js，此前静默忽略）
+  - `optional`/`multiple` 重构为与导入类型正交的标志：`optional` 对 Less/Reference/Inline 统一生效，`multiple` 可组合任意类型关闭去重
+  - 破坏性变更：`ImportType` 移除 `Once`/`Multiple`/`Optional` 变体（`Once` 并入默认 `Less` 语义，后两者迁移为 `Import::optional`/`Import::multiple` 字段）
+
+- **CLI 标志与库配置对齐**:
+  - `CompilerOptions` 新增 `source_map_root` / `source_map_file` 字段，覆盖全部 CLI source map 配置
+  - 新增 `CompilerOptions::build()` 统一构建入口，CLI 改经此路径构建编译器
 
 - **Maps 可写能力增强**:
   - 新增 `map-set()`，支持多级路径写入
@@ -57,9 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 新增 Maps 函数层与集成层测试（写入/深合并/key 规范化/错误语义）
 - 新增 Source Map `@keyframes` 规则名一致性回归测试（本地与 import 场景）
 - 新增 source map less.js 兼容模式回归测试（编译器与 CLI）
-- 当前测试状态（2026-02-22）: **346 passed, 0 ignored**（`--all-features`: **356 passed, 0 ignored**）
+- 当前测试状态（2026-09-08）: **359 passed, 0 ignored**（`--all-features`: **369 passed, 0 ignored**）
 - `cargo clippy --all-targets --all-features`: 通过（无警告）
-- 兼容性摘要来源：`docs/LESSJS_DIFF_REPORT.json`（`pass=70`、`fail=0`、`unsupported=14`）
+- 兼容性摘要来源：`docs/LESSJS_DIFF_REPORT.json`（`pass=80`、`fail=0`、`unsupported=16`，strict + strict-mappings）
 
 ## [0.2.4] - 2025-01-22
 
@@ -377,7 +387,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | LESS 兼容性 | 测试通过率 | 状态 |
 |------|-------------|------------|------|
-| 0.2.4 | 97% | 100% | 当前稳定版 |
+| 0.3.0 | 97% | 100% | 当前稳定版 |
+| 0.2.4 | 97% | 100% | 旧版本 |
 | 0.2.3 | 90% | 100% | 旧版本 |
 | 0.2.2 | 87% | 100% | 旧版本 |
 | 0.2.1 | 85% | 92.1% | 旧版本 |

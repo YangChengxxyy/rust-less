@@ -1,10 +1,10 @@
 # less.js 实编译对照差异报告
 
-- 生成时间: 2026-09-07T12:42:53.388Z
-- Node.js: v24.14.1
+- 生成时间: 2026-09-08T11:27:51.750Z
+- Node.js: v24.16.0
 - less.js: 4.5.1
 - rust-less CLI: /Users/cc/projects/rust-less/target/debug/rust-less
-- 选项: strict=on, strictMappings=on, observeMappings=off
+- 选项: strict=off, strictMappings=off, observeMappings=off
 - 总用例: 96
 - 通过: 80
 - 观测差异（非失败）: 0

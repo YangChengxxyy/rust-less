@@ -86,6 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         source_map: false,
         source_map_lessjs_compat: false,
         include_paths: vec![fixtures_path.to_string_lossy().to_string()],
+        ..Default::default()
     };
 
     let less_code = r#"

@@ -1,7 +1,6 @@
 //! Rust LESS 编译器的 CLI 二进制文件
 
 use clap::{Arg, Command};
-use rust_less::Compiler;
 use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
@@ -15,7 +14,7 @@ fn default_source_map_url(map_path: &str) -> String {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = Command::new("rust-less")
-        .version("0.2.4")
+        .version("0.3.0")
         .author("Yang Cheng")
         .about("一个用 Rust 编写的 LESS 到 CSS 编译器")
         .arg(
@@ -111,30 +110,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    // Compile LESS to CSS
-    let mut compiler = if matches.get_flag("compress") {
-        Compiler::compressed()
-    } else {
-        Compiler::new()
+    // Compile LESS to CSS — CLI 标志与库配置一一对应，统一走 CompilerOptions 构建
+    let options = rust_less::CompilerOptions {
+        compress: matches.get_flag("compress"),
+        source_map: source_map_enabled,
+        source_map_lessjs_compat: matches.get_flag("source-map-lessjs-compat"),
+        source_map_root: matches.get_one::<String>("source-map-root").cloned(),
+        source_map_file: output_file.clone(),
+        include_paths: matches
+            .get_many::<String>("include-path")
+            .map(|paths| paths.cloned().collect())
+            .unwrap_or_default(),
     };
-
-    if source_map_enabled {
-        compiler = compiler.with_source_map(true);
-        if let Some(source_root) = matches.get_one::<String>("source-map-root") {
-            compiler.set_source_map_source_root(Some(source_root.clone()));
-        }
-        compiler.set_source_map_lessjs_compat(matches.get_flag("source-map-lessjs-compat"));
-        if let Some(output) = &output_file {
-            compiler.set_source_map_file(Some(output.clone()));
-        }
-    }
-
-    // Add include paths
-    if let Some(paths) = matches.get_many::<String>("include-path") {
-        for path in paths {
-            compiler.add_include_path(path);
-        }
-    }
+    let mut compiler = options.build();
 
     // Compile from file or stdin
     let css_output = if let Some(input_path) = &input_file {
