@@ -7,22 +7,140 @@ use crate::error::{Error, Result};
 use crate::lexer::{Lexer, Token, TokenType};
 
 /// LESS 语法解析器
-pub struct Parser {
+pub struct Parser<'a> {
     tokens: Vec<Token>,
     current: usize,
+    /// 插件解析钩子表（自定义 at-rule，见 `plugin::ParseHook`）
+    parse_hooks: Vec<&'a dyn crate::plugin::ParseHook>,
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     /// 从词法分析器创建新的解析器
     pub fn new(mut lexer: Lexer) -> Result<Self> {
         let tokens = lexer.tokenize()?;
-        Ok(Self { tokens, current: 0 })
+        Ok(Self {
+            tokens,
+            current: 0,
+            parse_hooks: Vec::new(),
+        })
     }
 
     /// 从输入字符串创建新的解析器
     pub fn from_string(input: String) -> Result<Self> {
         let lexer = Lexer::new(input);
         Self::new(lexer)
+    }
+
+    /// 设置插件解析钩子表（编译器在解析前注入）
+    pub fn set_parse_hooks(&mut self, hooks: Vec<&'a dyn crate::plugin::ParseHook>) {
+        self.parse_hooks = hooks;
+    }
+
+    /// 按 at-rule 名称查找插件解析钩子
+    fn find_parse_hook(&self, name: &str) -> Option<&'a dyn crate::plugin::ParseHook> {
+        self.parse_hooks
+            .iter()
+            .copied()
+            .find(|hook| hook.at_rule_names().contains(&name))
+    }
+
+    /// 解析插件接管的自定义 at-rule：捕获 prelude 与花括号块的原始文本，
+    /// 交由钩子转换为语句序列（钩子只做文本→AST 转换，求值仍在编译期）。
+    fn parse_hooked_at_rule(
+        &mut self,
+        keyword: &str,
+        hook: &'a dyn crate::plugin::ParseHook,
+    ) -> Result<Statement> {
+        let position = self.current_position();
+
+        // Consume @keyword
+        self.advance();
+
+        // Capture raw prelude: everything until { or ;
+        let mut prelude = String::new();
+        let mut prev_end: Option<(usize, usize)> = None;
+        while !self.is_at_end()
+            && !matches!(
+                self.current_token().token_type,
+                TokenType::LeftBrace | TokenType::Semicolon
+            )
+        {
+            let token = self.current_token().clone();
+            if !prelude.is_empty() {
+                if let Some((prev_line, prev_end_col)) = prev_end {
+                    if token.position.line > prev_line || token.position.column > prev_end_col {
+                        prelude.push(' ');
+                    }
+                }
+            }
+            prelude.push_str(&token.lexeme);
+            prev_end = Some((
+                token.position.line,
+                token.position.column + token.lexeme.chars().count(),
+            ));
+            self.advance();
+        }
+
+        // Capture raw block body with balanced braces
+        let mut body = String::new();
+        if self.match_token(TokenType::LeftBrace) {
+            let mut depth = 1usize;
+            let mut prev: Option<(usize, usize)> = None;
+            while !self.is_at_end() && depth > 0 {
+                let token = self.current_token().clone();
+                match token.token_type {
+                    TokenType::LeftBrace => depth += 1,
+                    TokenType::RightBrace => {
+                        depth -= 1;
+                        if depth == 0 {
+                            // 块结束符不属于 body
+                            self.advance();
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                if !body.is_empty() {
+                    if let Some((prev_line, prev_end_col)) = prev {
+                        if token.position.line > prev_line || token.position.column > prev_end_col {
+                            body.push(' ');
+                        }
+                    }
+                }
+                body.push_str(&token.lexeme);
+                prev = Some((
+                    token.position.line,
+                    token.position.column + token.lexeme.chars().count(),
+                ));
+                self.advance();
+            }
+            if depth > 0 {
+                return Err(Error::parse_error(
+                    "Expected '}' after at-rule body",
+                    position.line,
+                    position.column,
+                ));
+            }
+        } else {
+            self.match_token(TokenType::Semicolon);
+        }
+
+        let prelude_opt = if prelude.trim().is_empty() {
+            None
+        } else {
+            Some(prelude.trim().to_string())
+        };
+        let statements = hook
+            .parse_at_rule(keyword, prelude_opt.as_deref(), &body, &position)
+            .map_err(|e| crate::plugin::wrap_plugin_error(hook.name(), e))?;
+
+        // 钩子拥有 prelude/body 的完整解释权：其产出的语句进入块中；
+        // 未产出语句时不设置块，保持语句形态（`@name;`）。
+        let mut at_rule = AtRule::new(keyword.to_string(), position);
+        if !statements.is_empty() {
+            at_rule = at_rule.with_block(statements);
+        }
+        Ok(Statement::AtRule(at_rule))
     }
 
     /// 解析整个样式表
@@ -156,6 +274,10 @@ impl Parser {
                     Ok(Some(Statement::DetachedRulesetCall(
                         self.parse_detached_ruleset_call()?,
                     )))
+                } else if let Some(hook) = self.find_parse_hook(keyword) {
+                    // 插件解析钩子：自定义 at-rule（docs/PLUGIN_HOOKS_DESIGN.md §3.2）
+                    let keyword = keyword.clone();
+                    Ok(Some(self.parse_hooked_at_rule(&keyword, hook)?))
                 } else {
                     Ok(Some(Statement::AtRule(self.parse_at_rule()?)))
                 }

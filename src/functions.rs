@@ -152,6 +152,21 @@ impl FunctionRegistry {
         self.functions.insert(name.to_string(), func);
     }
 
+    /// 注册插件函数（[`crate::plugin::LessFunction`]），与内置函数同一调用路径。
+    /// 插件错误统一包装为 [`crate::Error::PluginError`]，不静默吞掉。
+    pub fn register_plugin(&mut self, plugin: Box<dyn crate::plugin::LessFunction>) {
+        let name = plugin.name().to_string();
+        let plugin_name = name.clone();
+        self.functions.insert(
+            name,
+            Box::new(move |args, position| {
+                plugin
+                    .call(args, position)
+                    .map_err(|e| crate::plugin::wrap_plugin_error(&plugin_name, e))
+            }),
+        );
+    }
+
     /// Call a function by name
     pub fn call(&self, name: &str, args: &[Expression], position: &Position) -> Result<Expression> {
         if let Some(func) = self.functions.get(name) {

@@ -4,6 +4,98 @@ use crate::error::{Error, Result};
 use crate::parser::Parser;
 use std::path::{Path, PathBuf};
 
+impl Compiler {
+    /// 依次调用插件导入解析器链；`Some((规范路径, 内容))` 表示命中。
+    /// 解析链顺序：插件解析器 → include_paths → 默认文件系统。
+    fn resolve_import_with_plugins(&self, import: &Import) -> Result<Option<(String, String)>> {
+        if self.import_resolvers.is_empty() {
+            return Ok(None);
+        }
+        let specifier = import.path.trim_matches('"').trim_matches('\'');
+        for resolver in &self.import_resolvers {
+            match resolver.resolve(specifier, &self.current_file) {
+                Ok(Some(resolved)) => return Ok(Some(resolved)),
+                Ok(None) => continue,
+                Err(e) => return Err(crate::plugin::wrap_plugin_error(resolver.name(), e)),
+            }
+        }
+        Ok(None)
+    }
+
+    /// 编译已解析的 LESS 导入内容（来自文件系统或插件解析器）。
+    ///
+    /// `canonical_path` 用于循环依赖检测与 source map 归属；
+    /// `reference` 为 true 时只引入定义（reference 导入），不产生输出。
+    fn compile_imported_less(
+        &mut self,
+        import: &Import,
+        canonical_path: &str,
+        content: String,
+        reference: bool,
+    ) -> Result<()> {
+        let canonical = PathBuf::from(canonical_path);
+
+        // 检查循环依赖（multiple 导入允许同一文件多次引入）
+        if !import.multiple {
+            if self.imported_files.contains(&canonical) {
+                // 默认 once 语义：跳过已导入的文件
+                return Ok(());
+            }
+            self.imported_files.insert(canonical.clone());
+        }
+
+        // 保存当前基础路径和源文件
+        let old_base_path = self.base_path.clone();
+        let old_file = self.current_file.clone();
+
+        // 更新基础路径和当前文件为导入文件
+        self.base_path = canonical.parent().map(|p| p.to_path_buf());
+        self.current_file = canonical_path.to_string();
+
+        // 解析导入的文件（插件解析钩子对导入文件同样生效）
+        let mut parser = Parser::from_string(content).map_err(|e| {
+            Error::import_error(
+                &import.path,
+                format!("Parse error: {}", e),
+                import.position.line,
+                import.position.column,
+            )
+        })?;
+        if !self.parse_hooks.is_empty() {
+            parser.set_parse_hooks(
+                self.parse_hooks
+                    .iter()
+                    .map(|hook| hook.as_ref() as &dyn crate::plugin::ParseHook)
+                    .collect(),
+            );
+        }
+
+        let stylesheet = parser.parse().map_err(|e| {
+            Error::import_error(
+                &import.path,
+                format!("Parse error: {}", e),
+                import.position.line,
+                import.position.column,
+            )
+        })?;
+
+        // reference 导入复用完整 compile_stylesheet 逻辑（含嵌套 mixin/变量），
+        // 通过 suppress_output 抑制输出
+        let old_suppress = self.suppress_output;
+        if reference {
+            self.suppress_output = true;
+        }
+        let result = self.compile_stylesheet(&stylesheet);
+        self.suppress_output = old_suppress;
+
+        // 恢复基础路径和源文件
+        self.base_path = old_base_path;
+        self.current_file = old_file;
+
+        result
+    }
+}
+
 /// 导入编译特性
 pub trait ImportCompiler {
     /// 编译导入
@@ -26,7 +118,10 @@ impl ImportCompiler for Compiler {
     fn compile_import(&mut self, import: &Import) -> Result<()> {
         // Optional imports are silently skipped when the target file is missing
         // (CSS pass-through imports never touch the filesystem, so they are exempt).
-        if import.optional && import.import_type != ImportType::Css {
+        if import.optional
+            && import.import_type != ImportType::Css
+            && self.resolve_import_with_plugins(import)?.is_none()
+        {
             if let Err(Error::ImportError { .. }) = self.resolve_import_path(&import.path) {
                 return Ok(());
             }
@@ -115,6 +210,11 @@ impl ImportCompiler for Compiler {
     }
 
     fn compile_less_import(&mut self, import: &Import) -> Result<()> {
+        // 插件导入解析器链优先（docs/PLUGIN_HOOKS_DESIGN.md §3.4）
+        if let Some((canonical_path, content)) = self.resolve_import_with_plugins(import)? {
+            return self.compile_imported_less(import, &canonical_path, content, false);
+        }
+
         let resolved_path = self.resolve_import_path(&import.path).map_err(|e| {
             if let Error::ImportError { path, reason, .. } = e {
                 Error::import_error(&path, reason, import.position.line, import.position.column)
@@ -122,25 +222,6 @@ impl ImportCompiler for Compiler {
                 e
             }
         })?;
-
-        // 检查循环依赖（multiple 导入允许同一文件多次引入）
-        if !import.multiple {
-            if self.imported_files.contains(&resolved_path) {
-                // 默认 once 语义：跳过已导入的文件
-                return Ok(());
-            }
-
-            // 添加到已导入集合
-            self.imported_files.insert(resolved_path.clone());
-        }
-
-        // 保存当前基础路径和源文件
-        let old_base_path = self.base_path.clone();
-        let old_file = self.current_file.clone();
-
-        // 更新基础路径和当前文件为导入文件
-        self.base_path = resolved_path.parent().map(|p| p.to_path_buf());
-        self.current_file = resolved_path.display().to_string();
 
         // 读取文件内容
         let content = std::fs::read_to_string(&resolved_path).map_err(|e| {
@@ -152,36 +233,15 @@ impl ImportCompiler for Compiler {
             )
         })?;
 
-        // 解析导入的文件
-        let mut parser = Parser::from_string(content).map_err(|e| {
-            Error::import_error(
-                &import.path,
-                format!("Parse error: {}", e),
-                import.position.line,
-                import.position.column,
-            )
-        })?;
-
-        let stylesheet = parser.parse().map_err(|e| {
-            Error::import_error(
-                &import.path,
-                format!("Parse error: {}", e),
-                import.position.line,
-                import.position.column,
-            )
-        })?;
-
-        // 编译导入的样式表
-        self.compile_stylesheet(&stylesheet)?;
-
-        // 恢复基础路径和源文件
-        self.base_path = old_base_path;
-        self.current_file = old_file;
-
-        Ok(())
+        self.compile_imported_less(import, &resolved_path.display().to_string(), content, false)
     }
 
     fn compile_less_import_reference(&mut self, import: &Import) -> Result<()> {
+        // 插件导入解析器链优先
+        if let Some((canonical_path, content)) = self.resolve_import_with_plugins(import)? {
+            return self.compile_imported_less(import, &canonical_path, content, true);
+        }
+
         let resolved_path = self.resolve_import_path(&import.path).map_err(|e| {
             if let Error::ImportError { path, reason, .. } = e {
                 Error::import_error(&path, reason, import.position.line, import.position.column)
@@ -189,20 +249,6 @@ impl ImportCompiler for Compiler {
                 e
             }
         })?;
-
-        // 检查循环依赖（multiple 导入允许同一文件多次引入）
-        if !import.multiple {
-            if self.imported_files.contains(&resolved_path) {
-                return Ok(());
-            }
-
-            self.imported_files.insert(resolved_path.clone());
-        }
-
-        let old_base_path = self.base_path.clone();
-        let old_file = self.current_file.clone();
-        self.base_path = resolved_path.parent().map(|p| p.to_path_buf());
-        self.current_file = resolved_path.display().to_string();
 
         let content = std::fs::read_to_string(&resolved_path).map_err(|e| {
             Error::import_error(
@@ -213,60 +259,39 @@ impl ImportCompiler for Compiler {
             )
         })?;
 
-        let mut parser = Parser::from_string(content).map_err(|e| {
-            Error::import_error(
-                &import.path,
-                format!("Parse error: {}", e),
-                import.position.line,
-                import.position.column,
-            )
-        })?;
-
-        let stylesheet = parser.parse().map_err(|e| {
-            Error::import_error(
-                &import.path,
-                format!("Parse error: {}", e),
-                import.position.line,
-                import.position.column,
-            )
-        })?;
-
-        // 使用 suppress_output 标志来处理引用导入
-        // 这允许我们复用完整的 compile_stylesheet 逻辑（包括嵌套 mixins, 变量等）
-        // 而不会生成任何 CSS 输出
-        let old_suppress = self.suppress_output;
-        self.suppress_output = true;
-
-        self.compile_stylesheet(&stylesheet)?;
-
-        self.suppress_output = old_suppress;
-        self.base_path = old_base_path;
-        self.current_file = old_file;
-
-        Ok(())
+        self.compile_imported_less(import, &resolved_path.display().to_string(), content, true)
     }
 
     fn compile_inline_import(&mut self, import: &Import) -> Result<()> {
-        let resolved_path = self.resolve_import_path(&import.path).map_err(|e| {
-            if let Error::ImportError { path, reason, .. } = e {
-                Error::import_error(&path, reason, import.position.line, import.position.column)
-            } else {
-                e
-            }
-        })?;
+        // 插件导入解析器链优先
+        let (display_path, content) = if let Some((canonical_path, content)) =
+            self.resolve_import_with_plugins(import)?
+        {
+            (canonical_path, content)
+        } else {
+            let resolved_path = self.resolve_import_path(&import.path).map_err(|e| {
+                if let Error::ImportError { path, reason, .. } = e {
+                    Error::import_error(&path, reason, import.position.line, import.position.column)
+                } else {
+                    e
+                }
+            })?;
 
-        let content = std::fs::read_to_string(&resolved_path).map_err(|e| {
-            Error::import_error(
-                &import.path,
-                e.to_string(),
-                import.position.line,
-                import.position.column,
-            )
-        })?;
+            let content = std::fs::read_to_string(&resolved_path).map_err(|e| {
+                Error::import_error(
+                    &import.path,
+                    e.to_string(),
+                    import.position.line,
+                    import.position.column,
+                )
+            })?;
+
+            (resolved_path.display().to_string(), content)
+        };
 
         // Inline import maps directly to the imported file content.
         let old_file = self.current_file.clone();
-        self.current_file = resolved_path.display().to_string();
+        self.current_file = display_path;
 
         let mut src_line = 1usize;
         for line in content.split_inclusive('\n') {

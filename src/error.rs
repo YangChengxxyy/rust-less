@@ -141,6 +141,18 @@ pub enum Error {
 
     /// 内部编译器错误（bug）
     InternalError { message: String },
+
+    /// 插件错误（插件名称、错误信息、位置）
+    PluginError {
+        /// 插件名称
+        plugin: String,
+        /// 错误信息
+        message: String,
+        /// 错误行号
+        line: usize,
+        /// 错误列号
+        column: usize,
+    },
 }
 
 impl Error {
@@ -331,6 +343,21 @@ impl Error {
         }
     }
 
+    /// 创建插件错误
+    pub fn plugin_error(
+        plugin: impl Into<String>,
+        message: impl Into<String>,
+        line: usize,
+        column: usize,
+    ) -> Self {
+        Error::PluginError {
+            plugin: plugin.into(),
+            message: message.into(),
+            line,
+            column,
+        }
+    }
+
     /// 创建内部错误
     pub fn internal_error(message: impl Into<String>) -> Self {
         Error::InternalError {
@@ -356,7 +383,8 @@ impl Error {
             | Error::GuardError { line, .. }
             | Error::InfiniteRecursion { line, .. }
             | Error::InvalidSelector { line, .. }
-            | Error::InvalidProperty { line, .. } => Some(*line),
+            | Error::InvalidProperty { line, .. }
+            | Error::PluginError { line, .. } => Some(*line),
             Error::IoError { .. }
             | Error::CompilationError { .. }
             | Error::InternalError { .. } => None,
@@ -381,7 +409,8 @@ impl Error {
             | Error::GuardError { column, .. }
             | Error::InfiniteRecursion { column, .. }
             | Error::InvalidSelector { column, .. }
-            | Error::InvalidProperty { column, .. } => Some(*column),
+            | Error::InvalidProperty { column, .. }
+            | Error::PluginError { column, .. } => Some(*column),
             Error::IoError { .. }
             | Error::CompilationError { .. }
             | Error::InternalError { .. } => None,
@@ -435,6 +464,9 @@ impl Error {
             } => {
                 format!("Invalid property '{}' with value '{}'", property, value)
             }
+            Error::PluginError {
+                plugin, message, ..
+            } => format!("Plugin '{}' error: {}", plugin, message),
             Error::CompilationError { message } => format!("Compilation error: {}", message),
             Error::InternalError { message } => format!("Internal error: {}", message),
         }

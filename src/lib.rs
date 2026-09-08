@@ -14,6 +14,7 @@ pub mod error;
 pub mod extend;
 pub mod lexer;
 pub mod parser;
+pub mod plugin;
 
 #[cfg(feature = "functions")]
 pub mod functions;
@@ -55,7 +56,7 @@ pub fn compile_file<P: AsRef<Path>>(path: P) -> Result<String> {
 
 /// 使用自定义选项将 LESS 源代码编译为 CSS
 pub fn compile_with_options(input: &str, options: CompilerOptions) -> Result<String> {
-    let mut compiler = build_compiler_from_options(&options);
+    let mut compiler = build_compiler_from_options(options)?;
     compiler.compile(input)
 }
 
@@ -68,11 +69,11 @@ pub fn compile_file_with_options<P: AsRef<Path>>(
     path: P,
     options: CompilerOptions,
 ) -> Result<String> {
-    let mut compiler = build_compiler_from_options(&options);
+    let mut compiler = build_compiler_from_options(options)?;
     compiler.compile_file(path)
 }
 
-fn build_compiler_from_options(options: &CompilerOptions) -> Compiler {
+fn build_compiler_from_options(options: CompilerOptions) -> Result<Compiler> {
     options.build()
 }
 
@@ -80,7 +81,11 @@ fn build_compiler_from_options(options: &CompilerOptions) -> Compiler {
 ///
 /// 与 CLI 标志一一对应：`compress`/`source_map`/`source_map_lessjs_compat`/
 /// `source_map_root`/`source_map_file`/`include_paths`。
-#[derive(Debug, Clone, Default)]
+///
+/// 插件通过 `with_function_plugin` / `with_parse_hook` / `with_visitor` /
+/// `with_import_resolver` 注册（见 [`plugin`](crate::plugin) 模块与
+/// `docs/PLUGIN_HOOKS_DESIGN.md`）。
+#[derive(Default)]
 pub struct CompilerOptions {
     /// 是否压缩输出的 CSS
     pub compress: bool,
@@ -94,11 +99,83 @@ pub struct CompilerOptions {
     pub source_map_file: Option<String>,
     /// 导入的额外包含路径
     pub include_paths: Vec<String>,
+    /// 自定义函数插件，与内置函数同一调用路径（后注册覆盖同名内置函数）
+    pub functions: Vec<Box<dyn plugin::LessFunction>>,
+    /// 自定义 at-rule 解析钩子
+    pub parse_hooks: Vec<Box<dyn plugin::ParseHook>>,
+    /// 编译期 visitor（规则改写 + 输出后处理）
+    pub visitors: Vec<Box<dyn plugin::CompileVisitor>>,
+    /// 导入解析钩子（插件 → include_paths → 默认文件系统）
+    pub import_resolvers: Vec<Box<dyn plugin::ImportResolver>>,
+}
+
+impl std::fmt::Debug for CompilerOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompilerOptions")
+            .field("compress", &self.compress)
+            .field("source_map", &self.source_map)
+            .field("source_map_lessjs_compat", &self.source_map_lessjs_compat)
+            .field("source_map_root", &self.source_map_root)
+            .field("source_map_file", &self.source_map_file)
+            .field("include_paths", &self.include_paths)
+            .field(
+                "functions",
+                &self.functions.iter().map(|p| p.name()).collect::<Vec<_>>(),
+            )
+            .field(
+                "parse_hooks",
+                &self
+                    .parse_hooks
+                    .iter()
+                    .map(|p| p.name())
+                    .collect::<Vec<_>>(),
+            )
+            .field(
+                "visitors",
+                &self.visitors.iter().map(|p| p.name()).collect::<Vec<_>>(),
+            )
+            .field(
+                "import_resolvers",
+                &self
+                    .import_resolvers
+                    .iter()
+                    .map(|p| p.name())
+                    .collect::<Vec<_>>(),
+            )
+            .finish()
+    }
 }
 
 impl CompilerOptions {
-    /// 按当前选项构建配置好的 [`Compiler`]
-    pub fn build(&self) -> Compiler {
+    /// 注册自定义函数插件（见 [`plugin::LessFunction`]）。
+    pub fn with_function_plugin(mut self, plugin: Box<dyn plugin::LessFunction>) -> Self {
+        self.functions.push(plugin);
+        self
+    }
+
+    /// 注册自定义 at-rule 解析钩子（见 [`plugin::ParseHook`]）。
+    pub fn with_parse_hook(mut self, hook: Box<dyn plugin::ParseHook>) -> Self {
+        self.parse_hooks.push(hook);
+        self
+    }
+
+    /// 注册编译期 visitor（见 [`plugin::CompileVisitor`]）。
+    pub fn with_visitor(mut self, visitor: Box<dyn plugin::CompileVisitor>) -> Self {
+        self.visitors.push(visitor);
+        self
+    }
+
+    /// 注册导入解析钩子（见 [`plugin::ImportResolver`]）。
+    pub fn with_import_resolver(mut self, resolver: Box<dyn plugin::ImportResolver>) -> Self {
+        self.import_resolvers.push(resolver);
+        self
+    }
+
+    /// 按当前选项构建配置好的 [`Compiler`]（消耗选项，插件移入编译器）。
+    ///
+    /// 插件声明的 API 版本与 [`plugin::PLUGIN_API_VERSION`] 不一致时返回
+    /// [`Error::PluginError`]。
+    pub fn build(self) -> Result<Compiler> {
         let mut compiler = if self.compress {
             Compiler::compressed()
         } else {
@@ -120,7 +197,20 @@ impl CompilerOptions {
             compiler.add_include_path(include_path);
         }
 
-        compiler
+        for function_plugin in self.functions {
+            compiler.register_function_plugin(function_plugin)?;
+        }
+        for parse_hook in self.parse_hooks {
+            compiler.register_parse_hook(parse_hook)?;
+        }
+        for visitor in self.visitors {
+            compiler.register_visitor(visitor)?;
+        }
+        for resolver in self.import_resolvers {
+            compiler.register_import_resolver(resolver)?;
+        }
+
+        Ok(compiler)
     }
 }
 
@@ -150,7 +240,7 @@ mod tests {
             include_paths: vec![],
             ..Default::default()
         };
-        let mut compiler = build_compiler_from_options(&options);
+        let mut compiler = build_compiler_from_options(options).unwrap();
         compiler.compile(".test { color: red; }").unwrap();
         assert!(compiler.generate_source_map().is_some());
     }

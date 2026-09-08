@@ -37,6 +37,21 @@ pub trait RuleCompiler {
 
 impl RuleCompiler for Compiler {
     fn compile_rule(&mut self, rule: &Rule, parent_selectors: &[String]) -> Result<()> {
+        // 插件钩子：规则发射前访问，可改写选择器/声明
+        //（docs/PLUGIN_HOOKS_DESIGN.md §3.3）
+        let mut rule_owned;
+        let rule: &Rule = if self.visitors.is_empty() {
+            rule
+        } else {
+            rule_owned = rule.clone();
+            for visitor in &self.visitors {
+                visitor
+                    .pre_visit_rule(&mut rule_owned)
+                    .map_err(|e| crate::plugin::wrap_plugin_error(visitor.name(), e))?;
+            }
+            &rule_owned
+        };
+
         // Register this rule as a mixin in the current scope (Implicit Mixin)
         self.register_rule_as_mixin(rule);
 

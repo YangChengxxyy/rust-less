@@ -58,7 +58,26 @@
 | 功能 | 优先级 | 复杂度 | 预计影响 |
 |------|--------|--------|----------|
 | **Maps 高级语义** | 🔥 | 高 | 嵌套结构操作、边界行为与 LESS 4.x 完全对齐 |
-| **插件系统** | 🔥 | 高 | 扩展性 |
+
+### 🔌 插件系统（已实现）
+
+进程内 Rust API 插件系统已落地（`rust_less::plugin` 模块，详见
+[`docs/PLUGIN_HOOKS_DESIGN.md`](docs/PLUGIN_HOOKS_DESIGN.md) 与
+[`examples/plugin_system.rs`](examples/plugin_system.rs)）：
+
+| 扩展点 | Trait | 说明 |
+|--------|-------|------|
+| 自定义函数 | `LessFunction` | 与内置函数同一调用路径，后注册覆盖同名内置函数 |
+| 解析钩子 | `ParseHook` | 自定义 `@at-rule` 的文本→AST 转换 |
+| 编译期 visitor | `CompileVisitor` | 规则发射前改写（`pre_visit_rule`）+ 输出后处理（`post_process`） |
+| 导入解析器 | `ImportResolver` | 链式解析：插件 → `include_paths` → 文件系统 |
+
+插件声明 `api_version`（当前 `PLUGIN_API_VERSION = 1`），版本不兼容时构建期
+返回 `Error::PluginError`；声明 `invalidates_source_map` 的 visitor 与 source map
+输出冲突时同样在构建期报错。注册入口：`CompilerOptions::with_function_plugin` /
+`with_parse_hook` / `with_visitor` / `with_import_resolver`，或
+`Compiler::register_function_plugin` / `register_parse_hook` / `register_visitor` /
+`register_import_resolver`。
 
 ## 🚀 快速开始
 
@@ -419,7 +438,9 @@ bash tools/status-check/run-status-check.sh --with-perf
 - [ ] Language Server Protocol
 - [ ] 构建工具插件 (Webpack, Vite, Rollup)
 - [ ] WebAssembly 发布流程标准化（`pkg/` 产物与文档）
-- [ ] 插件系统（版本化 API + 示例插件）
+- [x] 插件系统（`LessFunction`/`ParseHook`/`CompileVisitor`/`ImportResolver` 四类扩展点 +
+  `PLUGIN_API_VERSION` 版本化 + 示例插件 `examples/plugin_system.rs`，
+  见 `docs/PLUGIN_HOOKS_DESIGN.md`）
 
 ## 🤝 贡献指南
 

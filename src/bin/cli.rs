@@ -121,8 +121,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .get_many::<String>("include-path")
             .map(|paths| paths.cloned().collect())
             .unwrap_or_default(),
+        ..Default::default()
     };
-    let mut compiler = options.build();
+    let mut compiler = options.build()?;
 
     // Compile from file or stdin
     let css_output = if let Some(input_path) = &input_file {

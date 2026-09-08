@@ -84,6 +84,12 @@ pub struct Compiler {
     /// compiled; used to keep source-map columns anchored to source text when
     /// the emitted prelude has variables resolved.
     pub(crate) original_at_rule_prelude: Option<String>,
+    /// 插件解析钩子表（按注册顺序，见 `plugin::ParseHook`）
+    pub(crate) parse_hooks: Vec<Box<dyn crate::plugin::ParseHook>>,
+    /// 插件编译期 visitor（按注册顺序，见 `plugin::CompileVisitor`）
+    pub(crate) visitors: Vec<Box<dyn crate::plugin::CompileVisitor>>,
+    /// 插件导入解析器链（按注册顺序，见 `plugin::ImportResolver`）
+    pub(crate) import_resolvers: Vec<Box<dyn crate::plugin::ImportResolver>>,
 }
 
 impl Compiler {
@@ -113,6 +119,9 @@ impl Compiler {
             force_important: false,
             pending_merges: std::collections::HashMap::new(),
             original_at_rule_prelude: None,
+            parse_hooks: Vec::new(),
+            visitors: Vec::new(),
+            import_resolvers: Vec::new(),
         }
     }
 
@@ -142,6 +151,9 @@ impl Compiler {
             force_important: false,
             pending_merges: std::collections::HashMap::new(),
             original_at_rule_prelude: None,
+            parse_hooks: Vec::new(),
+            visitors: Vec::new(),
+            import_resolvers: Vec::new(),
         }
     }
 
@@ -160,6 +172,66 @@ impl Compiler {
         F: Fn(&[Expression], &Position) -> Result<Expression> + 'static,
     {
         self.function_registry.register(name, func);
+    }
+
+    /// 注册自定义函数插件（[`crate::plugin::LessFunction`]）。
+    ///
+    /// 与内置函数同一调用路径；后注册覆盖同名内置函数。
+    /// 插件声明的 API 版本与 [`crate::plugin::PLUGIN_API_VERSION`] 不一致时
+    /// 返回 [`Error::PluginError`]。
+    pub fn register_function_plugin(
+        &mut self,
+        plugin: Box<dyn crate::plugin::LessFunction>,
+    ) -> Result<()> {
+        crate::plugin::check_api_version(plugin.name(), plugin.api_version())?;
+        self.function_registry.register_plugin(plugin);
+        Ok(())
+    }
+
+    /// 注册自定义 at-rule 解析钩子（[`crate::plugin::ParseHook`]）。
+    ///
+    /// 精确匹配钩子声明名称的 `@at-rule` 在解析期交由钩子转换；
+    /// 未命中走现有通用 at-rule 路径。
+    pub fn register_parse_hook(&mut self, hook: Box<dyn crate::plugin::ParseHook>) -> Result<()> {
+        crate::plugin::check_api_version(hook.name(), hook.api_version())?;
+        self.parse_hooks.push(hook);
+        Ok(())
+    }
+
+    /// 注册编译期 visitor（[`crate::plugin::CompileVisitor`]）。
+    ///
+    /// * `pre_visit_rule` 在每条规则发射前调用，可改写选择器/声明；
+    /// * `post_process` 在编译完成后按注册顺序依次调用。
+    ///
+    /// 声明 [`crate::plugin::CompileVisitor::invalidates_source_map`]
+    /// 的 visitor 与启用的 source map 冲突时返回 [`Error::PluginError`]。
+    pub fn register_visitor(
+        &mut self,
+        visitor: Box<dyn crate::plugin::CompileVisitor>,
+    ) -> Result<()> {
+        crate::plugin::check_api_version(visitor.name(), visitor.api_version())?;
+        if visitor.invalidates_source_map() && self.source_map_generator.is_enabled() {
+            return Err(Error::plugin_error(
+                visitor.name(),
+                "visitor invalidates source map but source map output is enabled",
+                0,
+                0,
+            ));
+        }
+        self.visitors.push(visitor);
+        Ok(())
+    }
+
+    /// 注册导入解析钩子（[`crate::plugin::ImportResolver`]）。
+    ///
+    /// 解析链顺序：插件解析器 → include_paths → 默认文件系统。
+    pub fn register_import_resolver(
+        &mut self,
+        resolver: Box<dyn crate::plugin::ImportResolver>,
+    ) -> Result<()> {
+        crate::plugin::check_api_version(resolver.name(), resolver.api_version())?;
+        self.import_resolvers.push(resolver);
+        Ok(())
     }
 
     /// 获取生成的源码映射
@@ -386,6 +458,14 @@ impl Compiler {
             .set_source_base_path(source_base_path);
 
         let mut parser = Parser::from_string(input.to_string())?;
+        if !self.parse_hooks.is_empty() {
+            parser.set_parse_hooks(
+                self.parse_hooks
+                    .iter()
+                    .map(|hook| hook.as_ref() as &dyn crate::plugin::ParseHook)
+                    .collect(),
+            );
+        }
         let stylesheet = parser.parse()?;
 
         self.output.clear();
@@ -400,6 +480,15 @@ impl Compiler {
 
         // Output any pending media queries
         self.output_pending_media_queries()?;
+
+        // 后处理器：按注册顺序依次调用（对齐 less.js post-processor）
+        let mut css = std::mem::take(&mut self.output);
+        for visitor in &self.visitors {
+            visitor
+                .post_process(&mut css)
+                .map_err(|e| crate::plugin::wrap_plugin_error(visitor.name(), e))?;
+        }
+        self.output = css;
 
         Ok(self.output.clone())
     }

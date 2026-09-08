@@ -963,7 +963,8 @@ mod import_option_combinations {
         let result = compile_with_fixtures(r#"@import (bogus) "emit.less";"#);
         match result {
             Err(err) => assert!(
-                err.message().contains("unrecognised @import option 'bogus'"),
+                err.message()
+                    .contains("unrecognised @import option 'bogus'"),
                 "Unexpected error: {}",
                 err.message()
             ),

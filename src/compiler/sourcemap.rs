@@ -47,6 +47,11 @@ impl SourceMapGenerator {
         }
     }
 
+    /// Whether source map generation is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
     /// Set generated CSS file field in source map.
     pub fn set_file(&self, output_file: Option<&str>) {
         let output_file = output_file.map(|s| s.to_string());
