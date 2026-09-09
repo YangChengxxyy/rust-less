@@ -483,6 +483,20 @@ impl Compiler {
         };
 
         let value = self.evaluate_expression(&declaration.value)?;
+
+        // less.js: rulesets (and therefore maps, which are rulesets) cannot be
+        // evaluated on a property. Reject instead of leaking a Debug fallback.
+        if matches!(
+            &value,
+            Expression::MapLiteral { .. } | Expression::DetachedRuleset { .. }
+        ) {
+            return Err(Error::semantic_error(
+                "Rulesets and maps cannot be used as a property value",
+                declaration.position.line,
+                declaration.position.column,
+            ));
+        }
+
         let value_str = value.to_css();
 
         // Handle property merge (+: and +_: syntax)

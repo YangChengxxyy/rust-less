@@ -1062,7 +1062,7 @@ fn map_lookup_path<'a>(
     for (index, key) in path.iter().enumerate() {
         let value = if let Some((_, value, _)) = current_entries
             .iter()
-            .find(|(k, _, _)| map_keys_equal(k, key))
+            .rev().find(|(k, _, _)| map_keys_equal(k, key))
         {
             value
         } else {
@@ -1104,7 +1104,7 @@ fn remove_map_path(
     if path.len() == 1 {
         if let Some(index) = entries
             .iter()
-            .position(|(k, _, _)| map_keys_equal(k, &path[0]))
+            .rposition(|(k, _, _)| map_keys_equal(k, &path[0]))
         {
             entries.remove(index);
             return RemoveMapPathResult::Removed;
@@ -1121,7 +1121,7 @@ fn remove_map_path(
         _,
     )) = entries
         .iter_mut()
-        .find(|(k, _, _)| map_keys_equal(k, &path[0]))
+        .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
     {
         return remove_map_path(nested_entries, &path[1..]);
     }
@@ -1144,7 +1144,7 @@ fn deep_remove_map_path(
     if path.len() == 1 {
         if let Some(index) = entries
             .iter()
-            .position(|(k, _, _)| map_keys_equal(k, &path[0]))
+            .rposition(|(k, _, _)| map_keys_equal(k, &path[0]))
         {
             entries.remove(index);
             return RemoveMapPathResult::Removed;
@@ -1154,7 +1154,7 @@ fn deep_remove_map_path(
 
     let Some(index) = entries
         .iter()
-        .position(|(k, _, _)| map_keys_equal(k, &path[0]))
+        .rposition(|(k, _, _)| map_keys_equal(k, &path[0]))
     else {
         return RemoveMapPathResult::Missing;
     };
@@ -1194,7 +1194,7 @@ fn set_map_path(
     if path.len() == 1 {
         if let Some((_, existing, _)) = entries
             .iter_mut()
-            .find(|(k, _, _)| map_keys_equal(k, &path[0]))
+            .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
         {
             *existing = value.clone();
         } else {
@@ -1205,7 +1205,7 @@ fn set_map_path(
 
     if let Some((_, existing, _)) = entries
         .iter_mut()
-        .find(|(k, _, _)| map_keys_equal(k, &path[0]))
+        .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
     {
         if let Expression::MapLiteral {
             entries: nested_entries,
@@ -1254,7 +1254,7 @@ fn update_map_path(
     if path.len() == 1 {
         if let Some((_, existing, _)) = entries
             .iter_mut()
-            .find(|(k, _, _)| map_keys_equal(k, &path[0]))
+            .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
         {
             *existing = value.clone();
             return Ok(true);
@@ -1264,7 +1264,7 @@ fn update_map_path(
 
     if let Some((_, existing, _)) = entries
         .iter_mut()
-        .find(|(k, _, _)| map_keys_equal(k, &path[0]))
+        .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
     {
         if let Expression::MapLiteral {
             entries: nested_entries,
@@ -1284,7 +1284,7 @@ fn deep_merge_entries(
     source: &[(String, Expression, Position)],
 ) {
     for (key, value, key_position) in source {
-        if let Some((_, existing, _)) = target.iter_mut().find(|(k, _, _)| map_keys_equal(k, key)) {
+        if let Some((_, existing, _)) = target.iter_mut().rev().find(|(k, _, _)| map_keys_equal(k, key)) {
             if let Expression::MapLiteral {
                 entries: target_nested,
                 ..
@@ -1570,7 +1570,7 @@ fn map_merge_function(args: &[Expression], position: &Position) -> Result<Expres
 
         for (key, value, key_position) in entries {
             if let Some((_, existing, _)) =
-                merged.iter_mut().find(|(k, _, _)| map_keys_equal(k, key))
+                merged.iter_mut().rev().find(|(k, _, _)| map_keys_equal(k, key))
             {
                 *existing = value.clone();
             } else {

@@ -10,6 +10,11 @@
 - `map-deep-merge` 多参数顺序：从左到右合并，后参数优先。
 - `map-remove` / `map-deep-remove`：缺失路径为 no-op，不报错。
 - `map-update` / `map-replace`：缺失路径报错；中间路径非 map 报错。
+- 同一字面量内重复键 last-wins（括号访问与 `map-*` 扩展读写一律对齐 less.js ruleset 语义）。
+- 单位键（`1px:`）与负数键（`-1:`）解析与访问。
+- map 值惰性求值（less.js lazy semantics）：声明时存储原始字面量，使用点按当前作用域求值。
+- 插值键 `@{key}:` 与复合键 `pre-@{key}` / `@{key}-suffix`。
+- map / detached ruleset 直接作属性值报错（对齐 less.js SyntaxError，不再泄漏内部 Debug 文本）。
 
 对应测试：
 - `tests/test_maps_compat.rs`
@@ -33,12 +38,18 @@
 - 逐条沉淀“扩展语义（unsupported）”与“原生语义（pass/fail）”的边界说明。
 - 已支持 `mappings` 对齐开关（`--observe-mappings` / `--strict-mappings`）；`lessjs-compat` 脚本默认仍为观测策略，`status-check` 默认启用 strict-mappings 门禁。
 
-### 最近一次实编译结果（2026-02-23）
+### 最近一次实编译结果（2026-09-09）
 
 - 报告文件：`docs/LESSJS_DIFF_REPORT.md`
-- 汇总：`pass=80`, `observed=0`, `fail=0`, `unsupported=16`, `blocked=0`
+- 汇总：`pass=85`, `observed=0`, `fail=0`, `unsupported=16`, `blocked=0`（total=101，strict + strict-mappings）
+- 较 2026-02-23 新增 5 个 A 类用例：`maps-native-dup-key-last-wins`、`maps-native-unit-negative-keys`、`maps-native-lazy-value`、`maps-native-interpolated-key`、`maps-native-map-as-value-error`。
 - 说明：
   - `unsupported=16`：`map-*` 扩展函数场景（less.js 4.5.1 不原生支持）+ 2 个扩展访问语义场景（`map-variable-key-access`、`map-nested-bracket-access`，less.js 对变量 key 与链式括号访问均报错）。
+
+### 历史实编译结果（2026-02-23）
+
+- 汇总：`pass=80`, `observed=0`, `fail=0`, `unsupported=16`, `blocked=0`
+- 说明：
   - `fail=0`：less.js 原生可比场景全部通过，新增 A 类用例：`maps-native-each-map`、`maps-native-each-list`、`maps-native-each-in-rule`、`maps-native-map-override`、`maps-native-media-prelude`。
   - source map 新增深度场景（strict-mappings 全过）：三级导入链混合 at-rule（`sourcemap-triple-chain-mixed-atrule`）、跨文件 detached ruleset（`sourcemap-detached-ruleset-import`）、media prelude 变量求值（`sourcemap-media-prelude-var`）及各 sourceRoot 变体。
 
@@ -86,6 +97,14 @@ node tools/lessjs-compat/run-lessjs-compat.js --case sourcemap --strict-mappings
 
 ## 3. 最近更新
 
+- 已完成 Maps 高级语义 LESS 4.x 边界对齐（2026-09-09）：
+  - 重复键 last-wins：括号访问与 `map-get`/`map-has-key`/`map-set`/`map-update`/`map-replace`/`map-remove` 族及 `map-merge` 合并目标一律取最后一个生效项。
+  - 字面值解析：支持单位键（`1px:`）、负数键（`-1:`）；百分数键作为有意放宽的扩展语法保留。
+  - map 值惰性求值：声明时存储原始字面量，变量使用点按当前作用域求值（对齐 less.js lazy semantics）。
+  - 插值键 `@{key}:` 与复合键 `pre-@{key}` / `@{key}-suffix` 解析与求值。
+  - map / detached ruleset 直接作属性值由泄漏 Debug 文本改为语义报错（对齐 less.js SyntaxError）。
+  - 新增 A 类对照用例 5 个（strict + strict-mappings 全过）；扩展语法分层补充进 `docs/MAPS_PRODUCT_BOUNDARY.md`。
+  - 附带修复：`test_cli_source_map.rs` 临时目录在并发测试下的偶发碰撞（目录名加入测试标签）。
 - 已完成 v0.4.0 对齐修复（2026-02-23）：
   - 解析器：变量声明支持空格分隔多值（`@m: 10px 20px`）与逗号分组（`@f: Arial, sans-serif`），修复值泄漏到语句流；修复逗号列表中标识符被错误加引号。
   - at-rule prelude 变量求值：`@media (min-width: @bp)` / `@sizes[tablet]` 现在按 less.js 语义求值后再发射；压缩模式保留 `@media (` 必需空格。

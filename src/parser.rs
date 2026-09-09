@@ -3173,6 +3173,52 @@ impl<'a> Parser<'a> {
             return false;
         }
 
+        // Small lookahead helpers for recognizing map-entry first patterns.
+        let skip_ws = |i: &mut usize| {
+            while *i < self.tokens.len()
+                && matches!(self.tokens[*i].token_type, TokenType::Whitespace)
+            {
+                *i += 1;
+            }
+        };
+        // Skip an optional numeric unit identifier (e.g. `px` in `1px: v`).
+        let skip_opt_unit = |i: &mut usize| {
+            skip_ws(i);
+            if *i < self.tokens.len() {
+                if let TokenType::Identifier(unit) = &self.tokens[*i].token_type {
+                    if is_css_unit(unit) {
+                        *i += 1;
+                        skip_ws(i);
+                    }
+                }
+            }
+        };
+        let at_colon = |i: usize| -> bool {
+            i < self.tokens.len() && matches!(self.tokens[i].token_type, TokenType::Colon)
+        };
+        // true when the tokens following the entry key colon look like a map
+        // entry value instead of a selector pseudo-class (`key: hover { }`).
+        let colon_starts_entry_value = |mut i: usize| -> bool {
+            skip_ws(&mut i);
+            if i >= self.tokens.len() {
+                return false;
+            }
+            match &self.tokens[i].token_type {
+                // `:` + `{` → nested map value (rust-less extension)
+                TokenType::LeftBrace => true,
+                // `::before` → pseudo-element selector → detached ruleset
+                TokenType::Colon => false,
+                TokenType::Identifier(_) | TokenType::VariableInterpolation(_) => {
+                    // `: hover { }` → pseudo-class selector; `: red;` → entry value
+                    i += 1;
+                    skip_ws(&mut i);
+                    !(i < self.tokens.len()
+                        && matches!(self.tokens[i].token_type, TokenType::LeftBrace))
+                }
+                _ => true,
+            }
+        };
+
         match &self.tokens[lookahead].token_type {
             // Empty braces → empty map
             TokenType::RightBrace => false,
@@ -3184,17 +3230,62 @@ impl<'a> Parser<'a> {
             // At-rules inside: `@media`, `@keyframes`, etc. → detached ruleset
             TokenType::AtKeyword(_) => true,
 
-            // Identifier, String, or Number followed by `:` → likely map literal
-            TokenType::Identifier(_) | TokenType::String(_) | TokenType::Number(_) => {
+            // Identifier or String followed by `:` → likely map literal
+            TokenType::Identifier(_) | TokenType::String(_) => {
                 let mut la2 = lookahead + 1;
-                while la2 < self.tokens.len()
-                    && matches!(self.tokens[la2].token_type, TokenType::Whitespace)
+                skip_ws(&mut la2);
+                // If followed by `:`, assume map literal
+                !at_colon(la2)
+            }
+
+            // Number key: `3: v` / `1px: v` (unit allowed) → map literal
+            TokenType::Number(_) => {
+                let mut la2 = lookahead + 1;
+                skip_opt_unit(&mut la2);
+                !at_colon(la2)
+            }
+
+            // Percentage key: `50%: v` → map literal (rust-less extension)
+            TokenType::Percentage(_) => {
+                let mut la2 = lookahead + 1;
+                skip_ws(&mut la2);
+                !at_colon(la2)
+            }
+
+            // Negative number key: `-1: v` / `-1px: v` → map literal
+            TokenType::Minus => {
+                let mut la2 = lookahead + 1;
+                skip_ws(&mut la2);
+                if la2 < self.tokens.len()
+                    && matches!(self.tokens[la2].token_type, TokenType::Number(_))
                 {
                     la2 += 1;
+                    skip_opt_unit(&mut la2);
+                    !at_colon(la2)
+                } else {
+                    true
                 }
-                // If followed by `:`, assume map literal
-                !(la2 < self.tokens.len()
-                    && matches!(self.tokens[la2].token_type, TokenType::Colon))
+            }
+
+            // Interpolated key: `@{key}: v` (or composite `pre@{k}`/`@{k}-x`)
+            // → map literal, unless the colon starts a selector pseudo-class.
+            TokenType::VariableInterpolation(_) => {
+                let mut la2 = lookahead + 1;
+                loop {
+                    skip_ws(&mut la2);
+                    match self.tokens.get(la2).map(|t| &t.token_type) {
+                        Some(TokenType::Identifier(_))
+                        | Some(TokenType::VariableInterpolation(_)) => {
+                            la2 += 1;
+                        }
+                        Some(TokenType::Colon) => {
+                            la2 += 1;
+                            return !colon_starts_entry_value(la2);
+                        }
+                        // Not a key pattern (e.g. interpolated selector) → detached ruleset
+                        _ => return true,
+                    }
+                }
             }
 
             // Anything else → detached ruleset
@@ -3469,39 +3560,103 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_map_key(&mut self) -> Option<String> {
-        match &self.current_token().token_type {
+        let mut key = match &self.current_token().token_type {
             TokenType::Identifier(name) => {
                 let key = name.clone();
                 self.advance();
-                Some(key)
+                key
             }
             TokenType::String(value) => {
                 // Preserve quoted key identity to align map native access semantics.
                 let key = format!("\"{}\"", value);
                 self.advance();
-                Some(key)
+                key
             }
             TokenType::Number(number) => {
                 let numeric = *number;
                 self.advance();
 
+                let mut key = numeric.to_string();
                 if let TokenType::Identifier(unit) = &self.current_token().token_type {
                     if is_css_unit(unit) {
-                        let key = format!("{}{}", numeric, unit);
+                        key.push_str(unit);
                         self.advance();
-                        return Some(key);
                     }
                 }
-
-                Some(numeric.to_string())
+                key
+            }
+            // Negative number key: `-1` / `-1px` (less.js parses these as map keys).
+            TokenType::Minus => {
+                self.advance();
+                while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                    self.advance();
+                }
+                match &self.current_token().token_type {
+                    TokenType::Number(number) => {
+                        let mut key = format!("-{}", number);
+                        self.advance();
+                        if let TokenType::Identifier(unit) = &self.current_token().token_type
+                        {
+                            if is_css_unit(unit) {
+                                key.push_str(unit);
+                                self.advance();
+                            }
+                        }
+                        key
+                    }
+                    _ => return None,
+                }
+            }
+            // Interpolated key: `@{name}` — resolved at evaluation in the
+            // current scope (less.js supports interpolated map keys).
+            TokenType::VariableInterpolation(name) => {
+                let key = format!("@{{{}}}", name);
+                self.advance();
+                key
             }
             TokenType::Percentage(value) => {
                 let key = format!("{}%", value);
                 self.advance();
-                Some(key)
+                key
             }
-            _ => None,
+            _ => return None,
+        };
+
+        // Composite keys: adjacent `identifier` / `@{interp}` segments merge into
+        // a single key (e.g. `dark-@{mode}`, `@{a}-@{b}`). Adjacency means no
+        // whitespace token between segments.
+        while self.current_token_adjacent_to_previous() {
+            match &self.current_token().token_type {
+                TokenType::Identifier(name) => {
+                    key.push_str(name);
+                    self.advance();
+                }
+                TokenType::VariableInterpolation(name) => {
+                    key.push_str(&format!("@{{{}}}", name));
+                    self.advance();
+                }
+                _ => break,
+            }
         }
+
+        Some(key)
+    }
+
+    /// True when the current token is an identifier / interpolation immediately
+    /// adjacent to the previous token (no whitespace in between). Used to merge
+    /// composite map key segments like `pre@{k}`.
+    fn current_token_adjacent_to_previous(&self) -> bool {
+        if self.current == 0 || self.current >= self.tokens.len() {
+            return false;
+        }
+        match &self.current_token().token_type {
+            TokenType::Identifier(_) | TokenType::VariableInterpolation(_) => {}
+            _ => return false,
+        }
+        let prev = &self.tokens[self.current - 1];
+        let curr = &self.tokens[self.current];
+        prev.position.line == curr.position.line
+            && prev.position.column + prev.lexeme.len() == curr.position.column
     }
 }
 

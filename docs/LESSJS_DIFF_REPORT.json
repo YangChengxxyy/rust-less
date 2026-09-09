@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-08T17:22:29.178Z",
+  "generatedAt": "2026-09-09T02:46:06.301Z",
   "environment": {
-    "nodeVersion": "v24.16.0",
+    "nodeVersion": "v24.14.1",
     "lessVersion": "4.5.1",
     "rustLessBin": "/Users/cc/projects/rust-less/target/debug/rust-less",
     "tempRoot": "/Users/cc/projects/rust-less/target/lessjs-compat",
@@ -10,8 +10,8 @@
     "observeMappings": false
   },
   "summary": {
-    "total": 96,
-    "pass": 80,
+    "total": 101,
+    "pass": 85,
     "observed": 0,
     "observedStructural": 0,
     "observedEncoding": 0,
@@ -578,6 +578,132 @@
         "rustOk": true,
         "lessOk": true,
         "details": null
+      }
+    },
+    {
+      "id": "maps-native-dup-key-last-wins",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".test{c:blue;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-dup-key-last-wins.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-dup-key-last-wins/rust/map-native-dup-key-last-wins.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".test{c:blue}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-unit-negative-keys",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".test{a:small;b:medium;c:below;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-unit-negative-keys.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-unit-negative-keys/rust/map-native-unit-negative-keys.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".test{a:small;b:medium;c:below}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-lazy-value",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".test{c:rebeccapurple;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-lazy-value.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-lazy-value/rust/map-native-lazy-value.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".test{c:rebeccapurple}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-interpolated-key",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".test{a:blue;b:gray;}",
+        "map": null,
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-interpolated-key.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-interpolated-key/rust/map-native-interpolated-key.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".test{a:blue;b:gray}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-map-as-value-error",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "both compilers returned errors",
+      "rust": {
+        "ok": false,
+        "error": "Error: SemanticError { message: \"Rulesets and maps cannot be used as a property value\", line: 5, column: 5 }",
+        "command": "/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-native-map-as-value-error.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-native-map-as-value-error/rust/map-native-map-as-value-error.css --compress --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": false,
+        "error": "Syntax: Rulesets cannot be evaluated on a property. (map-native-map-as-value-error.less) line 5 col 4"
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "both compilers returned errors",
+        "rustOk": false,
+        "lessOk": false,
+        "details": {
+          "rustError": "Error: SemanticError { message: \"Rulesets and maps cannot be used as a property value\", line: 5, column: 5 }",
+          "lessError": "Syntax: Rulesets cannot be evaluated on a property. (map-native-map-as-value-error.less) line 5 col 4"
+        }
       }
     },
     {

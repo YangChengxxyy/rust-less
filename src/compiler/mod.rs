@@ -561,7 +561,12 @@ impl Compiler {
     pub(crate) fn pre_scan_variables(&mut self, statements: &[Statement]) {
         for stmt in statements {
             if let Statement::Variable(var) = stmt {
-                if let Ok(value) = self.evaluate_expression(&var.value) {
+                // Map literals are stored raw for lazy use-site evaluation
+                // (matching compile_variable_declaration / less.js semantics).
+                if matches!(&var.value, Expression::MapLiteral { .. }) {
+                    self.current_scope()
+                        .define_variable(var.name.clone(), var.value.clone());
+                } else if let Ok(value) = self.evaluate_expression(&var.value) {
                     self.current_scope()
                         .define_variable(var.name.clone(), value);
                 }
@@ -786,7 +791,14 @@ impl Compiler {
 
     /// Compile a variable declaration
     pub(crate) fn compile_variable_declaration(&mut self, var: &VariableDeclaration) -> Result<()> {
-        let value = self.evaluate_expression(&var.value)?;
+        // Map literals are stored unevaluated so entry values and interpolated
+        // keys resolve lazily at each use site (less.js semantics); evaluation
+        // happens in Expression::Variable handling.
+        let value = if matches!(&var.value, Expression::MapLiteral { .. }) {
+            var.value.clone()
+        } else {
+            self.evaluate_expression(&var.value)?
+        };
         let current_file = self.current_file.clone();
         let scope = self.current_scope();
         scope.define_variable(var.name.clone(), value);

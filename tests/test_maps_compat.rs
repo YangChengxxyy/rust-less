@@ -305,3 +305,159 @@ fn test_lessjs_compat_mixin_call_inside_media_keeps_selector() {
     );
     assert!(css.contains("letter-spacing: 1px"), "Got: {}", css);
 }
+
+#[test]
+fn test_lessjs_native_dup_key_last_wins_bracket_and_map_get() {
+    let less = r#"
+@tokens: {
+    color: red;
+    color: blue;
+};
+.test {
+    bracket: @tokens[color];
+    via_get: map-get(@tokens, color);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("bracket: blue"), "Got: {}", css);
+    assert!(css.contains("via_get: blue"), "Got: {}", css);
+    assert!(!css.contains(": red"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_native_unit_and_negative_keys() {
+    let less = r#"
+@metrics: {
+    1px: small;
+    2em: medium;
+    -1: below;
+};
+.test {
+    a: @metrics[1px];
+    b: @metrics[2em];
+    c: @metrics[-1];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("a: small"), "Got: {}", css);
+    assert!(css.contains("b: medium"), "Got: {}", css);
+    assert!(css.contains("c: below"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_native_map_value_lazy_evaluation_scope() {
+    // less.js: map entry values are evaluated lazily at the use site, so a
+    // variable defined after the map (but before the access) resolves.
+    let less = r#"
+@tokens: {
+    accent: @semantic;
+};
+.test {
+    @semantic: rebeccapurple;
+    c: @tokens[accent];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("c: rebeccapurple"), "Got: {}", css);
+
+    // Variable defined after the map at top level also resolves (lazy).
+    let less_after = r#"
+@tokens: {
+    accent: @semantic;
+};
+@semantic: rebeccapurple;
+.test {
+    c: @tokens[accent];
+}
+"#;
+    let css = compile(less_after).unwrap();
+    assert!(css.contains("c: rebeccapurple"), "Got: {}", css);
+
+    // Truly unresolved variables still error at the access site.
+    let less_undef = r#"
+@tokens: {
+    accent: @missing;
+};
+.test {
+    c: @tokens[accent];
+}
+"#;
+    assert!(compile(less_undef).is_err());
+}
+
+#[test]
+fn test_lessjs_native_interpolated_map_keys() {
+    let less = r#"
+@key-name: primary;
+@tokens: {
+    @{key-name}: blue;
+    suffix-@{key-name}: gray;
+};
+.test {
+    a: @tokens[primary];
+    b: @tokens[suffix-primary];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("a: blue"), "Got: {}", css);
+    assert!(css.contains("b: gray"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_native_map_and_ruleset_as_property_value_error() {
+    // less.js: "Rulesets cannot be evaluated on a property."
+    let less = r#"
+@tokens: {
+    a: 1px;
+};
+.test {
+    c: @tokens;
+}
+"#;
+    let err = compile(less).unwrap_err().to_string();
+    assert!(err.contains("cannot be used as a property value"), "Got: {}", err);
+
+    let less_dr = r#"
+@dr: {
+    color: red;
+};
+.test {
+    c: @dr;
+}
+"#;
+    let err = compile(less_dr).unwrap_err().to_string();
+    assert!(err.contains("cannot be used as a property value"), "Got: {}", err);
+}
+
+#[test]
+fn test_map_extension_percent_key_supported() {
+    // rust-less extension (less.js 4.5.1 rejects percentage keys at parse time).
+    let less = r#"
+@m: {
+    50%: half;
+};
+.test {
+    c: @m[50%];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("c: half"), "Got: {}", css);
+}
+
+#[test]
+fn test_map_extension_map_set_updates_effective_dup_key() {
+    // With duplicate keys, map-set updates the effective (last) entry.
+    let less = r#"
+@tokens: {
+    a: 1;
+    a: 2;
+};
+@updated: map-set(@tokens, a, 3);
+.test {
+    c: map-get(@updated, a);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("c: 3"), "Got: {}", css);
+    assert!(!css.contains("c: 2"), "Got: {}", css);
+}

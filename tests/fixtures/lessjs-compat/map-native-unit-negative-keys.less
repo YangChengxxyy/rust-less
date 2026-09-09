@@ -1,0 +1,10 @@
+@metrics: {
+    1px: small;
+    2em: medium;
+    -1: below;
+};
+.test {
+    a: @metrics[1px];
+    b: @metrics[2em];
+    c: @metrics[-1];
+}

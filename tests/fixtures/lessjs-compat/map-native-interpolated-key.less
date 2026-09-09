@@ -1,0 +1,9 @@
+@key-name: primary;
+@tokens: {
+    @{key-name}: blue;
+    suffix-@{key-name}: gray;
+};
+.test {
+    a: @tokens[primary];
+    b: @tokens[suffix-primary];
+}

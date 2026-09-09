@@ -47,7 +47,15 @@ impl ExpressionCompiler for Compiler {
         match expr {
             Expression::Variable(name, pos) => {
                 if let Some(value) = self.current_scope().lookup_variable(name) {
-                    Ok(value.clone())
+                    let value = value.clone();
+                    // Map literals are stored unevaluated (less.js lazy semantics):
+                    // entry values and interpolated keys are resolved at each use
+                    // site, in the current scope.
+                    if matches!(&value, Expression::MapLiteral { .. }) {
+                        self.evaluate_expression(&value)
+                    } else {
+                        Ok(value)
+                    }
                 } else {
                     Err(Error::undefined_variable(name, pos.line, pos.column))
                 }
@@ -124,11 +132,15 @@ impl ExpressionCompiler for Compiler {
             Expression::MapLiteral {
                 entries, position, ..
             } => {
-                // Evaluate all values in the map
+                // Evaluate all values and resolve interpolated keys (`@{k}: v`)
+                // in the current scope. Map literal evaluation happens at the
+                // variable's use site (see Expression::Variable), matching
+                // less.js lazy map semantics.
                 let mut eval_entries = Vec::new();
                 for (key, value, key_position) in entries {
+                    let eval_key = self.resolve_map_key(key)?;
                     let eval_value = self.evaluate_expression(value)?;
-                    eval_entries.push((key.clone(), eval_value, key_position.clone()));
+                    eval_entries.push((eval_key, eval_value, key_position.clone()));
                 }
                 Ok(Expression::MapLiteral {
                     entries: eval_entries,
@@ -141,7 +153,8 @@ impl ExpressionCompiler for Compiler {
                 let key_str = normalize_map_key(&key_val);
 
                 if let Expression::MapLiteral { entries, .. } = &map_val {
-                    for (k, v, _) in entries {
+                    // less.js: within one map/ruleset, later declarations win.
+                    for (k, v, _) in entries.iter().rev() {
                         if k == &key_str {
                             return Ok(v.clone());
                         }
@@ -546,6 +559,40 @@ impl ExpressionCompiler for Compiler {
             Expression::String { value, .. } => !value.is_empty(),
             _ => false,
         }
+    }
+}
+
+impl Compiler {
+    /// Resolve `@{variable}` segments in a map literal key against the current
+    /// scope. Quoted keys (`"a b"`) keep their quoted identity verbatim,
+    /// matching quoted-key native access semantics.
+    fn resolve_map_key(&mut self, key: &str) -> Result<String> {
+        if !key.contains("@{") {
+            return Ok(key.to_string());
+        }
+        if key.len() >= 2 && key.starts_with('"') && key.ends_with('"') {
+            return Ok(key.to_string());
+        }
+        let mut out = String::with_capacity(key.len());
+        let mut rest = key;
+        while let Some(start) = rest.find("@{") {
+            out.push_str(&rest[..start]);
+            let end_rel = match rest[start + 2..].find('}') {
+                Some(end_rel) => end_rel,
+                None => {
+                    // Unterminated interpolation marker: keep literally.
+                    out.push_str(&rest[start..]);
+                    return Ok(out);
+                }
+            };
+            let end = start + 2 + end_rel;
+            let var_name = &rest[start + 2..end];
+            let value = self.resolve_variable(var_name)?;
+            out.push_str(&self.evaluate_expression_to_string(&value)?);
+            rest = &rest[end + 1..];
+        }
+        out.push_str(rest);
+        Ok(out)
     }
 }
 

@@ -1,12 +1,12 @@
 # less.js 实编译对照差异报告
 
-- 生成时间: 2026-09-08T17:22:29.178Z
-- Node.js: v24.16.0
+- 生成时间: 2026-09-09T02:46:06.301Z
+- Node.js: v24.14.1
 - less.js: 4.5.1
 - rust-less CLI: /Users/cc/projects/rust-less/target/debug/rust-less
 - 选项: strict=on, strictMappings=on, observeMappings=off
-- 总用例: 96
-- 通过: 80
+- 总用例: 101
+- 通过: 85
 - 观测差异（非失败）: 0
 - 观测差异（结构）: 0
 - 观测差异（编码）: 0
@@ -39,6 +39,11 @@
 | maps-native-each-in-rule | maps | lessjs-native | pass | output matched |
 | maps-native-map-override | maps | lessjs-native | pass | output matched |
 | maps-native-media-prelude | maps | lessjs-native | pass | output matched |
+| maps-native-dup-key-last-wins | maps | lessjs-native | pass | output matched |
+| maps-native-unit-negative-keys | maps | lessjs-native | pass | output matched |
+| maps-native-lazy-value | maps | lessjs-native | pass | output matched |
+| maps-native-interpolated-key | maps | lessjs-native | pass | output matched |
+| maps-native-map-as-value-error | maps | lessjs-native | pass | both compilers returned errors |
 | maps-map-variable-key-access | maps | extension | unsupported | less.js does not natively support rust-less map extension functions |
 | maps-map-nested-bracket-access | maps | extension | unsupported | less.js does not natively support rust-less map extension functions |
 | sourcemap-imported-keyframes | source-map | lessjs-native | pass | output matched |
