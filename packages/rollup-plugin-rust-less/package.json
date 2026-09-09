@@ -1,0 +1,39 @@
+{
+  "name": "rollup-plugin-rust-less",
+  "version": "1.0.0",
+  "description": "Rollup plugin that compiles LESS with rust-less via WebAssembly / 通过 WASM 版 rust-less 编译 LESS 的 Rollup 插件",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "less",
+    "rust",
+    "wasm",
+    "rollup",
+    "rollup-plugin",
+    "css",
+    "stylesheet"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rust-less/rust-less",
+    "directory": "packages/rollup-plugin-rust-less"
+  },
+  "peerDependencies": {
+    "rollup": ">=3"
+  },
+  "dependencies": {
+    "rust-less-wasm-node": "^1.0.0"
+  }
+}

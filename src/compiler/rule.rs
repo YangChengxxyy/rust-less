@@ -84,7 +84,7 @@ impl RuleCompiler for Compiler {
             current_selectors.push(selector_str);
 
             // Add unique matches
-            for m in exact_matches.into_iter().chain(partial_matches.into_iter()) {
+            for m in exact_matches.into_iter().chain(partial_matches) {
                 if !current_selectors.contains(&m) {
                     current_selectors.push(m);
                 }

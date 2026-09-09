@@ -159,4 +159,4 @@ let css = rust_less::compile_with_options(input, options)?;
 | v0.4.0 | 草案冻结；`FunctionRegistry` 公开注册路径打通（`Compiler::register_function`） | ✅ |
 | v0.5.0 | `LessFunction` + `ImportResolver` 落地，示例插件 | ✅ |
 | v0.6.0 | `ParseHook` + `CompileVisitor` 落地 | ✅ |
-| v1.0.0 | `PLUGIN_API_VERSION` 语义冻结（常量已存在，当前为 1），插件打包/发现约定 | ⏳ 打包/发现待定 |
+| v1.0.0 | `PLUGIN_API_VERSION` 语义冻结（常量已存在，当前为 1），插件打包/发现约定（`PluginBundle` + `Compiler::register_plugin_bundle`，见 `docs/PLUGIN_PACKAGING.md`） | ✅ 已落地 |

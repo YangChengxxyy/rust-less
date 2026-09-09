@@ -16,6 +16,9 @@ pub mod lexer;
 pub mod parser;
 pub mod plugin;
 
+#[cfg(feature = "lsp")]
+pub mod lsp;
+
 #[cfg(feature = "functions")]
 pub mod functions;
 

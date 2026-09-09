@@ -157,3 +157,38 @@ pub(crate) fn wrap_plugin_error(plugin: &str, err: Error) -> Error {
         }
     }
 }
+
+/// 插件扩展包：将四类扩展点（自定义函数、at-rule 解析钩子、
+/// 编译期 visitor、导入解析器）打包为一个具名、带版本的整体注册单位。
+///
+/// 约定见 `docs/PLUGIN_PACKAGING.md`：插件 crate 命名 `rust-less-plugin-*`，
+/// 入口为 `pub fn bundle() -> Box<dyn PluginBundle>`，v1.0.0 采用显式组合
+/// （用户依赖后调用 `Compiler::register_plugin_bundle`），动态加载不在范围内。
+pub trait PluginBundle: Send + Sync {
+    /// 插件包名称（用于错误归因）。
+    fn name(&self) -> &str;
+    /// 插件包自身语义版本。
+    fn version(&self) -> &str;
+    /// 声明的插件 API 版本，默认与当前编译器一致。
+    fn api_version(&self) -> u32 {
+        PLUGIN_API_VERSION
+    }
+    /// 向编译器注册本包的全部扩展点。
+    fn register(self: Box<Self>, compiler: &mut crate::compiler::Compiler) -> Result<()>;
+}
+
+/// 注册插件扩展包：先校验 API 版本，再由插件包自行注册各扩展点；
+/// 错误统一包装为 [`Error::PluginError`] 并带上插件包名称。
+///
+/// [`Compiler::register_plugin_bundle`](crate::compiler::Compiler::register_plugin_bundle)
+/// 委托到该函数。
+pub fn register_bundle(
+    compiler: &mut crate::compiler::Compiler,
+    bundle: Box<dyn PluginBundle>,
+) -> Result<()> {
+    check_api_version(bundle.name(), bundle.api_version())?;
+    let name = bundle.name().to_owned();
+    bundle
+        .register(compiler)
+        .map_err(|e| wrap_plugin_error(&name, e))
+}

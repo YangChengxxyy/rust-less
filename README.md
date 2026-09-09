@@ -11,20 +11,20 @@
 
 这是一个用 Rust 完全重写的 LESS 编译器，重点强调：
 - **高性能** - 利用 Rust 的零成本抽象和内存安全
-- **测试驱动开发** - 106个单元测试 + 239个集成测试确保代码质量
+- **测试驱动开发** - 106个单元测试 + 273个集成测试确保代码质量
 - **全面的 LESS 语法支持** - 97% 功能完成度，核心功能已完备
 - **模块化架构** - 清晰的代码结构，完整的API文档
 - **优秀的错误处理** - 提供清晰、有用的错误信息
 
 ## 📊 当前实现状态
 
-**版本**: 0.3.0  
-**测试通过率**: 100% (`cargo test --quiet` 共 359 passed, 0 ignored；`--all-features` 共 369 passed)  
+**版本**: 1.0.0  
+**测试通过率**: 100% (`cargo test --quiet` 共 381 passed, 0 ignored；`--all-features` 共 395 passed)  
 **功能完成度**: 97%（核心 LESS 功能已完备，Maps 可写能力已落地，源码映射持续完善）
-**生产就绪度**: 适合大部分生产项目
+**生产就绪度**: 适合生产项目；v1.0.0 生态就绪（LSP / 构建工具插件 / WASM 发布 / 版本化插件 API）
 
-**统计口径说明（2026-09-08）**:
-- 测试基线来自本地执行：`cargo test --quiet`（359 passed）与 `cargo test --all-features --quiet`（369 passed）。
+**统计口径说明（2026-09-09）**:
+- 测试基线来自本地执行：`cargo test --quiet`（381 passed）与 `cargo test --all-features --quiet`（395 passed）。
 - 兼容性基线来自 `docs/LESSJS_DIFF_REPORT.json`（2026-09-08 生成）：`pass=80`、`fail=0`、`unsupported=16`（total=96，strict + strict-mappings）。
 
 ### ✅ 已完成的核心功能
@@ -71,13 +71,48 @@
 | 解析钩子 | `ParseHook` | 自定义 `@at-rule` 的文本→AST 转换 |
 | 编译期 visitor | `CompileVisitor` | 规则发射前改写（`pre_visit_rule`）+ 输出后处理（`post_process`） |
 | 导入解析器 | `ImportResolver` | 链式解析：插件 → `include_paths` → 文件系统 |
+| 插件扩展包 | `PluginBundle` | 将四类扩展点打包为具名、带版本的整体注册单位（见 `docs/PLUGIN_PACKAGING.md`，示例 `examples/plugin_bundle.rs`） |
 
 插件声明 `api_version`（当前 `PLUGIN_API_VERSION = 1`），版本不兼容时构建期
 返回 `Error::PluginError`；声明 `invalidates_source_map` 的 visitor 与 source map
 输出冲突时同样在构建期报错。注册入口：`CompilerOptions::with_function_plugin` /
 `with_parse_hook` / `with_visitor` / `with_import_resolver`，或
 `Compiler::register_function_plugin` / `register_parse_hook` / `register_visitor` /
-`register_import_resolver`。
+`register_import_resolver`。插件扩展包经 `Compiler::register_plugin_bundle` 一次注册。
+
+## 🧩 生态系统（v1.0.0）
+
+### 语言服务器（LSP）
+
+```bash
+cargo build --features lsp --release   # 生成 target/release/rust-less-lsp
+```
+
+`rust-less-lsp` 是基于 stdio 的 LESS 语言服务器：诊断发布、变量/混合器/内置函数补全、
+悬停文档、层级化文档符号、定义跳转（含相对 `@import` 文件解析）。编辑器侧以普通
+stdio 语言服务器方式接入（可执行文件指向 `rust-less-lsp`）。
+
+### 构建工具插件
+
+| 包 | 目标工具 |
+|----|----------|
+| `rust-less-loader`（`packages/rust-less-loader`） | Webpack ≥ 5 |
+| `vite-plugin-rust-less`（`packages/vite-plugin-rust-less`） | Vite ≥ 4 |
+| `rollup-plugin-rust-less`（`packages/rollup-plugin-rust-less`） | Rollup ≥ 3 |
+
+三者运行于 Node.js，依赖 `rust-less-wasm-node`（WASM Node 变体），选项语义与
+`CompilerOptions` 对齐（`compress` / `sourceMap` / `sourceMapLessjsCompat`）。
+详见 `docs/BUILD_TOOL_PLUGINS.md`。
+
+### WebAssembly 发布
+
+```bash
+./build-wasm.sh     # 三目标构建 + 冒烟测试（产物 pkg/ pkg-nodejs/ pkg-web/）
+```
+
+产物对应 npm 包 `rust-less-wasm`（浏览器/bundler）、`rust-less-wasm-node`（Node.js，
+构建工具插件使用）、`rust-less-wasm-web`（`<script>` 直引）。包版本与 crate 版本锁步，
+流程见 `docs/WASM_RELEASE.md`，tag 发布由 `.github/workflows/wasm-release.yml` 驱动。
 
 ## 🚀 快速开始
 
@@ -87,7 +122,7 @@
 
 ```toml
 [dependencies]
-rust-less = "0.3.0"
+rust-less = "1.0.0"
 ```
 
 或安装 CLI 工具：
@@ -204,6 +239,8 @@ src/
 ├── wasm/                # WebAssembly 绑定
 │   ├── mod.rs          # WASM 模块入口
 │   └── bindings.rs     # wasm-bindgen 绑定
+├── lsp/                 # LSP 语言服务器（feature = "lsp"）
+├── bin/                 # 可执行入口（cli.rs：rust-less；lsp.rs：rust-less-lsp）
 ├── lexer.rs            # 词法分析器
 ├── parser.rs           # 递归下降解析器
 ├── functions.rs        # 内置函数库
@@ -260,9 +297,9 @@ bash tools/status-check/run-status-check.sh --with-perf
 | 测试类型 | 通过 | 失败 | 忽略 | 通过率 |
 |----------|------|------|------|--------|
 | 单元测试 | 106 | 0 | 0 | 100% |
-| 集成测试 | 239 | 0 | 0 | 100% |
-| Doc测试 | 1 | 0 | 0 | 100% |
-| **总计** | **346** | **0** | **0** | **100%** |
+| 集成测试 | 273 | 0 | 0 | 100% |
+| Doc测试 | 2 | 0 | 0 | 100% |
+| **总计** | **381** | **0** | **0** | **100%** |
 
 ## 🎯 功能演示
 
@@ -434,13 +471,14 @@ bash tools/status-check/run-status-check.sh --with-perf
 - [x] 源码映射深度对齐（复杂导入链/嵌套 at-rule/跨文件 mixin 与 detached ruleset/prelude 变量求值场景全部纳入 strict-mappings 门禁）
 - [x] 插件钩子设计草案（见 `docs/PLUGIN_HOOKS_DESIGN.md`，函数插件注册路径 `Compiler::register_function` 已落地）
 
-### 第四阶段：生态系统 (v1.0.0) - 6-12个月
-- [ ] Language Server Protocol
-- [ ] 构建工具插件 (Webpack, Vite, Rollup)
-- [ ] WebAssembly 发布流程标准化（`pkg/` 产物与文档）
+### 第四阶段：生态系统 (v1.0.0) - ✅ 已完成
+- [x] Language Server Protocol（`rust-less-lsp` 二进制，feature `lsp`：诊断发布、补全、悬停、文档符号、定义跳转）
+- [x] 构建工具插件（Webpack loader `rust-less-loader`、Vite 插件 `vite-plugin-rust-less`、Rollup 插件 `rollup-plugin-rust-less`，见 `packages/` 与 `docs/BUILD_TOOL_PLUGINS.md`）
+- [x] WebAssembly 发布流程标准化（`./build-wasm.sh`：三目标产物 `pkg/`（rust-less-wasm）/`pkg-nodejs/`（rust-less-wasm-node）/`pkg-web/`（rust-less-wasm-web）+ 冒烟测试 + 锁步版本戳，见 `docs/WASM_RELEASE.md` 与 `.github/workflows/wasm-release.yml`）
 - [x] 插件系统（`LessFunction`/`ParseHook`/`CompileVisitor`/`ImportResolver` 四类扩展点 +
   `PLUGIN_API_VERSION` 版本化 + 示例插件 `examples/plugin_system.rs`，
   见 `docs/PLUGIN_HOOKS_DESIGN.md`）
+- [x] 版本化插件 API 冻结与打包/发现约定（`PluginBundle` + `Compiler::register_plugin_bundle`，见 `docs/PLUGIN_PACKAGING.md`）
 
 ## 🤝 贡献指南
 

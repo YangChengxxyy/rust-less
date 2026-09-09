@@ -1,19 +1,19 @@
 # 项目当前状态
 
-**更新日期**: 2026-09-08
-**版本**: 0.3.0
-**状态**: 🟢 积极开发中
+**更新日期**: 2026-09-09
+**版本**: 1.0.0
+**状态**: 🟢 v1.0.0 已发布（生态就绪：LSP / 构建工具插件 / WASM 发布 / 版本化插件 API）
 
 ## 测试状态
 
 | 类型 | 通过 | 失败 | 忽略 | 通过率 |
 |------|------|------|------|--------|
 | 单元测试 | 106 | 0 | 0 | 100% |
-| 集成测试 | 252 | 0 | 0 | 100% |
-| Doc测试 | 1 | 0 | 0 | 100% |
-| **总计** | **359** | **0** | **0** | **100%** |
+| 集成测试 | 273 | 0 | 0 | 100% |
+| Doc测试 | 2 | 0 | 0 | 100% |
+| **总计** | **381** | **0** | **0** | **100%** |
 
-> 统计口径说明（2026-09-08）：测试数字来自本地执行 `cargo test`（359）；兼容性数字来自 `docs/LESSJS_DIFF_REPORT.json`（`pass=80/fail=0/unsupported=16`）。
+> 统计口径说明（2026-09-09）：测试数字来自本地执行 `cargo test`（381，`--all-features` 395）；兼容性数字来自 `docs/LESSJS_DIFF_REPORT.json`（`pass=80/fail=0/unsupported=16`）。
 
 ## 编译状态
 
@@ -50,9 +50,7 @@
 
 ### 🟢 低优先级 (远期功能)
 
-3. **Maps 高级语义补齐** - 嵌套结构/边界行为与 LESS 4.x 对齐
-4. **插件系统**
-5. **LSP (Language Server Protocol)**
+3. **Maps 高级语义补齐** - 嵌套结构/边界行为与 LESS 4.x 完全对齐
 
 ## 功能完成度
 
@@ -118,8 +116,8 @@
 - [x] 建立性能基线与阈值门禁（`docs/PERF_BASELINE.json` + `tools/perf-check/run-perf-check.sh`）
 - [x] 阶段验收：`cargo test`、`cargo test --all-features`、`cargo clippy --all-targets --all-features` 全绿
 
-### v1.0.0 (6-12 月)
-- [ ] LSP
-- [ ] 构建工具插件
-- [ ] WASM 标准化发布
-- [ ] 插件系统
+### v1.0.0 ✅ 已完成 (2026-09-09)
+- [x] LSP（`rust-less-lsp` 二进制，feature `lsp`；诊断/补全/悬停/符号/定义跳转；`tests/test_lsp.rs` 覆盖协议生命周期）
+- [x] 构建工具插件（`packages/rust-less-loader`、`packages/vite-plugin-rust-less`、`packages/rollup-plugin-rust-less`，见 `docs/BUILD_TOOL_PLUGINS.md`）
+- [x] WASM 标准化发布（`./build-wasm.sh` 三目标产物 + 冒烟测试 + 锁步版本，见 `docs/WASM_RELEASE.md`、`.github/workflows/wasm-release.yml`）
+- [x] 插件系统（四类扩展点 + `PluginBundle` 打包/发现约定 + `PLUGIN_API_VERSION=1` 语义冻结，见 `docs/PLUGIN_HOOKS_DESIGN.md`、`docs/PLUGIN_PACKAGING.md`）

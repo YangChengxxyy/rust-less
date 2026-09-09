@@ -1801,14 +1801,13 @@ impl<'a> Parser<'a> {
                         }
                         continue;
                     }
-                    TokenType::Dot | TokenType::Hash(_) => {
-                        // Found another selector part without >, but with whitespace
-                        if has_whitespace {
-                            self.current = lookahead;
-                            name.push(' ');
-                            continue;
-                        }
+                    // Found another selector part without >, but with whitespace
+                    TokenType::Dot | TokenType::Hash(_) if has_whitespace => {
+                        self.current = lookahead;
+                        name.push(' ');
+                        continue;
                     }
+                    TokenType::Dot | TokenType::Hash(_) => {}
                     _ => {}
                 }
             }

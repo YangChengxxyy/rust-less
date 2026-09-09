@@ -30,13 +30,15 @@ fn find_top_level_separator(chars: &[char], from: usize) -> Option<usize> {
             '(' => depth += 1,
             ')' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => return Some(idx),
-            'a' if depth == 0 && idx + 2 < chars.len() => {
-                if chars[idx + 1] == 'n' && chars[idx + 2] == 'd' {
-                    let prev_ok = idx == 0 || chars[idx - 1].is_whitespace();
-                    let next_ok = idx + 3 >= chars.len() || chars[idx + 3].is_whitespace();
-                    if prev_ok && next_ok {
-                        return Some(idx);
-                    }
+            'a' if depth == 0
+                && idx + 2 < chars.len()
+                && chars[idx + 1] == 'n'
+                && chars[idx + 2] == 'd' =>
+            {
+                let prev_ok = idx == 0 || chars[idx - 1].is_whitespace();
+                let next_ok = idx + 3 >= chars.len() || chars[idx + 3].is_whitespace();
+                if prev_ok && next_ok {
+                    return Some(idx);
                 }
             }
             _ => {}

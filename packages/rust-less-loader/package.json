@@ -1,0 +1,39 @@
+{
+  "name": "rust-less-loader",
+  "version": "1.0.0",
+  "description": "Webpack loader that compiles LESS with rust-less via WebAssembly / 通过 WASM 版 rust-less 编译 LESS 的 webpack loader",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "less",
+    "rust",
+    "wasm",
+    "webpack",
+    "loader",
+    "css",
+    "stylesheet"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rust-less/rust-less",
+    "directory": "packages/rust-less-loader"
+  },
+  "peerDependencies": {
+    "webpack": ">=5"
+  },
+  "dependencies": {
+    "rust-less-wasm-node": "^1.0.0"
+  }
+}

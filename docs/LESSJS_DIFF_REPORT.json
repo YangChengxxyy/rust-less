@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-08T11:27:51.750Z",
+  "generatedAt": "2026-09-08T17:22:29.178Z",
   "environment": {
     "nodeVersion": "v24.16.0",
     "lessVersion": "4.5.1",
     "rustLessBin": "/Users/cc/projects/rust-less/target/debug/rust-less",
     "tempRoot": "/Users/cc/projects/rust-less/target/lessjs-compat",
-    "strict": false,
-    "strictMappings": false,
+    "strict": true,
+    "strictMappings": true,
     "observeMappings": false
   },
   "summary": {
@@ -688,7 +688,7 @@
               "mappingsLength": 35,
               "mappingsHash": "ecff41ef"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -750,7 +750,7 @@
               "mappingsLength": 35,
               "mappingsHash": "ecff41ef"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -812,7 +812,7 @@
               "mappingsLength": 26,
               "mappingsHash": "e445209c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -874,7 +874,7 @@
               "mappingsLength": 19,
               "mappingsHash": "e755626c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -936,7 +936,7 @@
               "mappingsLength": 24,
               "mappingsHash": "1b8bfb6f"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -998,7 +998,7 @@
               "mappingsLength": 14,
               "mappingsHash": "4377b4e0"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1060,7 +1060,7 @@
               "mappingsLength": 15,
               "mappingsHash": "0591e638"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1122,7 +1122,7 @@
               "mappingsLength": 26,
               "mappingsHash": "a561cc58"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1184,7 +1184,7 @@
               "mappingsLength": 31,
               "mappingsHash": "80439704"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1246,7 +1246,7 @@
               "mappingsLength": 31,
               "mappingsHash": "80439704"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1308,7 +1308,7 @@
               "mappingsLength": 53,
               "mappingsHash": "e01b5dec"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1370,7 +1370,7 @@
               "mappingsLength": 53,
               "mappingsHash": "e01b5dec"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1432,7 +1432,7 @@
               "mappingsLength": 26,
               "mappingsHash": "e445209c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1494,7 +1494,7 @@
               "mappingsLength": 26,
               "mappingsHash": "e445209c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1560,7 +1560,7 @@
               "mappingsLength": 31,
               "mappingsHash": "faac2bcc"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1626,7 +1626,7 @@
               "mappingsLength": 31,
               "mappingsHash": "faac2bcc"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1688,7 +1688,7 @@
               "mappingsLength": 15,
               "mappingsHash": "20566d8f"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1750,7 +1750,7 @@
               "mappingsLength": 15,
               "mappingsHash": "20566d8f"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1816,7 +1816,7 @@
               "mappingsLength": 30,
               "mappingsHash": "5614db77"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1882,7 +1882,7 @@
               "mappingsLength": 30,
               "mappingsHash": "5614db77"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -1944,7 +1944,7 @@
               "mappingsLength": 26,
               "mappingsHash": "75e8a55c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2006,7 +2006,7 @@
               "mappingsLength": 26,
               "mappingsHash": "75e8a55c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2068,7 +2068,7 @@
               "mappingsLength": 32,
               "mappingsHash": "769224de"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2130,7 +2130,7 @@
               "mappingsLength": 32,
               "mappingsHash": "769224de"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2192,7 +2192,7 @@
               "mappingsLength": 53,
               "mappingsHash": "3a146ab8"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2254,7 +2254,7 @@
               "mappingsLength": 53,
               "mappingsHash": "3a146ab8"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2320,7 +2320,7 @@
               "mappingsLength": 49,
               "mappingsHash": "d85ec7e8"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2386,7 +2386,7 @@
               "mappingsLength": 49,
               "mappingsHash": "d85ec7e8"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2452,7 +2452,7 @@
               "mappingsLength": 30,
               "mappingsHash": "35cea7b8"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2518,7 +2518,7 @@
               "mappingsLength": 30,
               "mappingsHash": "35cea7b8"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2588,7 +2588,7 @@
               "mappingsLength": 47,
               "mappingsHash": "890dc338"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2658,7 +2658,7 @@
               "mappingsLength": 47,
               "mappingsHash": "890dc338"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2736,7 +2736,7 @@
               "mappingsLength": 81,
               "mappingsHash": "85074dfb"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2814,7 +2814,7 @@
               "mappingsLength": 81,
               "mappingsHash": "85074dfb"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2892,7 +2892,7 @@
               "mappingsLength": 119,
               "mappingsHash": "280e79eb"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -2970,7 +2970,7 @@
               "mappingsLength": 119,
               "mappingsHash": "280e79eb"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3048,7 +3048,7 @@
               "mappingsLength": 85,
               "mappingsHash": "49fd414c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3126,7 +3126,7 @@
               "mappingsLength": 85,
               "mappingsHash": "49fd414c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3204,7 +3204,7 @@
               "mappingsLength": 132,
               "mappingsHash": "30b8b5e4"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3282,7 +3282,7 @@
               "mappingsLength": 132,
               "mappingsHash": "30b8b5e4"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3360,7 +3360,7 @@
               "mappingsLength": 133,
               "mappingsHash": "5dff5194"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3438,7 +3438,7 @@
               "mappingsLength": 133,
               "mappingsHash": "5dff5194"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3504,7 +3504,7 @@
               "mappingsLength": 51,
               "mappingsHash": "d609fb58"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3570,7 +3570,7 @@
               "mappingsLength": 51,
               "mappingsHash": "d609fb58"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3648,7 +3648,7 @@
               "mappingsLength": 140,
               "mappingsHash": "bc71d74c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3726,7 +3726,7 @@
               "mappingsLength": 140,
               "mappingsHash": "bc71d74c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3792,7 +3792,7 @@
               "mappingsLength": 58,
               "mappingsHash": "8da3b113"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3858,7 +3858,7 @@
               "mappingsLength": 58,
               "mappingsHash": "8da3b113"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -3936,7 +3936,7 @@
               "mappingsLength": 162,
               "mappingsHash": "7a02181c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4014,7 +4014,7 @@
               "mappingsLength": 162,
               "mappingsHash": "7a02181c"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4080,7 +4080,7 @@
               "mappingsLength": 65,
               "mappingsHash": "cfc461a4"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4146,7 +4146,7 @@
               "mappingsLength": 65,
               "mappingsHash": "cfc461a4"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4224,7 +4224,7 @@
               "mappingsLength": 130,
               "mappingsHash": "52b0d94b"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4302,7 +4302,7 @@
               "mappingsLength": 130,
               "mappingsHash": "52b0d94b"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4368,7 +4368,7 @@
               "mappingsLength": 69,
               "mappingsHash": "41d1c7cc"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4434,7 +4434,7 @@
               "mappingsLength": 69,
               "mappingsHash": "41d1c7cc"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4512,7 +4512,7 @@
               "mappingsLength": 140,
               "mappingsHash": "965d2a4b"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4590,7 +4590,7 @@
               "mappingsLength": 140,
               "mappingsHash": "965d2a4b"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4656,7 +4656,7 @@
               "mappingsLength": 84,
               "mappingsHash": "0d5e6628"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4722,7 +4722,7 @@
               "mappingsLength": 84,
               "mappingsHash": "0d5e6628"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4800,7 +4800,7 @@
               "mappingsLength": 163,
               "mappingsHash": "ed7e85be"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4878,7 +4878,7 @@
               "mappingsLength": 163,
               "mappingsHash": "ed7e85be"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -4944,7 +4944,7 @@
               "mappingsLength": 102,
               "mappingsHash": "524a1b18"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5010,7 +5010,7 @@
               "mappingsLength": 102,
               "mappingsHash": "524a1b18"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5088,7 +5088,7 @@
               "mappingsLength": 138,
               "mappingsHash": "3310cd40"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5166,7 +5166,7 @@
               "mappingsLength": 138,
               "mappingsHash": "3310cd40"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5232,7 +5232,7 @@
               "mappingsLength": 98,
               "mappingsHash": "982f17c8"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5298,7 +5298,7 @@
               "mappingsLength": 98,
               "mappingsHash": "982f17c8"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5372,7 +5372,7 @@
               "mappingsLength": 143,
               "mappingsHash": "f96e5763"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5446,7 +5446,7 @@
               "mappingsLength": 143,
               "mappingsHash": "f96e5763"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5512,7 +5512,7 @@
               "mappingsLength": 62,
               "mappingsHash": "96ba9bd0"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5578,7 +5578,7 @@
               "mappingsLength": 62,
               "mappingsHash": "96ba9bd0"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []
@@ -5640,7 +5640,7 @@
               "mappingsLength": 26,
               "mappingsHash": "d9e784f0"
             },
-            "strictMappings": false,
+            "strictMappings": true,
             "observations": [],
             "structuralObservations": [],
             "encodingObservations": []

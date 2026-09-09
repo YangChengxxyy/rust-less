@@ -1,6 +1,6 @@
 [package]
 name = "rust-less"
-version = "0.3.0"
+version = "1.0.0"
 edition = "2021"
 description = "高性能的 LESS 到 CSS 编译器，支持变量、嵌套、颜色函数等核心功能"
 license = "MIT"
@@ -28,11 +28,17 @@ name = "rust-less"
 path = "src/bin/cli.rs"
 required-features = ["cli"]
 
+[[bin]]
+name = "rust-less-lsp"
+path = "src/bin/lsp.rs"
+required-features = ["lsp"]
+
 [features]
 default = ["functions"]
 cli = ["clap"]
 functions = []
 serde = ["dep:serde", "dep:serde_json"]
+lsp = ["dep:lsp-server", "dep:lsp-types", "dep:serde_json"]
 wasm = ["wasm-bindgen", "console_error_panic_hook", "wee_alloc"]
 
 [dependencies]
@@ -63,6 +69,10 @@ wee_alloc = { version = "0.4", optional = true }
 js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
 sourcemap = "9.3.2"
+
+# LSP 服务器依赖
+lsp-server = { version = "0.7", optional = true }
+lsp-types = { version = "0.95", optional = true }
 
 [dev-dependencies]
 criterion = "0.5"

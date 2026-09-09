@@ -9,60 +9,29 @@
 const fs = require('fs').promises;
 const path = require('path');
 
-// 在实际使用中，您需要安装并导入 rust-less-wasm 包
-// const { compileLess, compileLessWithOptions, createCompiler, validateLess, getVersion, getInfo } = require('rust-less-wasm');
-
-// 模拟 WASM 模块（实际使用时删除此部分）
-const mockWasmModule = {
-    async compileLess(input) {
-        console.log('📝 模拟编译 LESS 代码...');
-        await new Promise(resolve => setTimeout(resolve, 100)); // 模拟异步操作
-
-        if (input.includes('syntax-error')) {
-            return { error: '语法错误：缺少分号' };
-        }
-
-        // 简单的 LESS 到 CSS 转换模拟
-        let css = input
-            .replace(/@[\w-]+:\s*[^;]+;/g, '') // 移除变量定义
-            .replace(/@([\w-]+)/g, '#3498db') // 替换变量引用
-            .replace(/\s+&/g, '') // 处理父选择器
-            .replace(/\{\s*\n/g, ' {\n  ') // 格式化
-            .replace(/;\s*\n/g, ';\n  ')
-            .replace(/\n\s*\}/g, '\n}');
-
-        return { css: css.trim() };
-    },
-
-    async compileLessWithOptions(input, options) {
-        const result = await this.compileLess(input);
-        if (result.css && options.compress) {
-            result.css = result.css.replace(/\s+/g, ' ').replace(/;\s*}/g, '}').trim();
-        }
-        return result;
-    },
-
-    async createCompiler(options = {}) {
-        return {
-            compile: (input) => this.compileLessWithOptions(input, options)
-        };
-    },
-
-    async validateLess(input) {
-        return !input.includes('syntax-error') && input.includes('{') && input.includes('}');
-    },
-
-    async getVersion() {
-        return '0.2.0';
-    },
-
-    async getInfo() {
-        return 'Rust LESS 编译器 v0.2.0\n用 Rust 编写的高性能 LESS 到 CSS 编译器 (WebAssembly 版本)';
+// 实际使用时安装 npm 包：npm install rust-less-wasm-node
+// const { compileLess, compileLessWithOptions, createCompiler, validateLess, getVersion, getInfo } = require('rust-less-wasm-node');
+//
+// 未安装 npm 包时，回退到本仓库 ./build-wasm.sh 生成的本地构建产物（pkg-nodejs/），
+// 两者的 API 完全一致：
+//   compileLess(input)                      -> Promise<{ css, sourceMap?, error? }>
+//   compileLessWithOptions(input, options?)  -> Promise<{ css, sourceMap?, error? }>
+//   createCompiler(options?)                 -> Promise<{ compile(input) }>
+//   validateLess(input)                      -> Promise<boolean>
+//   getVersion() / getInfo()                 -> Promise<string>
+let wasmModule;
+try {
+    wasmModule = require('rust-less-wasm-node');
+} catch {
+    const localPkg = path.resolve(__dirname, '../../pkg-nodejs/index.cjs');
+    if (!require('fs').existsSync(localPkg)) {
+        console.error('❌ 未找到 rust-less-wasm-node，请先运行: ./build-wasm.sh');
+        process.exit(1);
     }
-};
+    wasmModule = require(localPkg);
+}
 
-// 在实际使用中，这里应该导入真实的模块
-const { compileLess, compileLessWithOptions, createCompiler, validateLess, getVersion, getInfo } = mockWasmModule;
+const { compileLess, compileLessWithOptions, createCompiler, validateLess, getVersion, getInfo } = wasmModule;
 
 /**
  * 示例 1: 基本编译

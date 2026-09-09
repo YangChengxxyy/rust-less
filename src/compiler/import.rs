@@ -293,12 +293,10 @@ impl ImportCompiler for Compiler {
         let old_file = self.current_file.clone();
         self.current_file = display_path;
 
-        let mut src_line = 1usize;
-        for line in content.split_inclusive('\n') {
+        for (src_line, line) in (1usize..).zip(content.split_inclusive('\n')) {
             let pos = Position::new(src_line, 1);
             self.add_mapping(&pos, None);
             self.write_str(line);
-            src_line += 1;
         }
 
         // Handle files without trailing newline while preserving old behavior.

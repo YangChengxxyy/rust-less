@@ -1,0 +1,39 @@
+{
+  "name": "vite-plugin-rust-less",
+  "version": "1.0.0",
+  "description": "Vite plugin that compiles LESS with rust-less via WebAssembly / 通过 WASM 版 rust-less 编译 LESS 的 Vite 插件",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "less",
+    "rust",
+    "wasm",
+    "vite",
+    "vite-plugin",
+    "css",
+    "stylesheet"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rust-less/rust-less",
+    "directory": "packages/vite-plugin-rust-less"
+  },
+  "peerDependencies": {
+    "vite": ">=4 || ^5.0.0"
+  },
+  "dependencies": {
+    "rust-less-wasm-node": "^1.0.0"
+  }
+}

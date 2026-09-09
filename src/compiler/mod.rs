@@ -234,6 +234,17 @@ impl Compiler {
         Ok(())
     }
 
+    /// 注册插件扩展包（[`crate::plugin::PluginBundle`]）。
+    ///
+    /// 先校验 API 版本，再由插件包自行注册各扩展点；
+    /// 错误统一包装为 [`Error::PluginError`] 并带上插件包名称。
+    pub fn register_plugin_bundle(
+        &mut self,
+        bundle: Box<dyn crate::plugin::PluginBundle>,
+    ) -> Result<()> {
+        crate::plugin::register_bundle(self, bundle)
+    }
+
     /// 获取生成的源码映射
     pub fn generate_source_map(&self) -> Option<String> {
         self.source_map_generator.generate_json()

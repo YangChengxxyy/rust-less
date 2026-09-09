@@ -31,15 +31,15 @@
 - Favor TDD: add or update tests before implementation when feasible.
 
 ## Configuration & Features
-- Optional features: `cli`, `wasm`, `serde` (see `Cargo.toml`).
+- Optional features: `cli`, `wasm`, `serde`, `lsp` (see `Cargo.toml`).
 - CLI usage examples live in `README.md`; keep them in sync with behavior.
 
 ## Current Status & Roadmap
-- Current version: 0.3.0; test suite reports 359 passing tests; less.js compat gate: 80 pass / 0 fail under strict-mappings (see `README.md`).
-- Near-term focus: finish string function parsing edge cases and tighten error reporting.
-- Planned features: source maps, Maps data structure, and a plugin system; WASM build is supported via `./build-wasm.sh`.
+- Current version: 1.0.0; test suite reports 381 passing tests (`--all-features` 395); less.js compat gate: 80 pass / 0 fail under strict-mappings (see `README.md`).
+- Near-term focus: Maps 高级语义与 LESS 4.x 边界对齐；持续性能基线维护。
+- v1.0.0 生态组件：`rust-less-lsp` 语言服务器（feature `lsp`）、构建工具插件（`packages/`）、WASM 发布流程（`./build-wasm.sh`）、版本化插件 API（`rust_less::plugin::PluginBundle`）。
 ## Milestone Checklist (Synced With README)
 - v0.2.4 (1-2 weeks): fix string function parsing (`e()`, `replace()`), add edge-case tests, improve error details, run perf baselines.
 - v0.3.0 ✅ done: minimal source maps, combined `@import` options (comma-separated list, unknown-option error, orthogonal optional/multiple), CLI flags aligned with `CompilerOptions`.
 - v0.4.0 ✅ done: Maps data structure, deep source map alignment (strict-mappings), plugin hook design (`docs/PLUGIN_HOOKS_DESIGN.md`, `Compiler::register_function`).
-- v1.0.0 (6-12 months): LSP, build-tool plugins, standardized WASM release flow, versioned plugin API.
+- v1.0.0 ✅ done (2026-09-09): LSP server (`rust-less-lsp`, feature `lsp`), build-tool plugins (Webpack loader, Vite plugin, Rollup plugin in `packages/`), standardized WASM release flow (`./build-wasm.sh` + `docs/WASM_RELEASE.md` + CI workflow), versioned plugin API freeze + packaging/discovery convention (`PluginBundle`, `docs/PLUGIN_PACKAGING.md`).

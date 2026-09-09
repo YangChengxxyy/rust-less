@@ -130,12 +130,13 @@ Rust LESS 编译器提供多种方式与 JavaScript 生态系统集成。
 
 #### 安装
 ```bash
-npm install rust-less-wasm
+npm install rust-less-wasm        # 浏览器 / bundler
+npm install rust-less-wasm-node   # Node.js（构建工具插件使用此变体）
 ```
 
 #### Node.js 使用
 ```javascript
-const { compileLess } = require('rust-less-wasm');
+const { compileLess } = require('rust-less-wasm-node');
 
 async function main() {
     const lessCode = `
@@ -151,38 +152,30 @@ async function main() {
 #### 浏览器使用
 ```html
 <script type="module">
-    import { compileLess } from './rust-less-wasm/index.js';
+    import { compileLess } from 'rust-less-wasm';
     // ...
 </script>
 ```
 
+本地构建与发布流程见 [`WASM_RELEASE.md`](WASM_RELEASE.md)（`./build-wasm.sh`）。
+
 ### 构建工具插件
 
-#### Vite 插件示例
-```javascript
-// vite-plugin-rust-less.js
-import { compileLessWithOptions } from 'rust-less-wasm';
+官方插件包（`packages/` 目录，详见 [`BUILD_TOOL_PLUGINS.md`](BUILD_TOOL_PLUGINS.md)）：
 
-export function rustLess(options = {}) {
-    return {
-        name: 'rust-less',
-        async transform(code, id) {
-            if (!id.endsWith('.less')) return null;
-            
-            const result = await compileLessWithOptions(code, {
-                compress: options.compress || false,
-                sourceMap: false
-            });
-            
-            if (result.error) throw new Error(result.error);
-            
-            return {
-                code: `export default ${JSON.stringify(result.css)}`,
-                map: null
-            };
-        }
-    };
-}
+| 包 | 目标工具 | 安装 |
+|----|----------|------|
+| `rust-less-loader` | Webpack ≥ 5 | `npm i -D rust-less-wasm-node rust-less-loader` |
+| `vite-plugin-rust-less` | Vite ≥ 4 | `npm i -D rust-less-wasm-node vite-plugin-rust-less` |
+| `rollup-plugin-rust-less` | Rollup ≥ 3 | `npm i -D rust-less-wasm-node rollup-plugin-rust-less` |
+
+```javascript
+// vite.config.js
+import rustLess from 'vite-plugin-rust-less';
+
+export default {
+    plugins: [rustLess({ compress: true })]
+};
 ```
 
 ---
