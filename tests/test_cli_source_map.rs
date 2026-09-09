@@ -6,20 +6,26 @@ mod cli_source_map {
     use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    fn temp_dir() -> PathBuf {
+    fn temp_dir(tag: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time before unix epoch")
             .as_nanos();
-        let dir =
-            std::env::temp_dir().join(format!("rust_less_cli_sm_{}_{}", std::process::id(), nanos));
+        // Tag with the test name so parallel tests never collide on the same
+        // (pid, coarse-clock) directory.
+        let dir = std::env::temp_dir().join(format!(
+            "rust_less_cli_sm_{}_{}_{}",
+            std::process::id(),
+            tag,
+            nanos
+        ));
         fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 
     #[test]
     fn test_cli_writes_external_source_map_and_comment() {
-        let dir = temp_dir();
+        let dir = temp_dir("external_comment");
         let input = dir.join("input.less");
         let output = dir.join("out.css");
         let map = dir.join("out.css.map");
@@ -64,7 +70,7 @@ mod cli_source_map {
 
     #[test]
     fn test_cli_uses_custom_source_map_url() {
-        let dir = temp_dir();
+        let dir = temp_dir("custom_url");
         let input = dir.join("input.less");
         let output = dir.join("out.css");
 
@@ -96,7 +102,7 @@ mod cli_source_map {
 
     #[test]
     fn test_cli_lessjs_compat_source_map_rewrites_sources_and_names() {
-        let dir = temp_dir();
+        let dir = temp_dir("lessjs_compat");
         let nested_dir = dir.join("nested");
         fs::create_dir_all(&nested_dir).expect("create nested dir");
 
