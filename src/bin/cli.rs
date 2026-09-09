@@ -14,7 +14,7 @@ fn default_source_map_url(map_path: &str) -> String {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = Command::new("rust-less")
-        .version("0.3.0")
+        .version(env!("CARGO_PKG_VERSION"))
         .author("Yang Cheng")
         .about("一个用 Rust 编写的 LESS 到 CSS 编译器")
         .arg(

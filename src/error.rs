@@ -77,13 +77,6 @@ pub enum Error {
         column: usize,
     },
 
-    /// 导入中的循环依赖
-    CircularDependency {
-        path: String,
-        line: usize,
-        column: usize,
-    },
-
     /// 文件 I/O 错误
     IoError {
         message: String,
@@ -245,15 +238,6 @@ impl Error {
         }
     }
 
-    /// 创建循环依赖错误
-    pub fn circular_dependency(path: impl Into<String>, line: usize, column: usize) -> Self {
-        Error::CircularDependency {
-            path: path.into(),
-            line,
-            column,
-        }
-    }
-
     /// 创建 I/O 错误
     pub fn io_error(message: impl Into<String>, path: Option<String>) -> Self {
         Error::IoError {
@@ -377,7 +361,6 @@ impl Error {
             | Error::TypeMismatch { line, .. }
             | Error::DivisionByZero { line, .. }
             | Error::ImportError { line, .. }
-            | Error::CircularDependency { line, .. }
             | Error::FunctionError { line, .. }
             | Error::MixinParameterError { line, .. }
             | Error::GuardError { line, .. }
@@ -403,7 +386,6 @@ impl Error {
             | Error::TypeMismatch { column, .. }
             | Error::DivisionByZero { column, .. }
             | Error::ImportError { column, .. }
-            | Error::CircularDependency { column, .. }
             | Error::FunctionError { column, .. }
             | Error::MixinParameterError { column, .. }
             | Error::GuardError { column, .. }
@@ -432,9 +414,6 @@ impl Error {
             Error::DivisionByZero { .. } => "Division by zero".to_string(),
             Error::ImportError { path, reason, .. } => {
                 format!("Import error '{}': {}", path, reason)
-            }
-            Error::CircularDependency { path, .. } => {
-                format!("Circular dependency detected: {}", path)
             }
             Error::IoError { message, path } => match path {
                 Some(p) => format!("I/O error in '{}': {}", p, message),
@@ -551,10 +530,4 @@ mod tests {
         assert!(err.message().contains("found string"));
     }
 
-    #[test]
-    fn test_circular_dependency_error() {
-        let err = Error::circular_dependency("styles.less", 1, 1);
-        assert!(err.message().contains("Circular dependency"));
-        assert!(err.message().contains("styles.less"));
-    }
 }

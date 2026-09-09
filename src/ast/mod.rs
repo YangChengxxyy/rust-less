@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::rc::Rc;
 
 pub mod expressions;
 pub mod selectors;
@@ -29,11 +30,16 @@ impl Position {
     pub fn new(line: usize, column: usize) -> Self {
         Self { line, column }
     }
+
+    /// Get the default position (1, 1)
+    pub fn default_position() -> Position {
+        Position { line: 1, column: 1 }
+    }
 }
 
 impl Default for Position {
     fn default() -> Self {
-        Self { line: 1, column: 1 }
+        Self::default_position()
     }
 }
 
@@ -57,7 +63,7 @@ impl Stylesheet {
     pub fn with_statements(statements: Vec<Statement>) -> Self {
         Self {
             statements,
-            position: Position::default(),
+            position: Position::default_position(),
         }
     }
 }
@@ -646,8 +652,10 @@ pub struct Scope {
     pub mixins: HashMap<String, Vec<MixinDefinition>>,
     /// Source file where each variable was defined (for source maps)
     pub variable_files: HashMap<String, String>,
-    /// Parent scope for variable lookup
-    pub parent: Option<Box<Scope>>,
+    /// Parent scope for variable lookup. Shared via `Rc`: pushing a child
+    /// scope freezes the ancestor chain without deep-cloning it, and
+    /// copy-on-write (`Rc::make_mut`) restores an owned chain on mutation.
+    pub parent: Option<Rc<Scope>>,
 }
 
 impl Scope {
@@ -656,13 +664,15 @@ impl Scope {
         Self::default()
     }
 
-    /// Create a new scope with the given parent scope
-    pub fn with_parent(parent: Scope) -> Self {
+    /// Create a new scope with the given (shared) parent scope. The parent
+    /// chain is frozen at push time; later mutations of it happen
+    /// copy-on-write and never affect sibling snapshots.
+    pub fn with_parent(parent: Rc<Scope>) -> Self {
         Self {
             variables: HashMap::new(),
             mixins: HashMap::new(),
             variable_files: HashMap::new(),
-            parent: Some(Box::new(parent)),
+            parent: Some(parent),
         }
     }
 
@@ -677,11 +687,13 @@ impl Scope {
     }
 
     /// Look up the source file where a variable was defined
-    pub fn lookup_variable_file(&self, name: &str) -> Option<&String> {
-        self.variable_files.get(name).or_else(|| {
-            self.parent
-                .as_ref()
-                .and_then(|p| p.lookup_variable_file(name))
+    pub fn lookup_variable_file(&self, name: &str) -> Option<String> {
+        self.variable_files.get(name).cloned().or_else(|| {
+            self.parent.as_ref()
+                .and_then(|p| {
+                    // Recursively lookup in parent scopes
+                    p.lookup_variable_file(name)
+                })
         })
     }
 
@@ -691,11 +703,13 @@ impl Scope {
     }
 
     /// Look up a variable by name, searching parent scopes if needed
-    pub fn lookup_variable(&self, name: &str) -> Option<&Expression> {
-        self.variables.get(name).or_else(|| {
-            self.parent
-                .as_ref()
-                .and_then(|parent| parent.lookup_variable(name))
+    pub fn lookup_variable(&self, name: &str) -> Option<Expression> {
+        self.variables.get(name).cloned().or_else(|| {
+            self.parent.as_ref()
+                .and_then(|parent| {
+                    // Recursively lookup in parent scopes
+                    parent.lookup_variable(name)
+                })
         })
     }
 
@@ -706,19 +720,20 @@ impl Scope {
         if self.variables.contains_key(name) {
             Some(0)
         } else {
-            self.parent
-                .as_ref()
+            self.parent.as_ref()
                 .and_then(|parent| parent.lookup_variable_depth(name))
                 .map(|depth| depth + 1)
         }
     }
 
     /// Look up a mixin by name, searching parent scopes if needed
-    pub fn lookup_mixin(&self, name: &str) -> Option<&Vec<MixinDefinition>> {
-        self.mixins.get(name).or_else(|| {
-            self.parent
-                .as_ref()
-                .and_then(|parent| parent.lookup_mixin(name))
+    pub fn lookup_mixin(&self, name: &str) -> Option<Vec<MixinDefinition>> {
+        self.mixins.get(name).cloned().or_else(|| {
+            self.parent.as_ref()
+                .and_then(|parent| {
+                    // Recursively lookup in parent scopes
+                    parent.lookup_mixin(name)
+                })
         })
     }
 }
@@ -1014,7 +1029,7 @@ mod tests {
 
         let found = scope.lookup_variable("color");
         assert!(found.is_some());
-        assert_eq!(*found.unwrap(), value);
+        assert_eq!(found.unwrap(), value);
 
         let not_found = scope.lookup_variable("missing");
         assert!(not_found.is_none());
@@ -1027,7 +1042,7 @@ mod tests {
         let parent_value = Expression::string("blue".to_string(), pos.clone());
         parent.define_variable("parent_color".to_string(), parent_value.clone());
 
-        let mut child = Scope::with_parent(parent);
+        let mut child = Scope::with_parent(std::rc::Rc::new(parent));
         let child_value = Expression::string("red".to_string(), pos);
         child.define_variable("child_color".to_string(), child_value.clone());
 
@@ -1036,9 +1051,9 @@ mod tests {
         // Child can access parent variables
         assert!(child.lookup_variable("parent_color").is_some());
 
-        assert_eq!(*child.lookup_variable("child_color").unwrap(), child_value);
+        assert_eq!(child.lookup_variable("child_color").unwrap(), child_value);
         assert_eq!(
-            *child.lookup_variable("parent_color").unwrap(),
+            child.lookup_variable("parent_color").unwrap(),
             parent_value
         );
     }

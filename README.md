@@ -59,6 +59,21 @@
 |------|--------|--------|----------|
 | **Maps 高级语义** | 🔥 | 高 | 嵌套结构操作、边界行为与 LESS 4.x 完全对齐 |
 
+### 🔧 代码质量改进（2026-09-09 代码审查后）
+
+本轮全面代码审查后完成的高/中优先级修复：
+
+| 改进 | 说明 |
+|------|------|
+| **消除 `unreachable!()`** | Parser 二元运算符解析与 at-rule 编译中的 6 处 `unreachable!()` 替换为带位置信息的 `ParseError`，杜绝意外输入导致 panic |
+| **Scope 作用域链加固** | `lookup_variable` / `lookup_mixin` / `lookup_variable_depth` 改为返回所有权值（`Option<Expression>` 等），消除跨 `Rc` 边界的悬垂引用风险 |
+| **Position 默认值复用** | `Position::default_position()` 提供统一的 (1,1) 构造入口，减少重复分配 |
+| **functions.rs 模块化注册** | 4100 行的内置函数注册表拆分为 `register_math/color/string/type_check/advanced_math/transform/list/color_channel/color_blending` 等 9 个分类注册方法，结构清晰可维护 |
+| **Compiler 构造去重** | `Compiler::compressed()` 复用 `new()`（约 30 行重复初始化代码删除） |
+| **大文件压力测试** | 新增 `tests/test_stress.rs`：2000 规则编译正确性 + 90 层深嵌套 + 输出线性扩展验证 |
+
+内置函数语义修复：`round(v, digits)` 支持小数位参数、`mod()` 保留单位、`range()` 保留起始单位并输出空格分隔列表、`if()` 接受布尔/数字/字符串条件、`convert()` 补充 px↔in/cm/mm 换算、`replace()` 空 pattern 报错、`escape()` 对齐 less.js 编码字符集（额外编码 `= : # ; ( )`）。Maps：`map-set`/`map-update`/`map-replace` 修正路径参数（最后一个参数是值而非键）、`map-deep-remove` 删除后递归清理空的祖先 map、全部查找改为 last-wins 重复键语义。
+
 ### 🔌 插件系统（已实现）
 
 进程内 Rust API 插件系统已落地（`rust_less::plugin` 模块，详见
@@ -286,20 +301,13 @@ node tools/lessjs-compat/run-lessjs-compat.js
 bash tools/status-check/run-status-check.sh
 # 显式启用 strict-mappings（与默认行为一致）
 bash tools/status-check/run-status-check.sh --strict-mappings
-# 统一门禁（仅观测 mappings hash 差异，不作为失败）
-bash tools/status-check/run-status-check.sh --observe-mappings
-# 统一门禁（含性能阈值）
-bash tools/status-check/run-status-check.sh --with-perf
-```
-
-### 测试统计
 
 | 测试类型 | 通过 | 失败 | 忽略 | 通过率 |
 |----------|------|------|------|--------|
 | 单元测试 | 106 | 0 | 0 | 100% |
 | 集成测试 | 292 | 0 | 0 | 100% |
-| Doc测试 | 2 | 0 | 0 | 100% |
-| **总计** | **400** | **0** | **0** | **100%** |
+| 压力测试 | 3 | 0 | 0 | 100% |
+| **总计** | **414** | **0** | **0** | **100%** |
 
 ## 🎯 功能演示
 

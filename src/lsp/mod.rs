@@ -160,6 +160,24 @@ fn line_text(text: &str, line0: u32) -> Option<&str> {
     text.lines().nth(line0 as usize)
 }
 
+/// 由字节偏移计算 1-based (line, column)，与解析器位置约定一致
+fn offset_to_pos(text: &str, offset: usize) -> (usize, usize) {
+    let mut line = 1;
+    let mut column = 1;
+    for (i, ch) in text.char_indices() {
+        if i >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+    (line, column)
+}
+
 /// 提取光标处（含边界）的标识符单词，保留 `@`/`.`/`#` 前缀
 fn word_at(text: &str, line: u32, character: u32) -> Option<String> {
     let l = line_text(text, line)?;
@@ -427,29 +445,32 @@ fn symbols_for_text(text: &str) -> DocumentSymbols {
         let mixin_re = Regex::new(r"(?m)^\s*\.([\w-]+)\s*\(").unwrap();
         let ns_re = Regex::new(r"(?m)^\s*#([\w-]+)\s*\{").unwrap();
         for cap in var_re.captures_iter(text) {
+            let (line, column) = offset_to_pos(text, cap.get(0).unwrap().start());
             out.vars.push(VarSymbol {
                 name: cap[1].to_string(),
                 value_text: String::new(),
-                line: 1,
-                column: 1,
+                line,
+                column,
             });
         }
         for cap in mixin_re.captures_iter(text) {
+            let (line, column) = offset_to_pos(text, cap.get(1).unwrap().start());
             out.mixins.push(MixinSymbol {
                 prefix: '.',
                 name: cap[1].to_string(),
                 params_text: String::new(),
-                line: 1,
-                column: 1,
+                line,
+                column,
             });
         }
         for cap in ns_re.captures_iter(text) {
+            let (line, column) = offset_to_pos(text, cap.get(1).unwrap().start());
             out.mixins.push(MixinSymbol {
                 prefix: '#',
                 name: cap[1].to_string(),
                 params_text: String::new(),
-                line: 1,
-                column: 1,
+                line,
+                column,
             });
         }
         out.vars.sort_by(|a, b| a.name.cmp(&b.name));
@@ -674,7 +695,18 @@ impl Server {
             Some((t, _)) => t.clone(),
             None => return,
         };
-        let diagnostics = match compile_with_options(&text, CompilerOptions::default()) {
+        // 文件 URI 时把文档所在目录与进程工作目录注入导入搜索路径，
+        // 使 `@import "sibling.less"` 能找到同级文件（仅工作区根级，不做项目配置发现）
+        let mut options = CompilerOptions::default();
+        if let Ok(file) = uri.to_file_path() {
+            if let Some(dir) = file.parent() {
+                options.include_paths.push(dir.display().to_string());
+            }
+        }
+        if let Ok(cwd) = std::env::current_dir() {
+            options.include_paths.push(cwd.display().to_string());
+        }
+        let diagnostics = match compile_with_options(&text, options) {
             Ok(_) => Vec::new(),
             Err(e) => vec![diagnostic_from_error(&e, &text)],
         };
@@ -691,37 +723,62 @@ impl Server {
             )));
     }
 
-    /// 补全：文档符号 + 内置函数
-    fn completion(&self, uri: &lsp_types::Url, _pos: Position) -> Vec<CompletionItem> {
+    /// 补全：文档符号 + 内置函数。
+    ///
+    /// 按光标前紧邻的字符过滤上下文：`@` → 仅变量，
+    /// `.`/`#` → 仅混入/命名空间，其余 → 全部候选。
+    fn completion(&self, uri: &lsp_types::Url, pos: Position) -> Vec<CompletionItem> {
         let mut items = Vec::new();
         if let Some((text, _)) = self.docs.get(uri) {
+            // 仅当光标紧邻触发字符且尚未输入标识符时按上下文过滤；
+            // `@` → 仅变量，`.`/`#` → 仅混入/命名空间
+            let chars_of = |l: &str| {
+                let chars: Vec<char> = l.chars().collect();
+                let prev = (pos.character > 0 && (pos.character as usize) <= chars.len())
+                    .then(|| chars[pos.character as usize - 1]);
+                let next = chars.get(pos.character as usize).copied();
+                (prev, next)
+            };
+            let (prev, next) = line_text(text, pos.line)
+                .map(chars_of)
+                .unwrap_or((None, None));
+            let typing_ident = next.map(|c| c.is_alphanumeric() || c == '-' || c == '_');
+            let fresh_trigger = typing_ident != Some(true);
+            let want_vars = !(matches!(prev, Some('.') | Some('#')) && fresh_trigger);
+            let want_mixins = !(prev == Some('@') && fresh_trigger);
             let symbols = symbols_for_text(text);
-            for v in &symbols.vars {
-                items.push(CompletionItem {
-                    label: format!("@{}", v.name),
-                    kind: Some(CompletionItemKind::VARIABLE),
-                    detail: (!v.value_text.is_empty())
-                        .then(|| format!("{}: {}", v.name, v.value_text)),
-                    ..CompletionItem::default()
-                });
+            if want_vars {
+                for v in &symbols.vars {
+                    items.push(CompletionItem {
+                        label: format!("@{}", v.name),
+                        kind: Some(CompletionItemKind::VARIABLE),
+                        detail: (!v.value_text.is_empty())
+                            .then(|| format!("{}: {}", v.name, v.value_text)),
+                        ..CompletionItem::default()
+                    });
+                }
             }
-            for m in &symbols.mixins {
-                items.push(CompletionItem {
-                    label: format!("{}{}", m.prefix, m.name),
-                    kind: Some(CompletionItemKind::FUNCTION),
-                    detail: (!m.params_text.is_empty())
-                        .then(|| format!("{}{}{}", m.prefix, m.name, m.params_text)),
-                    ..CompletionItem::default()
-                });
+            if want_mixins {
+                for m in &symbols.mixins {
+                    items.push(CompletionItem {
+                        label: format!("{}{}", m.prefix, m.name),
+                        kind: Some(CompletionItemKind::FUNCTION),
+                        detail: (!m.params_text.is_empty())
+                            .then(|| format!("{}{}{}", m.prefix, m.name, m.params_text)),
+                        ..CompletionItem::default()
+                    });
+                }
             }
-        }
-        for (name, doc) in BUILTIN_FUNCTIONS {
-            items.push(CompletionItem {
-                label: (*name).to_string(),
-                kind: Some(CompletionItemKind::FUNCTION),
-                detail: Some((*doc).to_string()),
-                ..CompletionItem::default()
-            });
+            if want_vars && want_mixins {
+                for (name, doc) in BUILTIN_FUNCTIONS {
+                    items.push(CompletionItem {
+                        label: (*name).to_string(),
+                        kind: Some(CompletionItemKind::FUNCTION),
+                        detail: Some((*doc).to_string()),
+                        ..CompletionItem::default()
+                    });
+                }
+            }
         }
         items
     }

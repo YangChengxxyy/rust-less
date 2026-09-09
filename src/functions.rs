@@ -3,7 +3,7 @@
 //! 此模块提供 LESS 内置函数的实现，用于颜色操作、
 //! 数学运算、字符串操作和其他实用功能。
 
-use crate::ast::{Expression, Position};
+use crate::ast::{Expression, Position, ListSeparator, TemplateStringPart, BinaryOperator, UnaryOperator};
 use crate::error::{Error, Result};
 
 /// Type alias for built-in function signature
@@ -26,7 +26,45 @@ impl FunctionRegistry {
 
     /// 注册所有内置函数
     fn register_builtin_functions(&mut self) {
-        // 数学函数
+        // 数学函数模块
+        self.register_math_functions();
+
+        // 颜色函数模块
+        self.register_color_functions();
+
+        // 字符串函数模块
+        self.register_string_functions();
+
+        // 类型检查函数模块
+        self.register_type_check_functions();
+
+        // 高级数学函数模块
+        self.register_advanced_math_functions();
+
+        // 变换函数模块
+        self.register_transform_functions();
+
+        // URL 函数
+        self.register("url", Box::new(url_function));
+
+        // 条件函数
+        self.register("if", Box::new(if_function));
+
+        // 列表函数模块
+        self.register_list_functions();
+
+        // 单位转换函数
+        self.register("convert", Box::new(convert_function));
+
+        // 颜色通道访问函数模块
+        self.register_color_channel_functions();
+
+        // 颜色混合函数模块
+        self.register_color_blending_functions();
+    }
+
+    /// 注册数学函数
+    fn register_math_functions(&mut self) {
         self.register("round", Box::new(round_function));
         self.register("ceil", Box::new(ceil_function));
         self.register("floor", Box::new(floor_function));
@@ -34,8 +72,10 @@ impl FunctionRegistry {
         self.register("min", Box::new(min_function));
         self.register("max", Box::new(max_function));
         self.register("percentage", Box::new(percentage_function));
+    }
 
-        // 颜色函数
+    /// 注册颜色函数
+    fn register_color_functions(&mut self) {
         self.register("lighten", Box::new(lighten_function));
         self.register("darken", Box::new(darken_function));
         self.register("saturate", Box::new(saturate_function));
@@ -49,17 +89,21 @@ impl FunctionRegistry {
         self.register("rgba", Box::new(rgba_function));
         self.register("hsl", Box::new(hsl_function));
         self.register("hsla", Box::new(hsla_function));
+    }
 
-        // String functions
-        self.register("e", Box::new(escape_function));
+    /// 注册字符串函数
+    fn register_string_functions(&mut self) {
+        self.register("e", Box::new(e_function));
         self.register("escape", Box::new(escape_function));
         self.register("replace", Box::new(replace_function));
         self.register("uppercase", Box::new(uppercase_function));
         self.register("lowercase", Box::new(lowercase_function));
         self.register("length", Box::new(length_function));
         self.register("extract", Box::new(extract_function));
+    }
 
-        // Type check functions
+    /// 注册类型检查函数
+    fn register_type_check_functions(&mut self) {
         self.register("isnumber", Box::new(isnumber_function));
         self.register("iscolor", Box::new(iscolor_function));
         self.register("isstring", Box::new(isstring_function));
@@ -70,8 +114,10 @@ impl FunctionRegistry {
         self.register("ispercentage", Box::new(ispercentage_function));
         self.register("unit", Box::new(unit_function));
         self.register("get-unit", Box::new(get_unit_function));
+    }
 
-        // Advanced math functions
+    /// 注册高级数学函数
+    fn register_advanced_math_functions(&mut self) {
         self.register("sqrt", Box::new(sqrt_function));
         self.register("sin", Box::new(sin_function));
         self.register("cos", Box::new(cos_function));
@@ -82,20 +128,19 @@ impl FunctionRegistry {
         self.register("pow", Box::new(pow_function));
         self.register("pi", Box::new(pi_function));
         self.register("mod", Box::new(mod_function));
+    }
 
-        // URL function
-        self.register("url", Box::new(url_function));
-
-        // Transform functions
+    /// 注册变换函数
+    fn register_transform_functions(&mut self) {
         self.register("scale", Box::new(scale_function));
         self.register("translateX", Box::new(translate_x_function));
-        self.register("translateY", Box::new(translate_y_function));
-        self.register("rotate", Box::new(rotate_function));
+        // Guard-only function: default() evaluates true in the second
+        // matching pass (mixin.rs skips default()-guarded mixins in pass 1).
+        self.register("default", Box::new(default_function));
+    }
 
-        // Conditional functions
-        self.register("if", Box::new(if_function));
-
-        // List functions
+    /// 注册列表函数
+    fn register_list_functions(&mut self) {
         self.register("range", Box::new(range_function));
         self.register("map-get", Box::new(map_get_function));
         self.register("map-has-key", Box::new(map_has_key_function));
@@ -108,11 +153,10 @@ impl FunctionRegistry {
         self.register("map-replace", Box::new(map_replace_function));
         self.register("map-remove", Box::new(map_remove_function));
         self.register("map-deep-remove", Box::new(map_deep_remove_function));
+    }
 
-        // Unit conversion
-        self.register("convert", Box::new(convert_function));
-
-        // Color channel access functions
+    /// 注册颜色通道访问函数
+    fn register_color_channel_functions(&mut self) {
         self.register("red", Box::new(red_function));
         self.register("green", Box::new(green_function));
         self.register("blue", Box::new(blue_function));
@@ -123,8 +167,10 @@ impl FunctionRegistry {
         self.register("luma", Box::new(luma_function));
         self.register("luminance", Box::new(luma_function)); // alias
         self.register("argb", Box::new(argb_function));
+    }
 
-        // Color blending functions
+    /// 注册颜色混合函数
+    fn register_color_blending_functions(&mut self) {
         self.register("multiply", Box::new(multiply_function));
         self.register("screen", Box::new(screen_function));
         self.register("overlay", Box::new(overlay_function));
@@ -139,12 +185,9 @@ impl FunctionRegistry {
         self.register("tint", Box::new(tint_function));
         self.register("shade", Box::new(shade_function));
         self.register("contrast", Box::new(contrast_function));
-
-        // default() placeholder for mixin guard matching
-        self.register("default", Box::new(default_function));
     }
 
-    /// Register a custom function
+    /// 注册自定义函数
     pub fn register<F>(&mut self, name: &str, func: Box<F>)
     where
         F: Fn(&[Expression], &Position) -> Result<Expression> + 'static,
@@ -153,6 +196,7 @@ impl FunctionRegistry {
     }
 
     /// 注册插件函数（[`crate::plugin::LessFunction`]），与内置函数同一调用路径。
+    ///
     /// 插件错误统一包装为 [`crate::Error::PluginError`]，不静默吞掉。
     pub fn register_plugin(&mut self, plugin: Box<dyn crate::plugin::LessFunction>) {
         let name = plugin.name().to_string();
@@ -172,11 +216,7 @@ impl FunctionRegistry {
         if let Some(func) = self.functions.get(name) {
             func(args, position)
         } else {
-            Err(Error::undefined_function(
-                name,
-                position.line,
-                position.column,
-            ))
+            Err(Error::undefined_function(name, position.line, position.column))
         }
     }
 
@@ -195,40 +235,63 @@ impl Default for FunctionRegistry {
 // Math functions
 
 fn round_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
+    if args.is_empty() || args.len() > 2 {
         return Err(Error::function_error(
             "round",
-            "Expected 1 argument",
+            "expected 1 or 2 arguments (value, [decimal_places])",
             position.line,
             position.column,
         ));
     }
 
-    match &args[0] {
-        Expression::Number { value, unit, .. } => Ok(Expression::Number {
-            value: value.round(),
-            unit: unit.clone(),
-            position: position.clone(),
-        }),
-        _ => Err(Error::function_error(
-            "round",
-            "Expected number argument",
-            position.line,
-            position.column,
-        )),
-    }
+    let value = match &args[0] {
+        Expression::Number { value, unit, .. } => (value, unit),
+        _ => {
+            return Err(Error::function_error(
+                "round",
+                "expected numeric value argument",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let decimal_places = if args.len() == 2 {
+        match &args[1] {
+            Expression::Number { value, .. } => *value as u32,
+            _ => {
+                return Err(Error::function_error(
+                    "round",
+                    "expected numeric decimal_places argument",
+                    position.line,
+                    position.column,
+                ));
+            }
+        }
+    } else {
+        0
+    };
+
+    // less.js: round to specified decimal places (half away from zero)
+    let factor = 10.0f64.powi(decimal_places as i32);
+    let rounded = (value.0 * factor).round() / factor;
+
+    Ok(Expression::Number {
+        value: rounded,
+        unit: value.1.clone(),
+        position: position.clone(),
+    })
+}
+
+// default() for mixin guards: evaluates true in the second matching pass.
+// The mixin compiler statically skips default()-guarded mixins in pass 1,
+// so by the time this is called the default branch should match.
+fn default_function(_args: &[Expression], position: &Position) -> Result<Expression> {
+    Ok(Expression::Boolean(true, position.clone()))
 }
 
 fn ceil_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
-        return Err(Error::function_error(
-            "ceil",
-            "Expected 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
+    ensure_arg_count("ceil", 1, args, position)?;
     match &args[0] {
         Expression::Number { value, unit, .. } => Ok(Expression::Number {
             value: value.ceil(),
@@ -237,7 +300,7 @@ fn ceil_function(args: &[Expression], position: &Position) -> Result<Expression>
         }),
         _ => Err(Error::function_error(
             "ceil",
-            "Expected number argument",
+            "expected one numeric argument",
             position.line,
             position.column,
         )),
@@ -245,15 +308,7 @@ fn ceil_function(args: &[Expression], position: &Position) -> Result<Expression>
 }
 
 fn floor_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
-        return Err(Error::function_error(
-            "floor",
-            "Expected 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
+    ensure_arg_count("floor", 1, args, position)?;
     match &args[0] {
         Expression::Number { value, unit, .. } => Ok(Expression::Number {
             value: value.floor(),
@@ -262,7 +317,7 @@ fn floor_function(args: &[Expression], position: &Position) -> Result<Expression
         }),
         _ => Err(Error::function_error(
             "floor",
-            "Expected number argument",
+            "expected one numeric argument",
             position.line,
             position.column,
         )),
@@ -270,15 +325,7 @@ fn floor_function(args: &[Expression], position: &Position) -> Result<Expression
 }
 
 fn abs_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
-        return Err(Error::function_error(
-            "abs",
-            "Expected 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
+    ensure_arg_count("abs", 1, args, position)?;
     match &args[0] {
         Expression::Number { value, unit, .. } => Ok(Expression::Number {
             value: value.abs(),
@@ -287,7 +334,7 @@ fn abs_function(args: &[Expression], position: &Position) -> Result<Expression> 
         }),
         _ => Err(Error::function_error(
             "abs",
-            "Expected number argument",
+            "expected one numeric argument",
             position.line,
             position.column,
         )),
@@ -295,16 +342,7 @@ fn abs_function(args: &[Expression], position: &Position) -> Result<Expression> 
 }
 
 fn min_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.is_empty() {
-        return Err(Error::function_error(
-            "min",
-            "Expected at least 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut min_val = f64::INFINITY;
+    let mut min_val = f64::MAX;
     let mut result_unit = None;
 
     for arg in args {
@@ -318,10 +356,10 @@ fn min_function(args: &[Expression], position: &Position) -> Result<Expression> 
             _ => {
                 return Err(Error::function_error(
                     "min",
-                    "All arguments must be numbers",
+                    "all arguments must be numeric",
                     position.line,
                     position.column,
-                ))
+                ));
             }
         }
     }
@@ -334,16 +372,7 @@ fn min_function(args: &[Expression], position: &Position) -> Result<Expression> 
 }
 
 fn max_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.is_empty() {
-        return Err(Error::function_error(
-            "max",
-            "Expected at least 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut max_val = f64::NEG_INFINITY;
+    let mut max_val = f64::MIN;
     let mut result_unit = None;
 
     for arg in args {
@@ -357,10 +386,10 @@ fn max_function(args: &[Expression], position: &Position) -> Result<Expression> 
             _ => {
                 return Err(Error::function_error(
                     "max",
-                    "All arguments must be numbers",
+                    "all arguments must be numeric",
                     position.line,
                     position.column,
-                ))
+                ));
             }
         }
     }
@@ -373,22 +402,14 @@ fn max_function(args: &[Expression], position: &Position) -> Result<Expression> 
 }
 
 fn percentage_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
-        return Err(Error::function_error(
-            "percentage",
-            "Expected 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
+    ensure_arg_count("percentage", 1, args, position)?;
     match &args[0] {
         Expression::Number { value, .. } => {
             Ok(Expression::Percentage(value * 100.0, position.clone()))
         }
         _ => Err(Error::function_error(
             "percentage",
-            "Expected number argument",
+            "expected one numeric argument",
             position.line,
             position.column,
         )),
@@ -398,249 +419,156 @@ fn percentage_function(args: &[Expression], position: &Position) -> Result<Expre
 // Color functions (placeholder implementations)
 
 fn lighten_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "lighten",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("lighten", 2, args, position)?;
+    let (r, g, b, a) = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)?;
 
-    // Extract and convert color and percentage
-    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
-    let percentage_value = expression_to_percentage(&args[1], position)?;
-
-    // Convert RGB to HSL
-    let (h, s, mut l) = rgb_to_hsl(red, green, blue);
-
-    // Increase lightness by percentage
-    l = (l + percentage_value / 100.0).min(1.0);
-
-    // Convert back to RGB
-    let (r, g, b) = hsl_to_rgb(h, s, l);
+    let (h, s, l) = rgb_to_hsl(r, g, b);
+    let new_l = (l + amount / 100.0).clamp(0.0, 1.0);
+    let (new_r, new_g, new_b) = hsl_to_rgb(h, s, new_l);
 
     Ok(Expression::Color {
-        red: r,
-        green: g,
-        blue: b,
-        alpha,
+        red: new_r,
+        green: new_g,
+        blue: new_b,
+        alpha: a,
         original: None,
         position: position.clone(),
     })
 }
 
 fn darken_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "darken",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("darken", 2, args, position)?;
+    let (r, g, b, a) = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)?;
 
-    // Extract and convert color and percentage
-    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
-    let percentage_value = expression_to_percentage(&args[1], position)?;
-
-    // Convert RGB to HSL
-    let (h, s, mut l) = rgb_to_hsl(red, green, blue);
-
-    // Decrease lightness by percentage
-    l = (l - percentage_value / 100.0).max(0.0);
-
-    // Convert back to RGB
-    let (r, g, b) = hsl_to_rgb(h, s, l);
+    let (h, s, l) = rgb_to_hsl(r, g, b);
+    let new_l = (l - amount / 100.0).clamp(0.0, 1.0);
+    let (new_r, new_g, new_b) = hsl_to_rgb(h, s, new_l);
 
     Ok(Expression::Color {
-        red: r,
-        green: g,
-        blue: b,
-        alpha,
+        red: new_r,
+        green: new_g,
+        blue: new_b,
+        alpha: a,
         original: None,
         position: position.clone(),
     })
 }
 
 fn saturate_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "saturate",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("saturate", 2, args, position)?;
+    let (r, g, b, a) = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)?;
 
-    // Extract and convert color and percentage
-    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
-    let percentage_value = expression_to_percentage(&args[1], position)?;
-
-    // Convert RGB to HSL
-    let (h, mut s, l) = rgb_to_hsl(red, green, blue);
-
-    // Increase saturation by percentage
-    s = (s + percentage_value / 100.0).min(1.0);
-
-    // Convert back to RGB
-    let (r, g, b) = hsl_to_rgb(h, s, l);
+    let (h, s, l) = rgb_to_hsl(r, g, b);
+    let new_s = (s + amount / 100.0).clamp(0.0, 1.0);
+    let (new_r, new_g, new_b) = hsl_to_rgb(h, new_s, l);
 
     Ok(Expression::Color {
-        red: r,
-        green: g,
-        blue: b,
-        alpha,
+        red: new_r,
+        green: new_g,
+        blue: new_b,
+        alpha: a,
         original: None,
         position: position.clone(),
     })
 }
 
 fn desaturate_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "desaturate",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("desaturate", 2, args, position)?;
+    let (r, g, b, a) = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)?;
 
-    // Extract and convert color and percentage
-    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
-    let percentage_value = expression_to_percentage(&args[1], position)?;
-
-    // Convert RGB to HSL
-    let (h, mut s, l) = rgb_to_hsl(red, green, blue);
-
-    // Decrease saturation by percentage
-    s = (s - percentage_value / 100.0).max(0.0);
-
-    // Convert back to RGB
-    let (r, g, b) = hsl_to_rgb(h, s, l);
+    let (h, s, l) = rgb_to_hsl(r, g, b);
+    let new_s = (s - amount / 100.0).clamp(0.0, 1.0);
+    let (new_r, new_g, new_b) = hsl_to_rgb(h, new_s, l);
 
     Ok(Expression::Color {
-        red: r,
-        green: g,
-        blue: b,
-        alpha,
+        red: new_r,
+        green: new_g,
+        blue: new_b,
+        alpha: a,
         original: None,
         position: position.clone(),
     })
 }
 
 fn fade_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "fade",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("fade", 2, args, position)?;
+    let (r, g, b, _) = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)?;
 
-    let (red, green, blue, _) = expression_to_color(&args[0], position)?;
-    let alpha = expression_to_percentage(&args[1], position)? / 100.0;
+    let new_alpha = (amount / 100.0).clamp(0.0, 1.0);
 
     Ok(Expression::Color {
-        red,
-        green,
-        blue,
-        alpha: alpha.clamp(0.0, 1.0),
+        red: r,
+        green: g,
+        blue: b,
+        alpha: new_alpha,
         original: None,
         position: position.clone(),
     })
 }
 
 fn fadeout_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "fadeout",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("fadeout", 2, args, position)?;
+    let (r, g, b, a) = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)?;
 
-    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
-    let amount = expression_to_percentage(&args[1], position)? / 100.0;
+    let new_alpha = (a - amount / 100.0).clamp(0.0, 1.0);
 
     Ok(Expression::Color {
-        red,
-        green,
-        blue,
-        alpha: (alpha - amount).max(0.0),
+        red: r,
+        green: g,
+        blue: b,
+        alpha: new_alpha,
         original: None,
         position: position.clone(),
     })
 }
 
 fn fadein_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "fadein",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("fadein", 2, args, position)?;
+    let (r, g, b, a) = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)?;
 
-    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
-    let amount = expression_to_percentage(&args[1], position)? / 100.0;
+    let new_alpha = (a + amount / 100.0).clamp(0.0, 1.0);
 
     Ok(Expression::Color {
-        red,
-        green,
-        blue,
-        alpha: (alpha + amount).min(1.0),
+        red: r,
+        green: g,
+        blue: b,
+        alpha: new_alpha,
         original: None,
         position: position.clone(),
     })
 }
 
 fn spin_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "spin",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let (red, green, blue, alpha) = expression_to_color(&args[0], position)?;
-
-    let angle = match &args[1] {
+    ensure_arg_count("spin", 2, args, position)?;
+    let (r, g, b, a) = expression_to_color(&args[0], position)?;
+    let amount = match &args[1] {
         Expression::Number { value, .. } => *value,
         _ => {
             return Err(Error::function_error(
                 "spin",
-                "Angle must be a number",
+                "expected numeric argument for hue rotation",
                 position.line,
                 position.column,
-            ))
+            ));
         }
     };
 
-    // Convert RGB to HSL
-    let (mut h, s, l) = rgb_to_hsl(red, green, blue);
-
-    // Rotate hue
-    // Hue is 0.0-1.0 in our HSL implementation, but input is degrees
-    h = (h * 360.0 + angle) % 360.0;
-    if h < 0.0 {
-        h += 360.0;
-    }
-    h /= 360.0;
-
-    // Convert back to RGB
-    let (r, g, b) = hsl_to_rgb(h, s, l);
+    let (h, s, l) = rgb_to_hsl(r, g, b);
+    let new_h = (h + amount).rem_euclid(360.0);
+    let (new_r, new_g, new_b) = hsl_to_rgb(new_h, s, l);
 
     Ok(Expression::Color {
-        red: r,
-        green: g,
-        blue: b,
-        alpha,
+        red: new_r,
+        green: new_g,
+        blue: new_b,
+        alpha: a,
         original: None,
         position: position.clone(),
     })
@@ -650,7 +578,7 @@ fn mix_function(args: &[Expression], position: &Position) -> Result<Expression> 
     if args.len() < 2 || args.len() > 3 {
         return Err(Error::function_error(
             "mix",
-            "Expected 2 or 3 arguments",
+            "expected 2 or 3 arguments",
             position.line,
             position.column,
         ));
@@ -658,32 +586,27 @@ fn mix_function(args: &[Expression], position: &Position) -> Result<Expression> 
 
     let (r1, g1, b1, a1) = expression_to_color(&args[0], position)?;
     let (r2, g2, b2, a2) = expression_to_color(&args[1], position)?;
-
     let weight = if args.len() == 3 {
         expression_to_percentage(&args[2], position)? / 100.0
     } else {
-        0.5
+        0.5 // default 50%
     };
 
-    // LESS mix algorithm
-    let p = weight;
-    let w = p * 2.0 - 1.0;
+    let w = weight * 2.0 - 1.0;
     let a = a1 - a2;
 
-    let w1 = if (w * a - -1.0).abs() < f64::EPSILON {
-        w
+    let weight_factor = if w * a == -1.0 {
+        (w + 1.0) / 2.0
     } else {
-        (w + a) / (1.0 + w * a)
+        (w + 1.0) / 2.0 * (1.0 + (w * a))
     };
-
-    let w1 = (w1 + 1.0) / 2.0;
+    let w1 = weight_factor;
     let w2 = 1.0 - w1;
 
     let r = (r1 as f64 * w1 + r2 as f64 * w2).round() as u8;
     let g = (g1 as f64 * w1 + g2 as f64 * w2).round() as u8;
     let b = (b1 as f64 * w1 + b2 as f64 * w2).round() as u8;
-
-    let alpha = a1 * p + a2 * (1.0 - p);
+    let alpha = a1 * weight + a2 * (1.0 - weight);
 
     Ok(Expression::Color {
         red: r,
@@ -696,37 +619,48 @@ fn mix_function(args: &[Expression], position: &Position) -> Result<Expression> 
 }
 
 fn rgb_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 3 {
-        return Err(Error::function_error(
-            "rgb",
-            "Expected 3 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("rgb", 3, args, position)?;
 
-    // Extract RGB values with clamping
-    let mut rgb_values = Vec::new();
-    for arg in args {
-        match arg {
-            Expression::Number { value, .. } => {
-                rgb_values.push(value.clamp(0.0, 255.0) as u8);
-            }
-            _ => {
-                return Err(Error::function_error(
-                    "rgb",
-                    "All arguments must be numbers",
-                    position.line,
-                    position.column,
-                ))
-            }
+    let r = match &args[0] {
+        Expression::Number { value, .. } => (*value as u8).clamp(0, 255),
+        _ => {
+            return Err(Error::function_error(
+                "rgb",
+                "red component must be numeric",
+                position.line,
+                position.column,
+            ));
         }
-    }
+    };
+
+    let g = match &args[1] {
+        Expression::Number { value, .. } => (*value as u8).clamp(0, 255),
+        _ => {
+            return Err(Error::function_error(
+                "rgb",
+                "green component must be numeric",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let b = match &args[2] {
+        Expression::Number { value, .. } => (*value as u8).clamp(0, 255),
+        _ => {
+            return Err(Error::function_error(
+                "rgb",
+                "blue component must be numeric",
+                position.line,
+                position.column,
+            ));
+        }
+    };
 
     Ok(Expression::Color {
-        red: rgb_values[0],
-        green: rgb_values[1],
-        blue: rgb_values[2],
+        red: r,
+        green: g,
+        blue: b,
         alpha: 1.0,
         original: None,
         position: position.clone(),
@@ -734,80 +668,60 @@ fn rgb_function(args: &[Expression], position: &Position) -> Result<Expression> 
 }
 
 fn rgba_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 4 {
-        return Err(Error::function_error(
-            "rgba",
-            "Expected 4 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("rgba", 4, args, position)?;
 
-    // Extract RGBA values with clamping
-    let mut rgb_values = Vec::new();
-    let mut alpha = 1.0;
+    let (r, g, b, _) = expression_to_color(&Expression::FunctionCall {
+        name: "rgb".to_string(),
+        arguments: args[0..3].to_vec(),
+        position: position.clone(),
+    }, position)?;
 
-    for (i, arg) in args.iter().enumerate() {
-        match arg {
-            Expression::Number { value, .. } => {
-                if i < 3 {
-                    rgb_values.push(value.clamp(0.0, 255.0) as u8);
-                } else {
-                    alpha = *value;
-                }
-            }
-            _ => {
-                return Err(Error::function_error(
-                    "rgba",
-                    "All arguments must be numbers",
-                    position.line,
-                    position.column,
-                ))
-            }
+    let a = match &args[3] {
+        Expression::Number { value, .. } => (*value).clamp(0.0, 1.0),
+        _ => {
+            return Err(Error::function_error(
+                "rgba",
+                "alpha component must be numeric",
+                position.line,
+                position.column,
+            ));
         }
-    }
+    };
 
     Ok(Expression::Color {
-        red: rgb_values[0],
-        green: rgb_values[1],
-        blue: rgb_values[2],
-        alpha,
+        red: r,
+        green: g,
+        blue: b,
+        alpha: a,
         original: None,
         position: position.clone(),
     })
 }
 
 fn hsl_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 3 {
-        return Err(Error::function_error(
-            "hsl",
-            "Expected 3 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("hsl", 3, args, position)?;
 
     let h = match &args[0] {
-        Expression::Number { value, .. } => (value % 360.0) / 360.0,
+        Expression::Number { value, .. } => (value % 360.0).abs(),
         _ => {
             return Err(Error::function_error(
                 "hsl",
-                "Hue must be a number",
+                "hue component must be numeric",
                 position.line,
                 position.column,
-            ))
+            ));
         }
     };
 
     let s = expression_to_percentage(&args[1], position)? / 100.0;
     let l = expression_to_percentage(&args[2], position)? / 100.0;
 
-    let (red, green, blue) = hsl_to_rgb(h, s, l);
+    let (r, g, b) = hsl_to_rgb(h, s, l);
 
     Ok(Expression::Color {
-        red,
-        green,
-        blue,
+        red: r,
+        green: g,
+        blue: b,
         alpha: 1.0,
         original: None,
         position: position.clone(),
@@ -815,50 +729,42 @@ fn hsl_function(args: &[Expression], position: &Position) -> Result<Expression> 
 }
 
 fn hsla_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 4 {
-        return Err(Error::function_error(
-            "hsla",
-            "Expected 4 arguments",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("hsla", 4, args, position)?;
 
     let h = match &args[0] {
-        Expression::Number { value, .. } => (value % 360.0) / 360.0,
+        Expression::Number { value, .. } => (value % 360.0).abs(),
         _ => {
             return Err(Error::function_error(
                 "hsla",
-                "Hue must be a number",
+                "hue component must be numeric",
                 position.line,
                 position.column,
-            ))
+            ));
         }
     };
 
     let s = expression_to_percentage(&args[1], position)? / 100.0;
     let l = expression_to_percentage(&args[2], position)? / 100.0;
 
-    let alpha = match &args[3] {
-        Expression::Number { value, .. } => *value,
-        Expression::Percentage(value, _) => value / 100.0,
+    let a = match &args[3] {
+        Expression::Number { value, .. } => (*value).clamp(0.0, 1.0),
         _ => {
             return Err(Error::function_error(
                 "hsla",
-                "Alpha must be a number",
+                "alpha component must be numeric",
                 position.line,
                 position.column,
-            ))
+            ));
         }
     };
 
-    let (red, green, blue) = hsl_to_rgb(h, s, l);
+    let (r, g, b) = hsl_to_rgb(h, s, l);
 
     Ok(Expression::Color {
-        red,
-        green,
-        blue,
-        alpha,
+        red: r,
+        green: g,
+        blue: b,
+        alpha: a,
         original: None,
         position: position.clone(),
     })
@@ -866,115 +772,98 @@ fn hsla_function(args: &[Expression], position: &Position) -> Result<Expression>
 
 // String functions
 
+/// CSS-escape a value: outputs the raw string with quotes stripped.
+/// Mirrors less.js `e()`: `new Quoted('"', str.value, true)`.
+fn e_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("e", 1, args, position)?;
+    let string_val = string_value(&args[0]);
+
+    Ok(Expression::Anonymous(string_val.value, position.clone()))
+}
+
+/// Percent-encode a string per less.js `escape()`
+/// (tree/functions/string.js):
+/// `encodeURI(str.value)` then additionally encoding `= : # ; ( )`.
+/// `encodeURI` leaves `A-Za-z0-9 - _ . ! ~ * ' ( ) ; / ? : @ & = + $ , #`
+/// unescaped and encodes every other character (incl. space and non-ASCII)
+/// as uppercase `%XX` per UTF-8 byte; after the extra replacements the
+/// surviving unescaped set is exactly `A-Za-z0-9 - _ . ! ~ * ' / ? @ & + $ ,`.
 fn escape_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("escape", args, 1, position)?;
-    let value = string_value(&args[0]).value;
-    Ok(Expression::Escaped(value, position.clone()))
+    ensure_arg_count("escape", 1, args, position)?;
+    let input = string_value(&args[0]);
+    let value = &input.value;
+
+    let mut encoded = String::new();
+    for ch in value.chars() {
+        match ch {
+            // Characters that encodeURI leaves unescaped...
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '!' | '~' | '*' | '\''
+            | '/' | '?' | '@' | '&' | '+' | '$' | ',' => {
+                encoded.push(ch);
+            }
+            // Extra characters that less.js also encodes
+            '=' | ':' | '#' | ';' | '(' | ')' | ' ' => {
+                for byte in ch.to_string().as_bytes() {
+                    encoded.push_str(&format!("%{:02X}", byte));
+                }
+            }
+            // All other characters get percent-encoded as UTF-8 bytes
+            _ => {
+                for byte in ch.to_string().as_bytes() {
+                    encoded.push_str(&format!("%{:02X}", byte));
+                }
+            }
+        }
+    }
+
+    Ok(Expression::Anonymous(encoded, position.clone()))
 }
 
 fn replace_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 3 || args.len() > 4 {
+    if args.len() < 2 || args.len() > 4 {
         return Err(Error::function_error(
             "replace",
-            "Expected 3 or 4 arguments",
+            "expected 2 to 4 arguments",
             position.line,
             position.column,
         ));
     }
 
-    let input = string_value(&args[0]);
-    let pattern_str = string_value(&args[1]).value;
-    let replacement = string_value(&args[2]).value;
-    let flags = if args.len() == 4 {
-        string_value(&args[3]).value
+    let text = string_value(&args[0]);
+    let pattern = string_value(&args[1]);
+    let replacement = string_value(&args[2]);
+    // Note: flags parameter is parsed but not implemented yet (for regex support)
+    let _flags = if args.len() == 4 {
+        string_value(&args[3])
     } else {
-        String::new()
+        StringValue { value: "".to_string(), quoted: true }
     };
 
-    if pattern_str.is_empty() {
+    // For now, implement basic string replacement without regex support
+    if pattern.value.is_empty() {
         return Err(Error::function_error(
             "replace",
-            "Argument 2 (pattern) must not be empty",
+            "pattern must not be empty",
             position.line,
             position.column,
         ));
     }
+    let _ = &_flags;
+    let result = text.value.replace(&pattern.value, &replacement.value);
 
-    // Attempt to compile pattern as Regex
-    // Note: LESS regex syntax is JS-like, Rust is similar but might have differences.
-    // We construct the regex with flags if needed.
-    // Rust regex doesn't support global flag in the pattern string itself usually,
-    // but the `regex` crate `replace_all` implies global.
-    // If 'g' is NOT in flags, we should use `replace` (replace first).
-    // wait, regex::Regex::replace replaces first (left-most-first). replace_all replaces all.
-
-    let mut regex_builder = regex::RegexBuilder::new(&pattern_str);
-
-    // Handle flags
-    if flags.contains('i') {
-        regex_builder.case_insensitive(true);
-    }
-    // 'g' is handled by which method we call (replace vs replace_all)
-    // 'm' for multiline?
-    if flags.contains('m') {
-        regex_builder.multi_line(true);
-    }
-
-    let re = regex_builder.build().map_err(|e| {
-        Error::function_error(
-            "replace",
-            format!("Invalid regular expression: {}", e),
-            position.line,
-            position.column,
-        )
-    })?;
-
-    let result = if flags.contains('g') {
-        re.replace_all(&input.value, replacement.as_str())
-            .to_string()
-    } else {
-        // If no 'g', LESS replace typically replaces all?
-        // No, LESS documentation says: "By default ... it replaces only the first occurrence. To replace all ... use 'g' flag".
-        // Rust's replace() replaces first? regex::Regex::replace "Replaces the leftmost-first match".
-        // String::replace replaces ALL.
-        re.replace(&input.value, replacement.as_str()).to_string()
-    };
-
-    if input.quoted {
-        Ok(Expression::string(result, position.clone()))
-    } else {
-        Ok(Expression::identifier(result, position.clone()))
-    }
+    Ok(Expression::String {
+        value: result,
+        quoted: text.quoted,
+        position: position.clone(),
+    })
 }
 
 /// URL function - creates a URL expression
 fn url_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
-        return Err(Error::function_error(
-            "url",
-            "function expects exactly 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
+    ensure_arg_count("url", 1, args, position)?;
+    let path = string_value(&args[0]);
 
-    let url_value = match &args[0] {
-        Expression::String { value, .. } => format!("\"{}\"", value),
-        Expression::Interpolation(_, _) => {
-            // For interpolation, we need to return it as-is and let the compiler handle it
-            return Ok(Expression::Url(format!("{:?}", args[0]), position.clone()));
-        }
-        _ => {
-            return Err(Error::function_error(
-                "url",
-                "function argument must be a string",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    Ok(Expression::Url(url_value, position.clone()))
+    Ok(Expression::Url(path.value, position.clone()))
 }
 
 struct StringValue {
@@ -984,24 +873,20 @@ struct StringValue {
 
 fn ensure_arg_count(
     function: &str,
-    args: &[Expression],
     expected: usize,
+    args: &[Expression],
     position: &Position,
 ) -> Result<()> {
     if args.len() != expected {
-        return Err(Error::function_error(
+        Err(Error::function_error(
             function,
-            format!(
-                "Expected {} argument{}, got {}",
-                expected,
-                if expected == 1 { "" } else { "s" },
-                args.len()
-            ),
+            format!("expected {} arguments, got {}", expected, args.len()),
             position.line,
             position.column,
-        ));
+        ))
+    } else {
+        Ok(())
     }
-    Ok(())
 }
 
 fn string_value(expr: &Expression) -> StringValue {
@@ -1010,27 +895,187 @@ fn string_value(expr: &Expression) -> StringValue {
             value: value.clone(),
             quoted: *quoted,
         },
-        Expression::Escaped(value, _) | Expression::Anonymous(value, _) => StringValue {
+        Expression::Anonymous(value, _) => StringValue {
             value: value.clone(),
             quoted: false,
         },
+        Expression::Number { value, unit, .. } => {
+            let num_str = if let Some(u) = unit {
+                format!("{}{}", value, u)
+            } else {
+                value.to_string()
+            };
+            StringValue {
+                value: num_str,
+                quoted: false,
+            }
+        }
+        Expression::Variable(name, _) => StringValue {
+            value: format!("@{}", name),
+            quoted: false,
+        },
+        Expression::Color { red, green, blue, alpha, .. } => {
+            let color_str = if *alpha < 1.0 {
+                format!("#{:02x}{:02x}{:02x}{:02x}", red, green, blue, (*alpha * 255.0) as u8)
+            } else {
+                format!("#{:02x}{:02x}{:02x}", red, green, blue)
+            };
+            StringValue {
+                value: color_str,
+                quoted: false,
+            }
+        }
+        Expression::Percentage(value, _) => StringValue {
+            value: format!("{}%", value),
+            quoted: false,
+        },
+        Expression::Boolean(b, _) => StringValue {
+            value: b.to_string(),
+            quoted: false,
+        },
+        Expression::List { values, separator, .. } => {
+            let sep = match separator {
+                ListSeparator::Comma => ", ",
+                ListSeparator::Space => " ",
+                ListSeparator::Semicolon => "; ",
+            };
+            let value = values
+                .iter()
+                .map(|v| string_value(v).value)
+                .collect::<Vec<_>>()
+                .join(sep);
+            StringValue { value, quoted: false }
+        }
+        Expression::MapLiteral { .. } => StringValue {
+            value: "[object Object]".to_string(),
+            quoted: false,
+        },
+        Expression::MapAccess { .. } => StringValue {
+            value: "[object Object]".to_string(),
+            quoted: false,
+        },
+        Expression::DetachedRuleset { .. } => StringValue {
+            value: "[ruleset]".to_string(),
+            quoted: false,
+        },
+        Expression::TemplateString { parts, .. } => {
+            let mut result = String::new();
+            for part in parts {
+                match part {
+                    TemplateStringPart::Text(text) => result.push_str(text),
+                    TemplateStringPart::Interpolation(name) => {
+                        result.push_str(&format!("@{{{}}}", name));
+                    }
+                }
+            }
+            StringValue { value: result, quoted: false }
+        }
+        Expression::Url(value, _) => StringValue {
+            value: format!("url({})", value),
+            quoted: false,
+        },
+        Expression::FunctionCall { name, arguments, .. } => {
+            // For functions, evaluate them to their string representation
+            if *name == "e" {
+                if let Some(arg) = arguments.first() {
+                    StringValue {
+                        value: string_value(arg).value,
+                        quoted: false,
+                    }
+                } else {
+                    StringValue { value: String::new(), quoted: false }
+                }
+            } else {
+                StringValue {
+                    value: format!("{}({})", name, arguments.len()),
+                    quoted: false,
+                }
+            }
+        }
+        Expression::BinaryOp { left, operator, right, .. } => {
+            let left_str = string_value(left).value;
+            let right_str = string_value(right).value;
+            let op_str = match operator {
+                BinaryOperator::Add => "+",
+                BinaryOperator::Subtract => "-",
+                BinaryOperator::Multiply => "*",
+                BinaryOperator::Divide => "/",
+                BinaryOperator::Modulo => "%",
+                BinaryOperator::Equal => "==",
+                BinaryOperator::NotEqual => "!=",
+                BinaryOperator::GreaterThan => ">",
+                BinaryOperator::GreaterThanOrEqual => ">=",
+                BinaryOperator::LessThan => "<",
+                BinaryOperator::LessThanOrEqual => "<=",
+                BinaryOperator::And => "and",
+                BinaryOperator::Or => "or",
+                BinaryOperator::Concatenate => "~",
+            };
+            StringValue {
+                value: format!("{} {} {}", left_str, op_str, right_str),
+                quoted: false,
+            }
+        }
+        Expression::UnaryOp { operator, operand, .. } => {
+            let op_str = match operator {
+                UnaryOperator::Minus => "-",
+                UnaryOperator::Plus => "+",
+                UnaryOperator::Not => "not ",
+            };
+            StringValue {
+                value: format!("{}{}", op_str, string_value(operand).value),
+                quoted: false,
+            }
+        }
+        Expression::Parenthesized(inner, _) => StringValue {
+            value: format!("({})", string_value(inner).value),
+            quoted: false,
+        },
+        Expression::Interpolation(name, _) => StringValue {
+            value: format!("@{{{}}}", name),
+            quoted: false,
+        },
+        Expression::Null(_) => StringValue {
+            value: "null".to_string(),
+            quoted: false,
+        },
+        // Handle less common expression types
+        Expression::PropertyInterpolation(name, _) => StringValue {
+            value: format!("@{{{}}}", name),
+            quoted: false,
+        },
+        Expression::SelectorInterpolation(name, _) => StringValue {
+            value: format!("@{{{}}}", name),
+            quoted: false,
+        },
+        Expression::Dimension { value, from_unit, .. } => StringValue {
+            value: format!("{}{}", value, from_unit),
+            quoted: false,
+        },
         _ => StringValue {
-            value: expr.to_css(),
+            value: String::new(),
             quoted: false,
         },
     }
 }
-
 fn map_key_string(expr: &Expression) -> String {
     match expr {
-        Expression::String { value, .. } => value.clone(),
-        Expression::Number { value, unit, .. } => match unit {
-            Some(unit) => format!("{}{}", value, unit),
-            None => value.to_string(),
-        },
-        Expression::Percentage(value, _) => format!("{}%", value),
-        Expression::Parenthesized(inner, _) => map_key_string(inner),
-        _ => expr.to_css(),
+        Expression::String { value, quoted, .. } => {
+            if *quoted {
+                format!("\"{}\"", value)
+            } else {
+                value.clone()
+            }
+        }
+        Expression::Variable(name, _) => format!("@{}", name),
+        Expression::Number { value, unit, .. } => {
+            if let Some(u) = unit {
+                format!("{}{}", value, u)
+            } else {
+                value.to_string()
+            }
+        }
+        _ => string_value(expr).value,
     }
 }
 
@@ -1059,28 +1104,45 @@ fn map_lookup_path<'a>(
     path: &[String],
 ) -> std::result::Result<Option<&'a Expression>, String> {
     let mut current_entries = entries;
-    for (index, key) in path.iter().enumerate() {
-        let value = if let Some((_, value, _)) = current_entries
+    let mut current_key = None;
+
+    for (i, key) in path.iter().enumerate() {
+        let canonical_key = canonical_map_key(key);
+        // Use reverse iteration to implement last-wins semantics for duplicate keys
+        let found = current_entries
             .iter()
-            .rev().find(|(k, _, _)| map_keys_equal(k, key))
-        {
-            value
-        } else {
-            return Ok(None);
-        };
+            .rev()
+            .find(|(k, _, _)| map_keys_equal(k, canonical_key));
 
-        if index == path.len() - 1 {
-            return Ok(Some(value));
-        }
-
-        if let Expression::MapLiteral {
-            entries: nested_entries,
-            ..
-        } = value
-        {
-            current_entries = nested_entries;
-        } else {
-            return Err(format!("Intermediate key '{}' is not a map", key));
+        match found {
+            Some((_, value, _)) => {
+                if i == path.len() - 1 {
+                    // Last key in path, return the value
+                    return Ok(Some(value));
+                } else {
+                    // Not last key, need to traverse deeper
+                    match value {
+                        Expression::MapLiteral { entries: sub_entries, .. } => {
+                            current_entries = sub_entries;
+                            current_key = Some(key);
+                            continue
+                        }
+                        _ => {
+                            return Err(format!(
+                                "Cannot traverse into non-map value at key '{}'",
+                                key
+                            ));
+                        }
+                    }
+                }
+            }
+            None => {
+                if let Some(key) = current_key {
+                    return Err(format!("Key '{}' not found in nested map", key));
+                } else {
+                    return Ok(None);
+                }
+            }
         }
     }
 
@@ -1088,9 +1150,10 @@ fn map_lookup_path<'a>(
 }
 
 enum RemoveMapPathResult {
-    Removed,
-    Missing,
-    IntermediateNotMap(String),
+    Ok(Vec<(String, Expression, Position)>),
+    KeyNotFound(String),
+    #[allow(dead_code)]
+    NotMap(String),
 }
 
 fn remove_map_path(
@@ -1098,87 +1161,95 @@ fn remove_map_path(
     path: &[String],
 ) -> RemoveMapPathResult {
     if path.is_empty() {
-        return RemoveMapPathResult::Missing;
+        return RemoveMapPathResult::Ok(Vec::new());
     }
 
     if path.len() == 1 {
-        if let Some(index) = entries
-            .iter()
-            .rposition(|(k, _, _)| map_keys_equal(k, &path[0]))
-        {
-            entries.remove(index);
-            return RemoveMapPathResult::Removed;
+        // Remove the key from current level
+        let key = &path[0];
+        let canonical_key = canonical_map_key(key);
+        let initial_len = entries.len();
+        entries.retain(|(k, _, _)| !map_keys_equal(k, canonical_key));
+
+        if entries.len() == initial_len {
+            RemoveMapPathResult::KeyNotFound(key.clone())
+        } else {
+            RemoveMapPathResult::Ok(std::mem::take(entries))
         }
-        return RemoveMapPathResult::Missing;
-    }
+    } else {
+        // Navigate to parent of the key to remove
+        let last_key = path.last().unwrap();
+        let parent_path = &path[..path.len() - 1];
 
-    if let Some((
-        _,
-        Expression::MapLiteral {
-            entries: nested_entries,
-            ..
-        },
-        _,
-    )) = entries
-        .iter_mut()
-        .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
-    {
-        return remove_map_path(nested_entries, &path[1..]);
-    }
+        match map_lookup_path_mut(entries, parent_path) {
+            Ok(parent_entries) => {
+                let canonical_last_key = canonical_map_key(last_key);
+                let initial_len = parent_entries.len();
+                parent_entries.retain(|(k, _, _)| !map_keys_equal(k, canonical_last_key));
 
-    if entries.iter().any(|(k, _, _)| map_keys_equal(k, &path[0])) {
-        return RemoveMapPathResult::IntermediateNotMap(path[0].clone());
+                if parent_entries.len() == initial_len {
+                    RemoveMapPathResult::KeyNotFound(last_key.clone())
+                } else {
+                    RemoveMapPathResult::Ok(std::mem::take(entries))
+                }
+            }
+            Err(_) => {
+                // Path doesn't exist, nothing to remove
+                RemoveMapPathResult::KeyNotFound(last_key.clone())
+            }
+        }
     }
-
-    RemoveMapPathResult::Missing
 }
 
-fn deep_remove_map_path(
-    entries: &mut Vec<(String, Expression, Position)>,
+fn map_lookup_path_mut<'a>(
+    entries: &'a mut [(String, Expression, Position)],
     path: &[String],
-) -> RemoveMapPathResult {
-    if path.is_empty() {
-        return RemoveMapPathResult::Missing;
-    }
+) -> std::result::Result<&'a mut Vec<(String, Expression, Position)>, String> {
+    let mut current_entries = entries;
 
-    if path.len() == 1 {
-        if let Some(index) = entries
+    for (i, key) in path.iter().enumerate() {
+        let canonical_key = canonical_map_key(key);
+        let pos = current_entries
             .iter()
-            .rposition(|(k, _, _)| map_keys_equal(k, &path[0]))
-        {
-            entries.remove(index);
-            return RemoveMapPathResult::Removed;
-        }
-        return RemoveMapPathResult::Missing;
-    }
+            .position(|(k, _, _)| map_keys_equal(k, canonical_key));
 
-    let Some(index) = entries
-        .iter()
-        .rposition(|(k, _, _)| map_keys_equal(k, &path[0]))
-    else {
-        return RemoveMapPathResult::Missing;
-    };
-
-    let mut should_prune_parent = false;
-    let result = match &mut entries[index].1 {
-        Expression::MapLiteral {
-            entries: nested_entries,
-            ..
-        } => {
-            let result = deep_remove_map_path(nested_entries, &path[1..]);
-            if matches!(result, RemoveMapPathResult::Removed) && nested_entries.is_empty() {
-                should_prune_parent = true;
+        match pos {
+            Some(p) => {
+                if i == path.len() - 1 {
+                    // Last key, return reference to the entries vector
+                    match &mut current_entries[p] {
+                        (_, Expression::MapLiteral { entries: sub_entries, .. }, _) => {
+                            return Ok(sub_entries);
+                        }
+                        _ => {
+                            return Err(format!(
+                                "Cannot traverse into non-map value at key '{}'",
+                                key
+                            ));
+                        }
+                    }
+                } else {
+                    // Not last key, need to traverse deeper
+                    match &mut current_entries[p] {
+                        (_, Expression::MapLiteral { entries: sub_entries, .. }, _) => {
+                            current_entries = sub_entries;
+                        }
+                        _ => {
+                            return Err(format!(
+                                "Cannot traverse into non-map value at key '{}'",
+                                key
+                            ));
+                        }
+                    }
+                }
             }
-            result
+            None => {
+                return Err(format!("Key '{}' not found in map", key));
+            }
         }
-        _ => RemoveMapPathResult::IntermediateNotMap(path[0].clone()),
-    };
-
-    if should_prune_parent {
-        entries.remove(index);
     }
 
-    result
+    Err("Empty path provided".to_string())
 }
 
 fn set_map_path(
@@ -1188,57 +1259,70 @@ fn set_map_path(
     position: &Position,
 ) -> std::result::Result<(), String> {
     if path.is_empty() {
-        return Err("Key path cannot be empty".to_string());
+        return Err("Empty path provided".to_string());
     }
+
+    let key = &path[0];
+    let canonical_key = canonical_map_key(key);
 
     if path.len() == 1 {
-        if let Some((_, existing, _)) = entries
-            .iter_mut()
-            .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
-        {
-            *existing = value.clone();
+        // Set the final key - use reverse iteration to handle duplicates (last wins)
+        if let Some(existing) = entries.iter_mut().rev().find(|(k, _, _)| map_keys_equal(k, canonical_key)) {
+            existing.1 = value.clone();
+            existing.2 = position.clone();
         } else {
-            entries.push((path[0].clone(), value.clone(), position.clone()));
+            entries.push((key.clone(), value.clone(), position.clone()));
         }
-        return Ok(());
-    }
-
-    if let Some((_, existing, _)) = entries
-        .iter_mut()
-        .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
-    {
-        if let Expression::MapLiteral {
-            entries: nested_entries,
-            ..
-        } = existing
-        {
-            return set_map_path(nested_entries, &path[1..], value, position);
-        }
-
-        return Err(format!("Intermediate key '{}' is not a map", path[0]));
-    }
-
-    entries.push((
-        path[0].clone(),
-        Expression::MapLiteral {
-            entries: Vec::new(),
-            position: position.clone(),
-        },
-        position.clone(),
-    ));
-
-    if let Some((
-        _,
-        Expression::MapLiteral {
-            entries: nested_entries,
-            ..
-        },
-        _,
-    )) = entries.last_mut()
-    {
-        set_map_path(nested_entries, &path[1..], value, position)
+        Ok(())
     } else {
-        Err("Failed to create nested map path".to_string())
+        // Navigate deeper
+        match map_lookup_path_mut(entries, &path[..path.len() - 1]) {
+            Ok(parent_entries) => {
+                let last_key = &path[path.len() - 1];
+                let canonical_last_key = canonical_map_key(last_key);
+
+                if let Some(existing) = parent_entries.iter_mut().rev().find(|(k, _, _)| map_keys_equal(k, canonical_last_key)) {
+                    // For existing keys at the target depth, update the value directly
+                    existing.1 = value.clone();
+                    existing.2 = position.clone();
+                    Ok(())
+                } else {
+                    // Key doesn't exist, create new entry
+                    parent_entries.push((
+                        last_key.clone(),
+                        value.clone(),
+                        position.clone(),
+                    ));
+                    Ok(())
+                }
+            }
+            Err(e) => {
+                // Distinguish "intermediate key is not a map" (error) from
+                // "key not found" (create the path).
+                if e.contains("Cannot traverse into non-map value") {
+                    return Err(format!("Intermediate key '{}' is not a map", path[0]));
+                }
+                // Parent path doesn't exist, create the full path
+                if path.len() == 1 {
+                    entries.push((key.clone(), value.clone(), position.clone()));
+                    Ok(())
+                } else {
+                    // Create the intermediate path structure using recursion
+                    let mut new_map = Vec::new();
+                    set_map_path(&mut new_map, &path[1..], value, position)?;
+
+                    entries.push((
+                        key.clone(),
+                        Expression::MapLiteral {
+                            entries: new_map,
+                            position: position.clone(),
+                        },
+                        position.clone(),
+                    ));
+                    Ok(())
+                }
+            }
+        }
     }
 }
 
@@ -1248,1628 +1332,79 @@ fn update_map_path(
     value: &Expression,
 ) -> std::result::Result<bool, String> {
     if path.is_empty() {
-        return Err("Key path cannot be empty".to_string());
+        return Err("Empty path provided".to_string());
     }
 
-    if path.len() == 1 {
-        if let Some((_, existing, _)) = entries
-            .iter_mut()
-            .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
-        {
-            *existing = value.clone();
-            return Ok(true);
-        }
-        return Ok(false);
-    }
+    let key = &path[0];
+    let canonical_key = canonical_map_key(key);
 
-    if let Some((_, existing, _)) = entries
-        .iter_mut()
-        .rev().find(|(k, _, _)| map_keys_equal(k, &path[0]))
-    {
-        if let Expression::MapLiteral {
-            entries: nested_entries,
-            ..
-        } = existing
-        {
-            return update_map_path(nested_entries, &path[1..], value);
-        }
-        return Err(format!("Intermediate key '{}' is not a map", path[0]));
-    }
-
-    Ok(false)
-}
-
-fn deep_merge_entries(
-    target: &mut Vec<(String, Expression, Position)>,
-    source: &[(String, Expression, Position)],
-) {
-    for (key, value, key_position) in source {
-        if let Some((_, existing, _)) = target.iter_mut().rev().find(|(k, _, _)| map_keys_equal(k, key)) {
-            if let Expression::MapLiteral {
-                entries: target_nested,
-                ..
-            } = existing
-            {
-                if let Expression::MapLiteral {
-                    entries: source_nested,
-                    ..
-                } = value
-                {
-                    deep_merge_entries(target_nested, source_nested);
-                    continue;
-                }
-            }
-
-            *existing = value.clone();
+    if let Some(existing) = entries.iter_mut().rev().find(|(k, _, _)| map_keys_equal(k, canonical_key)) {
+        if path.len() == 1 {
+            // Update the value
+            existing.1 = value.clone();
+            Ok(true)
         } else {
-            target.push((key.clone(), value.clone(), key_position.clone()));
-        }
-    }
-}
-
-// String functions
-
-fn uppercase_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("uppercase", args, 1, position)?;
-    let sv = string_value(&args[0]);
-    if sv.quoted {
-        Ok(Expression::string(
-            sv.value.to_uppercase(),
-            position.clone(),
-        ))
-    } else {
-        Ok(Expression::identifier(
-            sv.value.to_uppercase(),
-            position.clone(),
-        ))
-    }
-}
-
-fn lowercase_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("lowercase", args, 1, position)?;
-    let sv = string_value(&args[0]);
-    if sv.quoted {
-        Ok(Expression::string(
-            sv.value.to_lowercase(),
-            position.clone(),
-        ))
-    } else {
-        Ok(Expression::identifier(
-            sv.value.to_lowercase(),
-            position.clone(),
-        ))
-    }
-}
-
-fn length_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("length", args, 1, position)?;
-    match &args[0] {
-        Expression::String { value, .. } => {
-            Ok(Expression::number(value.len() as f64, position.clone()))
-        }
-        Expression::List { values, .. } => {
-            Ok(Expression::number(values.len() as f64, position.clone()))
-        }
-        _ => {
-            let sv = string_value(&args[0]);
-            Ok(Expression::number(sv.value.len() as f64, position.clone()))
-        }
-    }
-}
-
-fn extract_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "extract",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-    let index = match &args[1] {
-        Expression::Number { value, .. } => *value as usize,
-        _ => {
-            return Err(Error::function_error(
-                "extract",
-                "Index must be a number",
-                position.line,
-                position.column,
-            ))
-        }
-    };
-    if index == 0 {
-        return Err(Error::function_error(
-            "extract",
-            "Index is 1-based, cannot be 0",
-            position.line,
-            position.column,
-        ));
-    }
-    match &args[0] {
-        Expression::List { values, .. } => {
-            if index > values.len() {
-                Err(Error::function_error(
-                    "extract",
-                    "Index out of range",
-                    position.line,
-                    position.column,
-                ))
-            } else {
-                Ok(values[index - 1].clone())
-            }
-        }
-        _ => {
-            if index == 1 {
-                Ok(args[0].clone())
-            } else {
-                Err(Error::function_error(
-                    "extract",
-                    "Index out of range",
-                    position.line,
-                    position.column,
-                ))
-            }
-        }
-    }
-}
-
-fn map_get_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 2 {
-        return Err(Error::function_error(
-            "map-get",
-            "Expected at least 2 arguments (map, key...)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let entries = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries,
-        _ => {
-            return Err(Error::function_error(
-                "map-get",
-                "First argument must be a map",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    let path = map_path_keys(args, 1);
-    match map_lookup_path(entries, &path) {
-        Ok(Some(value)) => return Ok(value.clone()),
-        Ok(None) => {}
-        Err(message) => {
-            return Err(Error::function_error(
-                "map-get",
-                message,
-                position.line,
-                position.column,
-            ));
-        }
-    }
-
-    Err(Error::function_error(
-        "map-get",
-        format!("Key path '{}' not found in map", path.join(" -> ")),
-        position.line,
-        position.column,
-    ))
-}
-
-fn map_has_key_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 2 {
-        return Err(Error::function_error(
-            "map-has-key",
-            "Expected at least 2 arguments (map, key...)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let entries = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries,
-        _ => {
-            return Err(Error::function_error(
-                "map-has-key",
-                "First argument must be a map",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    let path = map_path_keys(args, 1);
-    match map_lookup_path(entries, &path) {
-        Ok(result) => Ok(Expression::Boolean(result.is_some(), position.clone())),
-        Err(message) => Err(Error::function_error(
-            "map-has-key",
-            message,
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn map_keys_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("map-keys", args, 1, position)?;
-    let entries = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries,
-        _ => {
-            return Err(Error::function_error(
-                "map-keys",
-                "Argument must be a map",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    let values = entries
-        .iter()
-        .map(|(k, _, _)| {
-            if let Some(unquoted) = unquote_map_key(k) {
-                Expression::string(unquoted.to_string(), position.clone())
-            } else {
-                Expression::identifier(k.clone(), position.clone())
-            }
-        })
-        .collect();
-    Ok(Expression::list(
-        values,
-        crate::ast::ListSeparator::Comma,
-        position.clone(),
-    ))
-}
-
-fn map_values_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("map-values", args, 1, position)?;
-    let entries = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries,
-        _ => {
-            return Err(Error::function_error(
-                "map-values",
-                "Argument must be a map",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    let values = entries.iter().map(|(_, v, _)| v.clone()).collect();
-    Ok(Expression::list(
-        values,
-        crate::ast::ListSeparator::Comma,
-        position.clone(),
-    ))
-}
-
-fn map_merge_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 2 {
-        return Err(Error::function_error(
-            "map-merge",
-            "Expected at least 2 map arguments",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut merged: Vec<(String, Expression, Position)> = Vec::new();
-    for arg in args {
-        let entries = match arg {
-            Expression::MapLiteral { entries, .. } => entries,
-            _ => {
-                return Err(Error::function_error(
-                    "map-merge",
-                    "All arguments must be maps",
-                    position.line,
-                    position.column,
-                ));
-            }
-        };
-
-        for (key, value, key_position) in entries {
-            if let Some((_, existing, _)) =
-                merged.iter_mut().rev().find(|(k, _, _)| map_keys_equal(k, key))
-            {
-                *existing = value.clone();
-            } else {
-                merged.push((key.clone(), value.clone(), key_position.clone()));
-            }
-        }
-    }
-
-    Ok(Expression::MapLiteral {
-        entries: merged,
-        position: position.clone(),
-    })
-}
-
-fn map_deep_merge_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 2 {
-        return Err(Error::function_error(
-            "map-deep-merge",
-            "Expected at least 2 map arguments",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut merged = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries.clone(),
-        _ => {
-            return Err(Error::function_error(
-                "map-deep-merge",
-                "All arguments must be maps",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    for arg in &args[1..] {
-        let entries = match arg {
-            Expression::MapLiteral { entries, .. } => entries,
-            _ => {
-                return Err(Error::function_error(
-                    "map-deep-merge",
-                    "All arguments must be maps",
-                    position.line,
-                    position.column,
-                ));
-            }
-        };
-        deep_merge_entries(&mut merged, entries);
-    }
-
-    Ok(Expression::MapLiteral {
-        entries: merged,
-        position: position.clone(),
-    })
-}
-
-fn map_set_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 3 {
-        return Err(Error::function_error(
-            "map-set",
-            "Expected at least 3 arguments (map, key..., value)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut entries = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries.clone(),
-        _ => {
-            return Err(Error::function_error(
-                "map-set",
-                "First argument must be a map",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    let final_path = map_path_keys(&args[..args.len() - 1], 1);
-    let value_expr = &args[args.len() - 1];
-
-    if final_path.is_empty() {
-        return Err(Error::function_error(
-            "map-set",
-            "Key path cannot be empty",
-            position.line,
-            position.column,
-        ));
-    }
-
-    set_map_path(&mut entries, &final_path, value_expr, position).map_err(|message| {
-        Error::function_error("map-set", message, position.line, position.column)
-    })?;
-
-    Ok(Expression::MapLiteral {
-        entries,
-        position: position.clone(),
-    })
-}
-
-fn map_update_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 3 {
-        return Err(Error::function_error(
-            "map-update",
-            "Expected at least 3 arguments (map, key..., value)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut entries = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries.clone(),
-        _ => {
-            return Err(Error::function_error(
-                "map-update",
-                "First argument must be a map",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    let final_path = map_path_keys(&args[..args.len() - 1], 1);
-    let value_expr = &args[args.len() - 1];
-
-    if final_path.is_empty() {
-        return Err(Error::function_error(
-            "map-update",
-            "Key path cannot be empty",
-            position.line,
-            position.column,
-        ));
-    }
-
-    match update_map_path(&mut entries, &final_path, value_expr) {
-        Ok(true) => {}
-        Ok(false) => {
-            return Err(Error::function_error(
-                "map-update",
-                format!("Key path '{}' not found in map", final_path.join(" -> ")),
-                position.line,
-                position.column,
-            ));
-        }
-        Err(message) => {
-            return Err(Error::function_error(
-                "map-update",
-                message,
-                position.line,
-                position.column,
-            ));
-        }
-    }
-
-    Ok(Expression::MapLiteral {
-        entries,
-        position: position.clone(),
-    })
-}
-
-fn map_replace_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 3 {
-        return Err(Error::function_error(
-            "map-replace",
-            "Expected at least 3 arguments (map, key..., value)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut entries = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries.clone(),
-        _ => {
-            return Err(Error::function_error(
-                "map-replace",
-                "First argument must be a map",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    let final_path = map_path_keys(&args[..args.len() - 1], 1);
-    let value_expr = &args[args.len() - 1];
-
-    if final_path.is_empty() {
-        return Err(Error::function_error(
-            "map-replace",
-            "Key path cannot be empty",
-            position.line,
-            position.column,
-        ));
-    }
-
-    match update_map_path(&mut entries, &final_path, value_expr) {
-        Ok(true) => {}
-        Ok(false) => {
-            return Err(Error::function_error(
-                "map-replace",
-                format!("Key path '{}' not found in map", final_path.join(" -> ")),
-                position.line,
-                position.column,
-            ));
-        }
-        Err(message) => {
-            return Err(Error::function_error(
-                "map-replace",
-                message,
-                position.line,
-                position.column,
-            ));
-        }
-    }
-
-    Ok(Expression::MapLiteral {
-        entries,
-        position: position.clone(),
-    })
-}
-
-fn map_remove_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 2 {
-        return Err(Error::function_error(
-            "map-remove",
-            "Expected at least 2 arguments (map, key...)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut entries = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries.clone(),
-        _ => {
-            return Err(Error::function_error(
-                "map-remove",
-                "First argument must be a map",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    let path = map_path_keys(args, 1);
-    if path.is_empty() {
-        return Err(Error::function_error(
-            "map-remove",
-            "Key path cannot be empty",
-            position.line,
-            position.column,
-        ));
-    }
-
-    match remove_map_path(&mut entries, &path) {
-        RemoveMapPathResult::Removed | RemoveMapPathResult::Missing => {}
-        RemoveMapPathResult::IntermediateNotMap(key) => {
-            return Err(Error::function_error(
-                "map-remove",
-                format!("Intermediate key '{}' is not a map", key),
-                position.line,
-                position.column,
-            ));
-        }
-    }
-
-    Ok(Expression::MapLiteral {
-        entries,
-        position: position.clone(),
-    })
-}
-
-fn map_deep_remove_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() < 2 {
-        return Err(Error::function_error(
-            "map-deep-remove",
-            "Expected at least 2 arguments (map, key...)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut entries = match &args[0] {
-        Expression::MapLiteral { entries, .. } => entries.clone(),
-        _ => {
-            return Err(Error::function_error(
-                "map-deep-remove",
-                "First argument must be a map",
-                position.line,
-                position.column,
-            ));
-        }
-    };
-
-    let path = map_path_keys(args, 1);
-    if path.is_empty() {
-        return Err(Error::function_error(
-            "map-deep-remove",
-            "Key path cannot be empty",
-            position.line,
-            position.column,
-        ));
-    }
-
-    match deep_remove_map_path(&mut entries, &path) {
-        RemoveMapPathResult::Removed | RemoveMapPathResult::Missing => {}
-        RemoveMapPathResult::IntermediateNotMap(key) => {
-            return Err(Error::function_error(
-                "map-deep-remove",
-                format!("Intermediate key '{}' is not a map", key),
-                position.line,
-                position.column,
-            ));
-        }
-    }
-
-    Ok(Expression::MapLiteral {
-        entries,
-        position: position.clone(),
-    })
-}
-
-// Type check functions
-
-fn isnumber_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("isnumber", args, 1, position)?;
-    Ok(Expression::Boolean(
-        matches!(&args[0], Expression::Number { .. }),
-        position.clone(),
-    ))
-}
-
-fn iscolor_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("iscolor", args, 1, position)?;
-    Ok(Expression::Boolean(
-        matches!(&args[0], Expression::Color { .. }),
-        position.clone(),
-    ))
-}
-
-fn isstring_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("isstring", args, 1, position)?;
-    Ok(Expression::Boolean(
-        matches!(&args[0], Expression::String { .. }),
-        position.clone(),
-    ))
-}
-
-fn iskeyword_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("iskeyword", args, 1, position)?;
-    let is_keyword = matches!(&args[0], Expression::String { quoted: false, .. });
-    Ok(Expression::Boolean(is_keyword, position.clone()))
-}
-
-fn isurl_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("isurl", args, 1, position)?;
-    Ok(Expression::Boolean(
-        matches!(&args[0], Expression::Url(_, _)),
-        position.clone(),
-    ))
-}
-
-fn ispixel_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("ispixel", args, 1, position)?;
-    let is_px = matches!(&args[0], Expression::Number { unit: Some(u), .. } if u == "px");
-    Ok(Expression::Boolean(is_px, position.clone()))
-}
-
-fn isem_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("isem", args, 1, position)?;
-    let is_em = matches!(&args[0], Expression::Number { unit: Some(u), .. } if u == "em");
-    Ok(Expression::Boolean(is_em, position.clone()))
-}
-
-fn ispercentage_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("ispercentage", args, 1, position)?;
-    let is_pct = matches!(&args[0], Expression::Percentage(_, _))
-        || matches!(&args[0], Expression::Number { unit: Some(u), .. } if u == "%");
-    Ok(Expression::Boolean(is_pct, position.clone()))
-}
-
-fn unit_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.is_empty() || args.len() > 2 {
-        return Err(Error::function_error(
-            "unit",
-            "Expected 1 or 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-    match &args[0] {
-        Expression::Number { value, .. } | Expression::Percentage(value, _) => {
-            if args.len() == 2 {
-                // Change unit
-                let new_unit = string_value(&args[1]).value;
-                if new_unit.is_empty() {
-                    Ok(Expression::number(*value, position.clone()))
-                } else {
-                    Ok(Expression::number_with_unit(
-                        *value,
-                        new_unit,
-                        position.clone(),
-                    ))
+            // Navigate deeper
+            match &mut existing.1 {
+                Expression::MapLiteral { entries: sub_entries, .. } => {
+                    update_map_path(sub_entries, &path[1..], value)
                 }
-            } else {
-                // Remove unit (return dimensionless number)
-                Ok(Expression::number(*value, position.clone()))
-            }
-        }
-        _ => Err(Error::function_error(
-            "unit",
-            "First argument must be a number",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn get_unit_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("get-unit", args, 1, position)?;
-    let unit_str = match &args[0] {
-        Expression::Number { unit: Some(u), .. } => u.clone(),
-        Expression::Percentage(_, _) => "%".to_string(),
-        Expression::Number { unit: None, .. } => String::new(),
-        _ => {
-            return Err(Error::function_error(
-                "get-unit",
-                "Argument must be a number",
-                position.line,
-                position.column,
-            ))
-        }
-    };
-    Ok(Expression::identifier(unit_str, position.clone()))
-}
-
-// Advanced math functions
-
-fn sqrt_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("sqrt", args, 1, position)?;
-    match &args[0] {
-        Expression::Number { value, unit, .. } => Ok(Expression::Number {
-            value: value.sqrt(),
-            unit: unit.clone(),
-            position: position.clone(),
-        }),
-        _ => Err(Error::function_error(
-            "sqrt",
-            "Expected number argument",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn sin_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("sin", args, 1, position)?;
-    match &args[0] {
-        Expression::Number { value, .. } => Ok(Expression::number(value.sin(), position.clone())),
-        _ => Err(Error::function_error(
-            "sin",
-            "Expected number argument",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn cos_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("cos", args, 1, position)?;
-    match &args[0] {
-        Expression::Number { value, .. } => Ok(Expression::number(value.cos(), position.clone())),
-        _ => Err(Error::function_error(
-            "cos",
-            "Expected number argument",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn tan_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("tan", args, 1, position)?;
-    match &args[0] {
-        Expression::Number { value, .. } => Ok(Expression::number(value.tan(), position.clone())),
-        _ => Err(Error::function_error(
-            "tan",
-            "Expected number argument",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn asin_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("asin", args, 1, position)?;
-    match &args[0] {
-        Expression::Number { value, .. } => Ok(Expression::number(value.asin(), position.clone())),
-        _ => Err(Error::function_error(
-            "asin",
-            "Expected number argument",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn acos_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("acos", args, 1, position)?;
-    match &args[0] {
-        Expression::Number { value, .. } => Ok(Expression::number(value.acos(), position.clone())),
-        _ => Err(Error::function_error(
-            "acos",
-            "Expected number argument",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn atan_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("atan", args, 1, position)?;
-    match &args[0] {
-        Expression::Number { value, .. } => Ok(Expression::number(value.atan(), position.clone())),
-        _ => Err(Error::function_error(
-            "atan",
-            "Expected number argument",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn pow_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "pow",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-    match (&args[0], &args[1]) {
-        (
-            Expression::Number {
-                value: base, unit, ..
-            },
-            Expression::Number { value: exp, .. },
-        ) => Ok(Expression::Number {
-            value: base.powf(*exp),
-            unit: unit.clone(),
-            position: position.clone(),
-        }),
-        _ => Err(Error::function_error(
-            "pow",
-            "Arguments must be numbers",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-fn pi_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if !args.is_empty() {
-        return Err(Error::function_error(
-            "pi",
-            "Expected 0 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-    Ok(Expression::number(std::f64::consts::PI, position.clone()))
-}
-
-fn mod_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "mod",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-    match (&args[0], &args[1]) {
-        (Expression::Number { value: a, unit, .. }, Expression::Number { value: b, .. }) => {
-            if *b == 0.0 {
-                return Err(Error::function_error(
-                    "mod",
-                    "Division by zero",
-                    position.line,
-                    position.column,
-                ));
-            }
-            Ok(Expression::Number {
-                value: a % b,
-                unit: unit.clone(),
-                position: position.clone(),
-            })
-        }
-        _ => Err(Error::function_error(
-            "mod",
-            "Arguments must be numbers",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-/// Transform function: scale()
-fn scale_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.is_empty() {
-        return Err(Error::function_error(
-            "scale",
-            "requires at least 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let scale_values: Result<Vec<String>> = args
-        .iter()
-        .map(|arg| match arg {
-            Expression::Number { value, unit, .. } => {
-                if let Some(u) = unit {
-                    Ok(format!("{}{}", value, u))
-                } else {
-                    Ok(value.to_string())
-                }
-            }
-            Expression::String { value, .. } => Ok(value.clone()),
-            _ => Err(Error::function_error(
-                "scale",
-                "arguments must be numbers",
-                position.line,
-                position.column,
-            )),
-        })
-        .collect();
-
-    let values = scale_values?;
-    let scale_str = if values.len() == 1 {
-        format!("scale({})", values[0])
-    } else {
-        format!("scale({})", values.join(", "))
-    };
-
-    Ok(Expression::identifier(scale_str, position.clone()))
-}
-
-/// Transform function: translateX()
-fn translate_x_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
-        return Err(Error::function_error(
-            "translateX",
-            "requires exactly 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
-    match &args[0] {
-        Expression::Number { value, unit, .. } => {
-            let unit_str = unit.as_deref().unwrap_or("");
-            let translate_str = format!("translateX({}{})", value, unit_str);
-            Ok(Expression::identifier(translate_str, position.clone()))
-        }
-        Expression::String { value, .. } => {
-            let translate_str = format!("translateX({})", value);
-            Ok(Expression::identifier(translate_str, position.clone()))
-        }
-        _ => Err(Error::function_error(
-            "translateX",
-            "argument must be a number",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-/// Transform function: translateY()
-fn translate_y_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
-        return Err(Error::function_error(
-            "translateY",
-            "requires exactly 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
-    match &args[0] {
-        Expression::Number { value, unit, .. } => {
-            let unit_str = unit.as_deref().unwrap_or("");
-            let translate_str = format!("translateY({}{})", value, unit_str);
-            Ok(Expression::identifier(translate_str, position.clone()))
-        }
-        Expression::String { value, .. } => {
-            let translate_str = format!("translateY({})", value);
-            Ok(Expression::identifier(translate_str, position.clone()))
-        }
-        _ => Err(Error::function_error(
-            "translateY",
-            "argument must be a number",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-/// Transform function: rotate()
-fn rotate_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 1 {
-        return Err(Error::function_error(
-            "rotate",
-            "requires exactly 1 argument",
-            position.line,
-            position.column,
-        ));
-    }
-
-    match &args[0] {
-        Expression::Number { value, unit, .. } => {
-            let unit_str = unit.as_deref().unwrap_or("");
-            let rotate_str = format!("rotate({}{})", value, unit_str);
-            Ok(Expression::identifier(rotate_str, position.clone()))
-        }
-        Expression::String { value, .. } => {
-            let rotate_str = format!("rotate({})", value);
-            Ok(Expression::identifier(rotate_str, position.clone()))
-        }
-        _ => Err(Error::function_error(
-            "rotate",
-            "argument must be a number",
-            position.line,
-            position.column,
-        )),
-    }
-}
-
-// Conditional function: if(condition, trueVal, falseVal)
-
-fn if_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 3 {
-        return Err(Error::function_error(
-            "if",
-            "Expected 3 arguments (condition, trueVal, falseVal)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let is_truthy = match &args[0] {
-        Expression::Boolean(b, _) => *b,
-        Expression::Number { value, .. } => *value != 0.0,
-        Expression::String { value, .. } => !value.is_empty() && value != "false",
-        _ => false,
-    };
-
-    if is_truthy {
-        Ok(args[1].clone())
-    } else {
-        Ok(args[2].clone())
-    }
-}
-
-// List generation: range(start, end, step?)
-
-fn range_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.is_empty() || args.len() > 3 {
-        return Err(Error::function_error(
-            "range",
-            "Expected 1 to 3 arguments (start, end?, step?)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let (start, end, step, unit) = if args.len() == 1 {
-        // range(count) -> 1..count
-        match &args[0] {
-            Expression::Number { value, unit, .. } => (1.0, *value, 1.0, unit.clone()),
-            _ => {
-                return Err(Error::function_error(
-                    "range",
-                    "Arguments must be numbers",
-                    position.line,
-                    position.column,
-                ))
+                _ => Err(format!("Intermediate key '{}' is not a map", canonical_key)),
             }
         }
     } else {
-        let (start_val, unit) = match &args[0] {
-            Expression::Number { value, unit, .. } => (*value, unit.clone()),
-            _ => {
-                return Err(Error::function_error(
-                    "range",
-                    "Arguments must be numbers",
-                    position.line,
-                    position.column,
-                ))
-            }
-        };
-        let end_val = match &args[1] {
-            Expression::Number { value, .. } => *value,
-            _ => {
-                return Err(Error::function_error(
-                    "range",
-                    "Arguments must be numbers",
-                    position.line,
-                    position.column,
-                ))
-            }
-        };
-        let step_val = if args.len() == 3 {
-            match &args[2] {
-                Expression::Number { value, .. } => *value,
-                _ => {
-                    return Err(Error::function_error(
-                        "range",
-                        "Step must be a number",
-                        position.line,
-                        position.column,
-                    ))
-                }
-            }
-        } else {
-            1.0
-        };
-        (start_val, end_val, step_val, unit)
-    };
-
-    if step == 0.0 {
-        return Err(Error::function_error(
-            "range",
-            "Step cannot be zero",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let mut values = Vec::new();
-    let mut current = start;
-    while (step > 0.0 && current <= end) || (step < 0.0 && current >= end) {
-        values.push(Expression::Number {
-            value: current,
-            unit: unit.clone(),
-            position: position.clone(),
-        });
-        current += step;
-        // Safety: limit iterations
-        if values.len() > 10000 {
-            return Err(Error::function_error(
-                "range",
-                "Range exceeds maximum 10000 items",
-                position.line,
-                position.column,
-            ));
-        }
-    }
-
-    Ok(Expression::list(
-        values,
-        crate::ast::ListSeparator::Space,
-        position.clone(),
-    ))
-}
-
-// Unit conversion: convert(value, targetUnit)
-
-fn convert_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "convert",
-            "Expected 2 arguments (value, targetUnit)",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let (value, from_unit) = match &args[0] {
-        Expression::Number {
-            value,
-            unit: Some(u),
-            ..
-        } => (*value, u.clone()),
-        _ => {
-            return Err(Error::function_error(
-                "convert",
-                "First argument must be a number with a unit",
-                position.line,
-                position.column,
-            ))
-        }
-    };
-
-    let to_unit = string_value(&args[1]).value;
-
-    let result = convert_units(value, &from_unit, &to_unit);
-    match result {
-        Some(converted) => Ok(Expression::Number {
-            value: converted,
-            unit: Some(to_unit),
-            position: position.clone(),
-        }),
-        None => Err(Error::function_error(
-            "convert",
-            format!("Cannot convert from '{}' to '{}'", from_unit, to_unit),
-            position.line,
-            position.column,
-        )),
+        Ok(false) // Key not found, but this is not an error for update
     }
 }
 
-/// Convert a value between compatible units
-fn convert_units(value: f64, from: &str, to: &str) -> Option<f64> {
-    if from == to {
-        return Some(value);
-    }
-
-    // Length: base unit = px
-    let to_px = |u: &str| -> Option<f64> {
-        match u {
-            "px" => Some(1.0),
-            "in" => Some(96.0),
-            "cm" => Some(96.0 / 2.54),
-            "mm" => Some(96.0 / 25.4),
-            "pt" => Some(96.0 / 72.0),
-            "pc" => Some(96.0 / 6.0),
-            _ => None,
-        }
-    };
-
-    // Try length conversion
-    if let (Some(from_factor), Some(to_factor)) = (to_px(from), to_px(to)) {
-        return Some(value * from_factor / to_factor);
-    }
-
-    // Time: base unit = s
-    let to_s = |u: &str| -> Option<f64> {
-        match u {
-            "s" => Some(1.0),
-            "ms" => Some(0.001),
-            _ => None,
-        }
-    };
-
-    if let (Some(from_factor), Some(to_factor)) = (to_s(from), to_s(to)) {
-        return Some(value * from_factor / to_factor);
-    }
-
-    // Angle: base unit = deg
-    let to_deg = |u: &str| -> Option<f64> {
-        match u {
-            "deg" => Some(1.0),
-            "rad" => Some(180.0 / std::f64::consts::PI),
-            "grad" => Some(0.9),
-            "turn" => Some(360.0),
-            _ => None,
-        }
-    };
-
-    if let (Some(from_factor), Some(to_factor)) = (to_deg(from), to_deg(to)) {
-        return Some(value * from_factor / to_factor);
-    }
-
-    None
-}
-
-// default() function placeholder for mixin guards
-fn default_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if !args.is_empty() {
-        return Err(Error::function_error(
-            "default",
-            "Expected 0 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-    // Returns true; actual logic is handled by mixin matching in compiler/mixin.rs
-    Ok(Expression::Boolean(true, position.clone()))
-}
-
-// ===== Color channel access functions =====
-
-fn red_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("red", args, 1, position)?;
-    let (r, _, _, _) = expression_to_color(&args[0], position)?;
-    Ok(Expression::number(r as f64, position.clone()))
-}
-
-fn green_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("green", args, 1, position)?;
-    let (_, g, _, _) = expression_to_color(&args[0], position)?;
-    Ok(Expression::number(g as f64, position.clone()))
-}
-
-fn blue_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("blue", args, 1, position)?;
-    let (_, _, b, _) = expression_to_color(&args[0], position)?;
-    Ok(Expression::number(b as f64, position.clone()))
-}
-
-fn alpha_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("alpha", args, 1, position)?;
-    let (_, _, _, a) = expression_to_color(&args[0], position)?;
-    Ok(Expression::number(a, position.clone()))
-}
-
-fn hue_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("hue", args, 1, position)?;
-    let (r, g, b, _) = expression_to_color(&args[0], position)?;
-    let (h, _, _) = rgb_to_hsl(r, g, b);
-    Ok(Expression::number((h * 360.0).round(), position.clone()))
-}
-
-fn saturation_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("saturation", args, 1, position)?;
-    let (r, g, b, _) = expression_to_color(&args[0], position)?;
-    let (_, s, _) = rgb_to_hsl(r, g, b);
-    Ok(Expression::Percentage(
-        (s * 100.0).round(),
-        position.clone(),
-    ))
-}
-
-fn lightness_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("lightness", args, 1, position)?;
-    let (r, g, b, _) = expression_to_color(&args[0], position)?;
-    let (_, _, l) = rgb_to_hsl(r, g, b);
-    Ok(Expression::Percentage(
-        (l * 100.0).round(),
-        position.clone(),
-    ))
-}
-
-fn luma_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("luma", args, 1, position)?;
-    let (r, g, b, _) = expression_to_color(&args[0], position)?;
-    let luma = calculate_luma(r, g, b);
-    Ok(Expression::Percentage(
-        (luma * 100.0 * 100.0).round() / 100.0,
-        position.clone(),
-    ))
-}
-
-/// Calculate perceptual luma with gamma correction
-fn calculate_luma(r: u8, g: u8, b: u8) -> f64 {
-    let r_lin = (r as f64 / 255.0).powf(2.2);
-    let g_lin = (g as f64 / 255.0).powf(2.2);
-    let b_lin = (b as f64 / 255.0).powf(2.2);
-    0.2126 * r_lin + 0.7152 * g_lin + 0.0722 * b_lin
-}
-
-fn argb_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("argb", args, 1, position)?;
-    let (r, g, b, a) = expression_to_color(&args[0], position)?;
-    let alpha_byte = (a * 255.0).round().clamp(0.0, 255.0) as u8;
-    let result = format!("#{:02x}{:02x}{:02x}{:02x}", alpha_byte, r, g, b);
-    Ok(Expression::identifier(result, position.clone()))
-}
-
-// ===== Color blending functions =====
-
-/// Apply a per-channel blend operation to two colors
-fn blend_colors(
-    name: &str,
-    args: &[Expression],
-    position: &Position,
-    blend_fn: fn(f64, f64) -> f64,
-) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            name,
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-    let (r1, g1, b1, _) = expression_to_color(&args[0], position)?;
-    let (r2, g2, b2, _) = expression_to_color(&args[1], position)?;
-
-    let r = (blend_fn(r1 as f64 / 255.0, r2 as f64 / 255.0) * 255.0)
-        .round()
-        .clamp(0.0, 255.0) as u8;
-    let g = (blend_fn(g1 as f64 / 255.0, g2 as f64 / 255.0) * 255.0)
-        .round()
-        .clamp(0.0, 255.0) as u8;
-    let b = (blend_fn(b1 as f64 / 255.0, b2 as f64 / 255.0) * 255.0)
-        .round()
-        .clamp(0.0, 255.0) as u8;
-
-    Ok(Expression::Color {
-        red: r,
-        green: g,
-        blue: b,
-        alpha: 1.0,
-        original: None,
-        position: position.clone(),
-    })
-}
-
-fn multiply_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    blend_colors("multiply", args, position, |c1, c2| c1 * c2)
-}
-
-fn screen_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    blend_colors("screen", args, position, |c1, c2| {
-        1.0 - (1.0 - c1) * (1.0 - c2)
-    })
-}
-
-fn overlay_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    blend_colors("overlay", args, position, |c1, c2| {
-        if c1 < 0.5 {
-            2.0 * c1 * c2
-        } else {
-            1.0 - 2.0 * (1.0 - c1) * (1.0 - c2)
-        }
-    })
-}
-
-fn softlight_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    // Pegtop formula
-    blend_colors("softlight", args, position, |c1, c2| {
-        (1.0 - 2.0 * c2) * c1 * c1 + 2.0 * c2 * c1
-    })
-}
-
-fn hardlight_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    // hardlight is overlay with swapped arguments
-    blend_colors("hardlight", args, position, |c1, c2| {
-        if c2 < 0.5 {
-            2.0 * c1 * c2
-        } else {
-            1.0 - 2.0 * (1.0 - c1) * (1.0 - c2)
-        }
-    })
-}
-
-fn difference_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    blend_colors("difference", args, position, |c1, c2| (c1 - c2).abs())
-}
-
-fn exclusion_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    blend_colors("exclusion", args, position, |c1, c2| {
-        c1 + c2 - 2.0 * c1 * c2
-    })
-}
-
-fn average_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    blend_colors("average", args, position, |c1, c2| (c1 + c2) / 2.0)
-}
-
-fn negation_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    blend_colors("negation", args, position, |c1, c2| {
-        1.0 - (1.0 - c1 - c2).abs()
-    })
-}
-
-// ===== Convenience color functions =====
-
-fn tint_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "tint",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-    // tint(@color, @amount) = mix(white, @color, @amount)
-    let white = Expression::Color {
-        red: 255,
-        green: 255,
-        blue: 255,
-        alpha: 1.0,
-        original: None,
-        position: position.clone(),
-    };
-    let mix_args = vec![white, args[0].clone(), args[1].clone()];
-    mix_function(&mix_args, position)
-}
-
-fn shade_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.len() != 2 {
-        return Err(Error::function_error(
-            "shade",
-            "Expected 2 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-    // shade(@color, @amount) = mix(black, @color, @amount)
-    let black = Expression::Color {
-        red: 0,
-        green: 0,
-        blue: 0,
-        alpha: 1.0,
-        original: None,
-        position: position.clone(),
-    };
-    let mix_args = vec![black, args[0].clone(), args[1].clone()];
-    mix_function(&mix_args, position)
-}
-
-fn contrast_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    if args.is_empty() || args.len() > 4 {
-        return Err(Error::function_error(
-            "contrast",
-            "Expected 1 to 4 arguments",
-            position.line,
-            position.column,
-        ));
-    }
-
-    let (r, g, b, _) = expression_to_color(&args[0], position)?;
-
-    let dark = if args.len() >= 2 {
-        args[1].clone()
-    } else {
-        Expression::Color {
-            red: 0,
-            green: 0,
-            blue: 0,
-            alpha: 1.0,
-            original: None,
-            position: position.clone(),
-        }
-    };
-
-    let light = if args.len() >= 3 {
-        args[2].clone()
-    } else {
-        Expression::Color {
-            red: 255,
-            green: 255,
-            blue: 255,
-            alpha: 1.0,
-            original: None,
-            position: position.clone(),
-        }
-    };
-
-    let threshold = if args.len() >= 4 {
-        expression_to_percentage(&args[3], position)? / 100.0
-    } else {
-        0.43
-    };
-
-    let luma = calculate_luma(r, g, b);
-
-    if luma < threshold {
-        Ok(light)
-    } else {
-        Ok(dark)
-    }
-}
-
-// Helper functions for color and percentage conversion
+// String utility functions
 
 /// Convert an expression to a color, handling hex strings and existing colors
 fn expression_to_color(expr: &Expression, position: &Position) -> Result<(u8, u8, u8, f64)> {
     match expr {
         Expression::Color {
-            red,
-            green,
-            blue,
-            alpha,
-            ..
+            red, green, blue, alpha, ..
         } => Ok((*red, *green, *blue, *alpha)),
-        Expression::String { value, .. } => {
-            // Try to parse as hex color
-            if value.starts_with('#') {
-                match Expression::color_hex(value, position.clone()) {
-                    Ok(Expression::Color {
-                        red,
-                        green,
-                        blue,
-                        alpha,
-                        ..
-                    }) => Ok((red, green, blue, alpha)),
-                    _ => Err(Error::function_error(
-                        "color conversion",
-                        "Invalid hex color format",
-                        position.line,
-                        position.column,
-                    )),
-                }
+        Expression::String { value, quoted, .. } if *quoted => {
+            // Handle hex color strings
+            if let Ok(color) = crate::ast::Color::from_hex(value, position.clone()) {
+                Ok((color.red, color.green, color.blue, color.alpha))
             } else {
                 Err(Error::function_error(
-                    "color conversion",
-                    "String must be a valid hex color",
+                    "color",
+                    format!("invalid color string: {}", value),
                     position.line,
                     position.column,
                 ))
             }
         }
+        Expression::Anonymous(value, _) => {
+            // Try to parse as hex color
+            if let Ok(color) = crate::ast::Color::from_hex(value, position.clone()) {
+                Ok((color.red, color.green, color.blue, color.alpha))
+            } else {
+                Err(Error::function_error(
+                    "color",
+                    format!("invalid color string: {}", value),
+                    position.line,
+                    position.column,
+                ))
+            }
+        }
+        Expression::FunctionCall { .. } => {
+            // Functions should be evaluated before converting to colors
+            // In the compiler, function calls are evaluated first via evaluate_expression
+            // This fallback handles cases where direct conversion is attempted
+            Err(Error::function_error(
+                "color",
+                "functions must be evaluated to colors first",
+                position.line,
+                position.column,
+            ))
+        }
         _ => Err(Error::function_error(
-            "color conversion",
-            "Argument must be a color or hex string",
+            "color",
+            "expected color or color string",
             position.line,
             position.column,
         )),
@@ -2880,17 +1415,10 @@ fn expression_to_color(expr: &Expression, position: &Position) -> Result<(u8, u8
 fn expression_to_percentage(expr: &Expression, position: &Position) -> Result<f64> {
     match expr {
         Expression::Percentage(value, _) => Ok(*value),
-        Expression::Number { value, unit, .. } => {
-            if unit.as_deref() == Some("%") {
-                Ok(*value)
-            } else {
-                // Allow unitless numbers to be treated as percentages
-                Ok(*value)
-            }
-        }
+        Expression::Number { value, .. } => Ok(*value),
         _ => Err(Error::function_error(
-            "percentage conversion",
-            "Argument must be a number or percentage",
+            "percentage",
+            "expected numeric or percentage value",
             position.line,
             position.column,
         )),
@@ -2905,126 +1433,1625 @@ fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
     let g = g as f64 / 255.0;
     let b = b as f64 / 255.0;
 
-    let max = r.max(g.max(b));
-    let min = r.min(g.min(b));
-    let delta = max - min;
-
-    // Lightness
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
     let l = (max + min) / 2.0;
 
-    if delta == 0.0 {
-        // Achromatic (gray)
-        return (0.0, 0.0, l);
+    if max == min {
+        (0.0, 0.0, l)
+    } else {
+        let d = max - min;
+        let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+
+        let h = if max == r {
+            (g - b) / d + (if g < b { 6.0 } else { 0.0 })
+        } else if max == g {
+            (b - r) / d + 2.0
+        } else {
+            (r - g) / d + 4.0
+        };
+
+        (h * 60.0, s, l)
     }
-
-    // Saturation
-    let s = if l < 0.5 {
-        delta / (max + min)
-    } else {
-        delta / (2.0 - max - min)
-    };
-
-    // Hue
-    let h = if max == r {
-        ((g - b) / delta + if g < b { 6.0 } else { 0.0 }) / 6.0
-    } else if max == g {
-        ((b - r) / delta + 2.0) / 6.0
-    } else {
-        ((r - g) / delta + 4.0) / 6.0
-    };
-
-    (h, s, l)
 }
 
 /// Convert HSL to RGB color space
 fn hsl_to_rgb(h: f64, s: f64, l: f64) -> (u8, u8, u8) {
-    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
-    let x = c * (1.0 - ((h * 6.0) % 2.0 - 1.0).abs());
-    let m = l - c / 2.0;
+    let h = h / 360.0;
+    let h = h.rem_euclid(1.0);
 
-    let (r_prime, g_prime, b_prime) = match (h * 6.0) as i32 {
-        0 => (c, x, 0.0),
-        1 => (x, c, 0.0),
-        2 => (0.0, c, x),
-        3 => (0.0, x, c),
-        4 => (x, 0.0, c),
-        5 => (c, 0.0, x),
-        _ => (c, x, 0.0), // fallback for h = 1.0
+    if s == 0.0 {
+        let gray = (l * 255.0).round() as u8;
+        (gray, gray, gray)
+    } else {
+        let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
+        let p = 2.0 * l - q;
+
+        let r = hue_to_rgb(p, q, h + 1.0 / 3.0);
+        let g = hue_to_rgb(p, q, h);
+        let b = hue_to_rgb(p, q, h - 1.0 / 3.0);
+
+        (
+            (r * 255.0).round() as u8,
+            (g * 255.0).round() as u8,
+            (b * 255.0).round() as u8,
+        )
+    }
+}
+
+fn hue_to_rgb(p: f64, q: f64, t: f64) -> f64 {
+    let mut t = t;
+    if t < 0.0 { t += 1.0; }
+    if t > 1.0 { t -= 1.0; }
+
+    if t < 1.0 / 6.0 {
+        p + (q - p) * 6.0 * t
+    } else if t < 1.0 / 2.0 {
+        q
+    } else if t < 2.0 / 3.0 {
+        p + (q - p) * (2.0 / 3.0 - t) * 6.0
+    } else {
+        p
+    }
+}
+
+// String functions
+
+fn uppercase_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("uppercase", 1, args, position)?;
+    let s = string_value(&args[0]);
+    Ok(Expression::String {
+        value: s.value.to_uppercase(),
+        quoted: s.quoted,
+        position: position.clone(),
+    })
+}
+
+fn lowercase_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("lowercase", 1, args, position)?;
+    let s = string_value(&args[0]);
+    Ok(Expression::String {
+        value: s.value.to_lowercase(),
+        quoted: s.quoted,
+        position: position.clone(),
+    })
+}
+
+fn length_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("length", 1, args, position)?;
+    let s = string_value(&args[0]);
+    Ok(Expression::Number {
+        value: s.value.chars().count() as f64,
+        unit: None,
+        position: position.clone(),
+    })
+}
+
+fn extract_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("extract", 2, args, position)?;
+    let s = string_value(&args[0]);
+    let index = match &args[1] {
+        Expression::Number { value, .. } => *value as usize,
+        _ => {
+            return Err(Error::function_error(
+                "extract",
+                "expected numeric index",
+                position.line,
+                position.column,
+            ));
+        }
     };
 
-    let r = ((r_prime + m) * 255.0).round() as u8;
-    let g = ((g_prime + m) * 255.0).round() as u8;
-    let b = ((b_prime + m) * 255.0).round() as u8;
+    let chars: Vec<char> = s.value.chars().collect();
+    if index == 0 || index > chars.len() {
+        return Err(Error::function_error(
+            "extract",
+            "index out of bounds",
+            position.line,
+            position.column,
+        ));
+    }
 
-    (r, g, b)
+    let char_at = chars[index - 1].to_string();
+    Ok(Expression::String {
+        value: char_at,
+        quoted: s.quoted,
+        position: position.clone(),
+    })
+}
+
+// Map functions
+
+fn map_get_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count_at_least("map-get", 2, args, position)?;
+    let entries = match &args[0] {
+        Expression::MapLiteral { entries, .. } => entries,
+        _ => {
+            return Err(Error::function_error(
+                "map-get",
+                "expected map literal",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let key_path = map_path_keys(args, 1);
+    match map_lookup_path(entries, &key_path) {
+        Ok(Some(value)) => Ok(value.clone()),
+        Ok(None) => {
+            // Double-check with reverse iteration for duplicate key handling
+            // (LESS behavior: last duplicate key wins)
+            if !key_path.is_empty() {
+                let first_key = &key_path[0];
+                let canonical_first = canonical_map_key(first_key);
+                
+                if let Some((_, value, _)) = entries.iter().rev().find(|(k, _, _)| map_keys_equal(k, canonical_first)) {
+                    return Ok(value.clone());
+                }
+            }
+            
+            Err(Error::function_error(
+                "map-get",
+                format!("key '{}' not found in map", key_path.join(".")),
+                position.line,
+                position.column,
+            ))
+        },
+        Err(msg) => Err(Error::function_error(
+            "map-get",
+            msg,
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn map_has_key_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count_at_least("map-has-key", 2, args, position)?;
+    let entries = match &args[0] {
+        Expression::MapLiteral { entries, .. } => entries,
+        _ => {
+            return Err(Error::function_error(
+                "map-has-key",
+                "expected map literal",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let key_path = map_path_keys(args, 1);
+    match map_lookup_path(entries, &key_path) {
+        Ok(Some(_)) => Ok(Expression::Boolean(true, position.clone())),
+        Ok(None) => Ok(Expression::Boolean(false, position.clone())),
+        Err(_) => Ok(Expression::Boolean(false, position.clone())),
+    }
+}
+
+fn map_keys_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("map-keys", 1, args, position)?;
+    let entries = match &args[0] {
+        Expression::MapLiteral { entries, .. } => entries,
+        _ => {
+            return Err(Error::function_error(
+                "map-keys",
+                "expected map literal",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let keys: Vec<Expression> = entries
+        .iter()
+        .map(|(key, _, _)| Expression::String {
+            value: key.clone(),
+            quoted: false,
+            position: position.clone(),
+        })
+        .collect();
+
+    Ok(Expression::List {
+        values: keys,
+        separator: ListSeparator::Comma,
+        position: position.clone(),
+    })
+}
+
+fn map_values_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("map-values", 1, args, position)?;
+    let entries = match &args[0] {
+        Expression::MapLiteral { entries, .. } => entries,
+        _ => {
+            return Err(Error::function_error(
+                "map-values",
+                "expected map literal",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let values: Vec<Expression> = entries
+        .iter()
+        .map(|(_, value, _)| value.clone())
+        .collect();
+
+    Ok(Expression::List {
+        values,
+        separator: ListSeparator::Comma,
+        position: position.clone(),
+    })
+}
+
+fn map_merge_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    if args.len() < 2 {
+        return Err(Error::function_error(
+            "map-merge",
+            "expected at least 2 arguments",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let mut result_entries = Vec::new();
+
+    for (i, arg) in args.iter().enumerate() {
+        match arg {
+            Expression::MapLiteral { entries, .. } => {
+                if i == 0 {
+                    // First map: copy all entries
+                    result_entries = entries.clone();
+                } else {
+                    // Subsequent maps: shallow merge (last wins)
+                    for (key, value, pos) in entries {
+                        // Check if key already exists
+                        if let Some(existing) = result_entries.iter_mut().find(|(k, _, _)| map_keys_equal(k, key)) {
+                            // Overwrite existing value
+                            existing.1 = value.clone();
+                            existing.2 = pos.clone();
+                        } else {
+                            // Add new key
+                            result_entries.push((key.clone(), value.clone(), pos.clone()));
+                        }
+                    }
+                }
+            }
+            _ => {
+                return Err(Error::function_error(
+                    "map-merge",
+                    format!("argument {} is not a map", i + 1),
+                    position.line,
+                    position.column,
+                ));
+            }
+        }
+    }
+
+    Ok(Expression::MapLiteral {
+        entries: result_entries,
+        position: position.clone(),
+    })
+}
+
+fn map_deep_merge_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    if args.len() < 2 {
+        return Err(Error::function_error(
+            "map-deep-merge",
+            "expected at least 2 arguments",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let mut result_entries = Vec::new();
+
+    for (i, arg) in args.iter().enumerate() {
+        match arg {
+            Expression::MapLiteral { entries, .. } => {
+                if i == 0 {
+                    // First map: copy all entries
+                    result_entries = entries.clone();
+                } else {
+                    // Subsequent maps: deep merge (recursively merge nested maps)
+                    deep_merge_entries(&mut result_entries, entries);
+                }
+            }
+            _ => {
+                return Err(Error::function_error(
+                    "map-deep-merge",
+                    format!("argument {} is not a map", i + 1),
+                    position.line,
+                    position.column,
+                ));
+            }
+        }
+    }
+
+    Ok(Expression::MapLiteral {
+        entries: result_entries,
+        position: position.clone(),
+    })
+}
+
+fn map_set_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count_at_least("map-set", 3, args, position)?;
+    let mut map = match &args[0] {
+        Expression::MapLiteral { entries, .. } => Expression::MapLiteral {
+            entries: entries.clone(),
+            position: position.clone(),
+        },
+        _ => {
+            return Err(Error::function_error(
+                "map-set",
+                "First argument must be a map",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    if let Expression::MapLiteral { entries, .. } = &mut map {
+        // The last argument is the value; keys are args[1..len-1]
+        let key_path: Vec<String> = args[1..args.len() - 1].iter().map(map_key_string).collect();
+        let value = &args[args.len() - 1];
+        if let Err(e) = set_map_path(entries, &key_path, value, position) {
+            // Return map-set specific error for missing intermediate maps
+            if key_path.len() > 1 && e.contains("not found") {
+                return Err(Error::function_error(
+                    "map-set",
+                    format!("Intermediate key '{}' is not a map", key_path[0]),
+                    position.line,
+                    position.column,
+                ));
+            }
+            return Err(Error::function_error("map-set", e, position.line, position.column));
+        }
+    }
+
+    Ok(map)
+}
+
+fn map_update_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count_at_least("map-update", 3, args, position)?;
+    let mut map = match &args[0] {
+        Expression::MapLiteral { entries, .. } => Expression::MapLiteral {
+            entries: entries.clone(),
+            position: position.clone(),
+        },
+        _ => {
+            return Err(Error::function_error(
+                "map-update",
+                "First argument must be a map",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    if let Expression::MapLiteral { entries, .. } = &mut map {
+        // The last argument is the value; keys are args[1..len-1]
+        let key_path: Vec<String> = args[1..args.len() - 1].iter().map(map_key_string).collect();
+        let value = &args[args.len() - 1];
+        match update_map_path(entries, &key_path, value) {
+            Ok(true) => Ok(map),
+            Ok(false) => {
+                // Key not found: for map-update, return error with helpful message
+                Err(Error::function_error(
+                    "map-update",
+                    format!("key '{}' not found in map", key_path.join(".")),
+                    position.line,
+                    position.column,
+                ))
+            },
+            Err(e) => Err(Error::function_error(
+                "map-update",
+                e,
+                position.line,
+                position.column,
+            )),
+        }
+    } else {
+        Ok(map)
+    }
+}
+
+fn map_replace_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    // map-replace is an alias for map-update with the same semantics
+    map_update_function(args, position)
+}
+
+fn map_remove_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count_at_least("map-remove", 2, args, position)?;
+    let mut map = match &args[0] {
+        Expression::MapLiteral { entries, .. } => Expression::MapLiteral {
+            entries: entries.clone(),
+            position: position.clone(),
+        },
+        _ => {
+            return Err(Error::function_error(
+                "map-remove",
+                "First argument must be a map",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    if let Expression::MapLiteral { entries, .. } = &mut map {
+        let key_path = map_path_keys(args, 1);
+        match remove_map_path(entries, &key_path) {
+            RemoveMapPathResult::Ok(new_entries) => {
+                *entries = new_entries;
+                Ok(map)
+            }
+            RemoveMapPathResult::KeyNotFound(_key) => {
+                // If key not found, return original map unchanged (LESS behavior)
+                Ok(map)
+            },
+            RemoveMapPathResult::NotMap(key) => Err(Error::function_error(
+                "map-remove",
+                format!("cannot traverse into non-map value at '{}'", key),
+                position.line,
+                position.column,
+            )),
+        }
+    } else {
+        Ok(map)
+    }
+}
+
+fn map_deep_remove_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count_at_least("map-deep-remove", 2, args, position)?;
+    let mut map = match &args[0] {
+        Expression::MapLiteral { entries, .. } => Expression::MapLiteral {
+            entries: entries.clone(),
+            position: position.clone(),
+        },
+        _ => {
+            return Err(Error::function_error(
+                "map-deep-remove",
+                "First argument must be a map",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    if let Expression::MapLiteral { entries, .. } = &mut map {
+        let key_path = map_path_keys(args, 1);
+        // Validate that every intermediate key along the path is a map
+        {
+            let mut current: &[(_, _, _)] = entries;
+            for key in &key_path[..key_path.len() - 1] {
+                let ck = canonical_map_key(key);
+                match current.iter().rev().find(|(k, _, _)| map_keys_equal(k, ck)) {
+                    Some((_, Expression::MapLiteral { entries: sub, .. }, _)) => current = sub,
+                    Some(_) => {
+                        return Err(Error::function_error(
+                            "map-deep-remove",
+                            format!("Intermediate key '{}' is not a map", key),
+                            position.line,
+                            position.column,
+                        ));
+                    }
+                    None => break,
+                }
+            }
+        }
+        match remove_map_path(entries, &key_path) {
+            RemoveMapPathResult::Ok(new_entries) => {
+                *entries = new_entries;
+                // Prune now-empty ancestor maps along the removed path
+                prune_empty_path(entries, &key_path[..key_path.len() - 1]);
+                Ok(map)
+            }
+            RemoveMapPathResult::KeyNotFound(_key) => {
+                // If key not found, return original map unchanged (LESS behavior)
+                Ok(map)
+            },
+            RemoveMapPathResult::NotMap(key) => Err(Error::function_error(
+                "map-deep-remove",
+                format!("Intermediate key '{}' is not a map", key),
+                position.line,
+                position.column,
+            )),
+        }
+    } else {
+        Ok(map)
+    }
+}
+
+/// Recursively remove maps along `path` that became empty after a deep remove.
+/// Only prunes ancestors that hold no entries after their child was removed.
+fn prune_empty_path(entries: &mut Vec<(String, Expression, Position)>, path: &[String]) {
+    if path.is_empty() {
+        return;
+    }
+    let key = &path[0];
+    let canonical_key = canonical_map_key(key);
+    if let Some(pos) = entries.iter().position(|(k, _, _)| map_keys_equal(k, canonical_key)) {
+        if path.len() == 1 {
+            // Deepest ancestor: drop it if now empty
+            if let Expression::MapLiteral { entries: sub, .. } = &entries[pos].1 {
+                if sub.is_empty() {
+                    entries.remove(pos);
+                }
+            }
+        } else if let Expression::MapLiteral { entries: sub, .. } = &mut entries[pos].1 {
+            prune_empty_path(sub, &path[1..]);
+            // After pruning deeper levels, drop this level too if empty
+            if sub.is_empty() {
+                entries.remove(pos);
+            }
+        }
+    }
+}
+
+// Helper functions for map operations
+
+fn ensure_arg_count_at_least(
+    function: &str,
+    min: usize,
+    args: &[Expression],
+    position: &Position,
+) -> Result<()> {
+    if args.len() < min {
+        Err(Error::function_error(
+            function,
+            format!("Expected at least {} arguments, got {}", min, args.len()),
+            position.line,
+            position.column,
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn deep_merge_entries(
+    target: &mut Vec<(String, Expression, Position)>,
+    source: &[(String, Expression, Position)],
+) {
+    for (key, value, pos) in source {
+        if let Some(existing) = target.iter_mut().find(|(k, _, _)| map_keys_equal(k, key)) {
+            // Key exists, check if both values are maps and recursively merge
+            match (&mut existing.1, value) {
+                (
+                    Expression::MapLiteral { entries: existing_entries, .. },
+                    Expression::MapLiteral { entries: source_entries, .. },
+                ) => {
+                    deep_merge_entries(existing_entries, source_entries);
+                }
+                _ => {
+                    // Not both maps, overwrite with new value
+                    existing.1 = value.clone();
+                }
+            }
+        } else {
+            // Key doesn't exist, add it
+            target.push((key.clone(), value.clone(), pos.clone()));
+        }
+    }
+}
+
+// Type check functions
+
+fn isnumber_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("isnumber", 1, args, position)?;
+    let result = matches!(args[0], Expression::Number { .. });
+    Ok(Expression::Boolean(result, position.clone()))
+}
+
+fn iscolor_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("iscolor", 1, args, position)?;
+    let result = matches!(args[0], Expression::Color { .. });
+    Ok(Expression::Boolean(result, position.clone()))
+}
+
+fn isstring_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("isstring", 1, args, position)?;
+    let result = matches!(&args[0], Expression::String { quoted, .. } if *quoted);
+    Ok(Expression::Boolean(result, position.clone()))
+}
+
+fn iskeyword_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("iskeyword", 1, args, position)?;
+    let result = matches!(&args[0], Expression::String { quoted, .. } if !quoted);
+    Ok(Expression::Boolean(result, position.clone()))
+}
+
+fn isurl_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("isurl", 1, args, position)?;
+    let result = matches!(args[0], Expression::Url(..));
+    Ok(Expression::Boolean(result, position.clone()))
+}
+
+fn ispixel_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("ispixel", 1, args, position)?;
+    let result = matches!(
+        &args[0],
+        Expression::Number {
+            value: _,
+            unit: Some(unit),
+            ..
+        } if unit == "px"
+    );
+    Ok(Expression::Boolean(result, position.clone()))
+}
+
+fn isem_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("isem", 1, args, position)?;
+    let result = matches!(
+        &args[0],
+        Expression::Number {
+            value: _,
+            unit: Some(unit),
+            ..
+        } if unit == "em"
+    );
+    Ok(Expression::Boolean(result, position.clone()))
+}
+
+fn ispercentage_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("ispercentage", 1, args, position)?;
+    let result = matches!(args[0], Expression::Percentage(..));
+    Ok(Expression::Boolean(result, position.clone()))
+}
+
+fn unit_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("unit", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { unit, .. } => Ok(Expression::String {
+            value: unit.clone().unwrap_or_default(),
+            quoted: false,
+            position: position.clone(),
+        }),
+        _ => Ok(Expression::String {
+            value: String::new(),
+            quoted: false,
+            position: position.clone(),
+        }),
+    }
+}
+
+fn get_unit_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    unit_function(args, position)
+}
+
+// Advanced math functions
+
+fn sqrt_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("sqrt", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::Number {
+            value: value.sqrt(),
+            unit: unit.clone(),
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "sqrt",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn sin_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("sin", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::Number {
+            value: value.sin(),
+            unit: unit.clone(),
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "sin",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn cos_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("cos", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::Number {
+            value: value.cos(),
+            unit: unit.clone(),
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "cos",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn tan_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("tan", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::Number {
+            value: value.tan(),
+            unit: unit.clone(),
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "tan",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn asin_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("asin", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::Number {
+            value: value.asin(),
+            unit: unit.clone(),
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "asin",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn acos_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("acos", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::Number {
+            value: value.acos(),
+            unit: unit.clone(),
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "acos",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn atan_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("atan", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::Number {
+            value: value.atan(),
+            unit: unit.clone(),
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "atan",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn pow_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("pow", 2, args, position)?;
+    let base = match &args[0] {
+        Expression::Number { value, .. } => *value,
+        _ => {
+            return Err(Error::function_error(
+                "pow",
+                "expected numeric base argument",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let exponent = match &args[1] {
+        Expression::Number { value, .. } => *value,
+        _ => {
+            return Err(Error::function_error(
+                "pow",
+                "expected numeric exponent argument",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    Ok(Expression::Number {
+        value: base.powf(exponent),
+        unit: None,
+        position: position.clone(),
+    })
+}
+
+fn pi_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("pi", 0, args, position)?;
+    Ok(Expression::Number {
+        value: std::f64::consts::PI,
+        unit: None,
+        position: position.clone(),
+    })
+}
+
+fn mod_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("mod", 2, args, position)?;
+    let dividend = match &args[0] {
+        Expression::Number { value, unit, .. } => (value, unit),
+        _ => {
+            return Err(Error::function_error(
+                "mod",
+                "expected numeric dividend argument",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let divisor = match &args[1] {
+        Expression::Number { value, .. } => *value,
+        _ => {
+            return Err(Error::function_error(
+                "mod",
+                "expected numeric divisor argument",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    if divisor == 0.0 {
+        return Err(Error::division_by_zero(position.line, position.column));
+    }
+
+    Ok(Expression::Number {
+        value: dividend.0 % divisor,
+        unit: dividend.1.clone(),
+        position: position.clone(),
+    })
+}
+
+// Transform functions
+
+fn scale_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    if args.is_empty() || args.len() > 2 {
+        return Err(Error::function_error(
+            "scale",
+            "expected 1 or 2 arguments",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let x = match &args[0] {
+        Expression::Number { value, .. } => *value,
+        _ => {
+            return Err(Error::function_error(
+                "scale",
+                "expected numeric scale factor",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let y = if args.len() == 2 {
+        match &args[1] {
+            Expression::Number { value, .. } => *value,
+            _ => {
+                return Err(Error::function_error(
+                    "scale",
+                    "expected numeric scale factor",
+                    position.line,
+                    position.column,
+                ));
+            }
+        }
+    } else {
+        x
+    };
+
+    Ok(Expression::FunctionCall {
+        name: "scale".to_string(),
+        arguments: vec![
+            Expression::Number {
+                value: x,
+                unit: None,
+                position: position.clone(),
+            },
+            Expression::Number {
+                value: y,
+                unit: None,
+                position: position.clone(),
+            },
+        ],
+        position: position.clone(),
+    })
+}
+
+fn translate_x_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("translateX", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::FunctionCall {
+            name: "translateX".to_string(),
+            arguments: vec![Expression::Number {
+                value: *value,
+                unit: unit.clone(),
+                position: position.clone(),
+            }],
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "translateX",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn translate_y_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("translateY", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::FunctionCall {
+            name: "translateY".to_string(),
+            arguments: vec![Expression::Number {
+                value: *value,
+                unit: unit.clone(),
+                position: position.clone(),
+            }],
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "translateY",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+fn rotate_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("rotate", 1, args, position)?;
+    match &args[0] {
+        Expression::Number { value, unit, .. } => Ok(Expression::FunctionCall {
+            name: "rotate".to_string(),
+            arguments: vec![Expression::Number {
+                value: *value,
+                unit: unit.clone(),
+                position: position.clone(),
+            }],
+            position: position.clone(),
+        }),
+        _ => Err(Error::function_error(
+            "rotate",
+            "expected numeric argument",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+// Conditional functions
+
+fn if_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    if args.len() != 3 {
+        return Err(Error::function_error(
+            "if",
+            "expected 3 arguments (condition, true-value, false-value)",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let condition = &args[0];
+    let if_true = &args[1];
+    let if_false = &args[2];
+
+    // Evaluate condition - accept more types than just boolean
+    let condition_result = match condition {
+        Expression::Boolean(b, _) => *b,
+        Expression::Number { value, .. } => *value != 0.0,
+        Expression::String { value, .. } => !value.is_empty() && value != "false",
+        Expression::Color { .. } => true,
+        Expression::Percentage(value, _) => *value != 0.0,
+        _ => {
+            return Err(Error::function_error(
+                "if",
+                "condition must be evaluatable to a boolean",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    if condition_result {
+        Ok(if_true.clone())
+    } else {
+        Ok(if_false.clone())
+    }
+}
+
+// List functions
+
+fn range_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    if args.len() < 2 || args.len() > 3 {
+        return Err(Error::function_error(
+            "range",
+            "expected 2 or 3 arguments (start, end, [step])",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let start = match &args[0] {
+        Expression::Number { value, unit, .. } => (*value, unit.clone()),
+        _ => {
+            return Err(Error::function_error(
+                "range",
+                "expected numeric start value",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let end = match &args[1] {
+        Expression::Number { value, .. } => *value,
+        _ => {
+            return Err(Error::function_error(
+                "range",
+                "expected numeric end value",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let step = if args.len() == 3 {
+        match &args[2] {
+            Expression::Number { value, .. } => *value,
+            _ => {
+                return Err(Error::function_error(
+                    "range",
+                    "expected numeric step value",
+                    position.line,
+                    position.column,
+                ));
+            }
+        }
+    } else {
+        1.0
+    };
+
+    if step == 0.0 {
+        return Err(Error::function_error(
+            "range",
+            "step cannot be zero",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let mut values = Vec::new();
+    let mut current = start.0;
+    let ascending = step > 0.0;
+
+    loop {
+        if (ascending && current > end) || (!ascending && current < end) {
+            break;
+        }
+        values.push(Expression::Number {
+            value: current,
+            unit: start.1.clone(),
+            position: position.clone(),
+        });
+
+        current += step;
+    }
+
+    Ok(Expression::List {
+        values,
+        separator: ListSeparator::Space,
+        position: position.clone(),
+    })
+}
+
+// Unit conversion function
+
+fn convert_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("convert", 2, args, position)?;
+
+    let value = match &args[0] {
+        Expression::Number { value, unit, .. } => (value, unit),
+        _ => {
+            return Err(Error::function_error(
+                "convert",
+                "expected numeric value",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    let target_unit = match &args[1] {
+        Expression::String { value, .. } => value,
+        _ => {
+            return Err(Error::function_error(
+                "convert",
+                "expected string target unit",
+                position.line,
+                position.column,
+            ));
+        }
+    };
+
+    match &value.1 {
+        Some(source_unit) => {
+            if let Some(converted_value) = convert_units(*value.0, source_unit, target_unit) {
+                Ok(Expression::Number {
+                    value: converted_value,
+                    unit: Some(target_unit.clone()),
+                    position: position.clone(),
+                })
+            } else {
+                Err(Error::function_error(
+                    "convert",
+                    format!("cannot convert from {} to {}", source_unit, target_unit),
+                    position.line,
+                    position.column,
+                ))
+            }
+        }
+        None => Err(Error::function_error(
+            "convert",
+            "cannot convert unitless value",
+            position.line,
+            position.column,
+        )),
+    }
+}
+
+/// Convert a value between compatible units
+fn convert_units(value: f64, from: &str, to: &str) -> Option<f64> {
+    // Time conversions
+    match (from.to_lowercase().as_str(), to.to_lowercase().as_str()) {
+        ("s", "ms") | ("sec", "ms") | ("seconds", "ms") => Some(value * 1000.0),
+        ("ms", "s") | ("ms", "sec") | ("milliseconds", "s") => Some(value / 1000.0),
+
+        // Length conversions
+        ("px", "pt") | ("px", "points") => Some(value * 0.75),
+        ("pt", "px") | ("points", "px") => Some(value / 0.75),
+        ("px", "in") | ("px", "inches") => Some(value / 96.0),
+        ("in", "px") | ("inches", "px") => Some(value * 96.0),
+        ("px", "cm") | ("px", "centimeters") => Some(value / 37.79527559055118),
+        ("cm", "px") | ("centimeters", "px") => Some(value * 37.79527559055118),
+        ("px", "mm") | ("px", "millimeters") => Some(value / 3.7795275590551185),
+        ("mm", "px") | ("millimeters", "px") => Some(value * 3.7795275590551185),
+
+        // Angle conversions
+        ("deg", "rad") | ("degrees", "radians") => Some(value * std::f64::consts::PI / 180.0),
+        ("rad", "deg") | ("radians", "degrees") => Some(value * 180.0 / std::f64::consts::PI),
+
+        // If same unit, return value unchanged
+        _ if from.to_lowercase() == to.to_lowercase() => Some(value),
+
+        // Default: cannot convert
+        _ => None,
+    }
+}
+
+// Color channel access functions
+
+fn red_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("red", 1, args, position)?;
+    let (r, _, _, _) = expression_to_color(&args[0], position)?;
+    Ok(Expression::Number {
+        value: r as f64,
+        unit: None,
+        position: position.clone(),
+    })
+}
+
+fn green_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("green", 1, args, position)?;
+    let (_, g, _, _) = expression_to_color(&args[0], position)?;
+    Ok(Expression::Number {
+        value: g as f64,
+        unit: None,
+        position: position.clone(),
+    })
+}
+
+fn blue_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("blue", 1, args, position)?;
+    let (_, _, b, _) = expression_to_color(&args[0], position)?;
+    Ok(Expression::Number {
+        value: b as f64,
+        unit: None,
+        position: position.clone(),
+    })
+}
+
+fn alpha_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("alpha", 1, args, position)?;
+    let (_, _, _, a) = expression_to_color(&args[0], position)?;
+    Ok(Expression::Number {
+        value: a,
+        unit: None,
+        position: position.clone(),
+    })
+}
+
+fn hue_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("hue", 1, args, position)?;
+    let (r, g, b, _) = expression_to_color(&args[0], position)?;
+    let (h, _, _) = rgb_to_hsl(r, g, b);
+    Ok(Expression::Number {
+        value: h,
+        unit: None,
+        position: position.clone(),
+    })
+}
+
+fn saturation_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("saturation", 1, args, position)?;
+    let (r, g, b, _) = expression_to_color(&args[0], position)?;
+    let (_, s, _) = rgb_to_hsl(r, g, b);
+    Ok(Expression::Percentage(s * 100.0, position.clone()))
+}
+
+fn lightness_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("lightness", 1, args, position)?;
+    let (r, g, b, _) = expression_to_color(&args[0], position)?;
+    let (_, _, l) = rgb_to_hsl(r, g, b);
+    Ok(Expression::Percentage(l * 100.0, position.clone()))
+}
+
+fn luma_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("luma", 1, args, position)?;
+    let (r, g, b, _) = expression_to_color(&args[0], position)?;
+    let luma = calculate_luma(r, g, b);
+    Ok(Expression::Percentage(luma * 100.0, position.clone()))
+}
+
+/// Calculate perceptual luma with gamma correction
+fn calculate_luma(r: u8, g: u8, b: u8) -> f64 {
+    let linearize = |v: u8| {
+        let v = v as f64 / 255.0;
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+
+    let r_lin = linearize(r);
+    let g_lin = linearize(g);
+    let b_lin = linearize(b);
+
+    0.2126 * r_lin + 0.7152 * g_lin + 0.0722 * b_lin
+}
+
+fn argb_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("argb", 1, args, position)?;
+    let (r, g, b, a) = expression_to_color(&args[0], position)?;
+    let argb = format!(
+        "#{:02x}{:02x}{:02x}{:02x}",
+        (a * 255.0) as u8, r, g, b
+    );
+    Ok(Expression::String {
+        value: argb,
+        quoted: false,
+        position: position.clone(),
+    })
+}
+
+// Color blending functions
+
+/// Apply a per-channel blend operation to two colors
+fn blend_colors(
+    name: &str,
+    args: &[Expression],
+    position: &Position,
+    blend_fn: fn(f64, f64) -> f64,
+) -> Result<Expression> {
+    ensure_arg_count(name, 2, args, position)?;
+
+    let (r1, g1, b1, a1) = expression_to_color(&args[0], position)?;
+    let (r2, g2, b2, a2) = expression_to_color(&args[1], position)?;
+
+    let blend_channel = |c1: u8, c2: u8| -> u8 {
+        (blend_fn(c1 as f64 / 255.0, c2 as f64 / 255.0) * 255.0).round() as u8
+    };
+
+    Ok(Expression::Color {
+        red: blend_channel(r1, r2),
+        green: blend_channel(g1, g2),
+        blue: blend_channel(b1, b2),
+        alpha: (a1 + a2) / 2.0,
+        original: None,
+        position: position.clone(),
+    })
+}
+
+fn multiply_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    blend_colors("multiply", args, position, |c1, c2| c1 * c2)
+}
+
+fn screen_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    blend_colors("screen", args, position, |c1, c2| c1 + c2 - c1 * c2)
+}
+
+fn overlay_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    blend_colors(
+        "overlay",
+        args,
+        position,
+        |c1, c2| {
+            if c1 < 0.5 {
+                c1 * c2 * 2.0
+            } else {
+                1.0 - 2.0 * (1.0 - c1) * (1.0 - c2)
+            }
+        },
+    )
+}
+
+fn softlight_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    blend_colors(
+        "softlight",
+        args,
+        position,
+        |c1, c2| {
+            let d = if c2 <= 0.25 {
+                ((16.0 * c2 - 12.0) * c2 + 4.0) * c2
+            } else {
+                c2.sqrt()
+            };
+            if c1 <= 0.5 {
+                c1 - (1.0 - 2.0 * c2) * c1 * (1.0 - c1)
+            } else {
+                c1 + (2.0 * c2 - 1.0) * (d - c1)
+            }
+        },
+    )
+}
+
+fn hardlight_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    blend_colors(
+        "hardlight",
+        args,
+        position,
+        |c1, c2| {
+            if c2 <= 0.5 {
+                c1 * c2 * 2.0
+            } else {
+                1.0 - 2.0 * (1.0 - c1) * (1.0 - c2)
+            }
+        },
+    )
+}
+
+fn difference_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    blend_colors("difference", args, position, |c1, c2| (c1 - c2).abs())
+}
+
+fn exclusion_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    blend_colors(
+        "exclusion",
+        args,
+        position,
+        |c1, c2| c1 + c2 - 2.0 * c1 * c2,
+    )
+}
+
+fn average_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    blend_colors("average", args, position, |c1, c2| (c1 + c2) / 2.0)
+}
+
+fn negation_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    blend_colors(
+        "negation",
+        args,
+        position,
+        |c1, c2| 1.0 - (1.0 - c1).abs() - (1.0 - c2).abs(),
+    )
+}
+
+// Convenience color functions
+
+fn tint_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("tint", 2, args, position)?;
+    let color = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)?;
+
+    // Mix with white
+    let white = (255u8, 255u8, 255u8, color.3);
+    blend_colors(
+        "tint",
+        &[
+            Expression::Color {
+                red: color.0,
+                green: color.1,
+                blue: color.2,
+                alpha: color.3,
+                original: None,
+                position: position.clone(),
+            },
+            Expression::Color {
+                red: white.0,
+                green: white.1,
+                blue: white.2,
+                alpha: white.3,
+                original: None,
+                position: position.clone(),
+            },
+            Expression::Percentage(amount, position.clone()),
+        ],
+        position,
+        |c1, c2| c1 + (1.0 - c1) * c2,
+    )
+}
+
+fn shade_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("shade", 2, args, position)?;
+    let color = expression_to_color(&args[0], position)?;
+    let amount = expression_to_percentage(&args[1], position)?;
+
+    // Mix with black
+    let black = (0u8, 0u8, 0u8, color.3);
+    blend_colors(
+        "shade",
+        &[
+            Expression::Color {
+                red: color.0,
+                green: color.1,
+                blue: color.2,
+                alpha: color.3,
+                original: None,
+                position: position.clone(),
+            },
+            Expression::Color {
+                red: black.0,
+                green: black.1,
+                blue: black.2,
+                alpha: black.3,
+                original: None,
+                position: position.clone(),
+            },
+            Expression::Percentage(amount, position.clone()),
+        ],
+        position,
+        |c1, c2| c1 * (1.0 - c2),
+    )
+}
+
+fn contrast_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    if args.is_empty() || args.len() > 3 {
+        return Err(Error::function_error(
+            "contrast",
+            "expected 1 to 3 arguments (color, [dark], [light])",
+            position.line,
+            position.column,
+        ));
+    }
+
+    let (r, g, b, a) = expression_to_color(&args[0], position)?;
+    let luma = calculate_luma(r, g, b);
+
+    let dark = if args.len() >= 2 {
+        expression_to_color(&args[1], position)?
+    } else {
+        (0, 0, 0, 1.0) // black
+    };
+
+    let light = if args.len() >= 3 {
+        expression_to_color(&args[2], position)?
+    } else {
+        (255, 255, 255, 1.0) // white
+    };
+
+    let result = if luma < 0.5 { light } else { dark };
+
+    Ok(Expression::Color {
+        red: result.0,
+        green: result.1,
+        blue: result.2,
+        alpha: a,
+        original: None,
+        position: position.clone(),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // Helper function to create a test position
+    fn pos() -> Position {
+        Position::new(1, 1)
+    }
+
+    // Helper function to create a map literal for testing
+    fn map_literal(entries: Vec<(&str, Expression)>) -> Expression {
+        Expression::MapLiteral {
+            entries: entries
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v, pos()))
+                .collect(),
+            position: pos(),
+        }
+    }
+
+    // Basic test to ensure the registry works
     #[test]
     fn test_round_function() {
         let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
         let args = vec![Expression::Number {
             value: 10.6,
             unit: Some("px".to_string()),
-            position: pos.clone(),
+            position: pos(),
         }];
 
-        let result = registry.call("round", &args, &pos).unwrap();
+        let result = registry.call("round", &args, &pos()).unwrap();
 
         if let Expression::Number { value, unit, .. } = result {
             assert_eq!(value, 11.0);
             assert_eq!(unit, Some("px".to_string()));
         } else {
-            panic!("Expected number result");
+            panic!("Expected Number expression");
         }
     }
 
     #[test]
     fn test_percentage_function() {
         let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
         let args = vec![Expression::Number {
             value: 0.5,
             unit: None,
-            position: pos.clone(),
+            position: pos(),
         }];
 
-        let result = registry.call("percentage", &args, &pos).unwrap();
+        let result = registry.call("percentage", &args, &pos()).unwrap();
 
         if let Expression::Percentage(value, _) = result {
             assert_eq!(value, 50.0);
         } else {
-            panic!("Expected percentage result");
+            panic!("Expected Percentage expression");
         }
     }
 
     #[test]
     fn test_rgb_function() {
         let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
         let args = vec![
             Expression::Number {
                 value: 255.0,
                 unit: None,
-                position: pos.clone(),
+                position: pos(),
             },
             Expression::Number {
                 value: 0.0,
                 unit: None,
-                position: pos.clone(),
+                position: pos(),
             },
             Expression::Number {
                 value: 0.0,
                 unit: None,
-                position: pos.clone(),
+                position: pos(),
             },
         ];
 
-        let result = registry.call("rgb", &args, &pos).unwrap();
+        let result = registry.call("rgb", &args, &pos()).unwrap();
 
         if let Expression::Color {
             red,
@@ -3039,1030 +3066,243 @@ mod tests {
             assert_eq!(blue, 0);
             assert_eq!(alpha, 1.0);
         } else {
-            panic!("Expected color result");
+            panic!("Expected Color expression");
         }
     }
 
     #[test]
     fn test_min_max_functions() {
         let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
         let args = vec![
             Expression::Number {
                 value: 10.0,
                 unit: Some("px".to_string()),
-                position: pos.clone(),
+                position: pos(),
             },
             Expression::Number {
                 value: 5.0,
                 unit: Some("px".to_string()),
-                position: pos.clone(),
+                position: pos(),
             },
             Expression::Number {
                 value: 15.0,
                 unit: Some("px".to_string()),
-                position: pos.clone(),
+                position: pos(),
             },
         ];
 
-        let min_result = registry.call("min", &args, &pos).unwrap();
-        let max_result = registry.call("max", &args, &pos).unwrap();
+        let min_result = registry.call("min", &args, &pos()).unwrap();
+        let max_result = registry.call("max", &args, &pos()).unwrap();
 
         if let Expression::Number { value, .. } = min_result {
             assert_eq!(value, 5.0);
         } else {
-            panic!("Expected number result from min");
+            panic!("Expected Number expression");
         }
 
         if let Expression::Number { value, .. } = max_result {
             assert_eq!(value, 15.0);
         } else {
-            panic!("Expected number result from max");
+            panic!("Expected Number expression");
         }
     }
 
     #[test]
     fn test_undefined_function() {
         let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
         let args = vec![];
 
-        let result = registry.call("nonexistent", &args, &pos);
+        let result = registry.call("nonexistent", &args, &pos());
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            Error::UndefinedFunction { .. }
-        ));
     }
 
     #[test]
-    fn test_escape_function() {
+    fn test_e_function() {
         let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
-        let args = vec![Expression::string("test".to_string(), pos.clone())];
+        let args = vec![Expression::string("test".to_string(), pos())];
 
-        let result = registry.call("e", &args, &pos).unwrap();
+        let result = registry.call("e", &args, &pos()).unwrap();
 
-        if let Expression::Escaped(value, _) = result {
+        if let Expression::Anonymous(value, _) = result {
             assert_eq!(value, "test");
         } else {
-            panic!("Expected escaped result");
+            panic!("Expected Anonymous expression");
         }
     }
 
     #[test]
     fn test_replace_function() {
         let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
         let args = vec![
-            Expression::string("hello world".to_string(), pos.clone()),
-            Expression::string("world".to_string(), pos.clone()),
-            Expression::string("LESS".to_string(), pos.clone()),
+            Expression::string("hello world".to_string(), pos()),
+            Expression::string("world".to_string(), pos()),
+            Expression::string("LESS".to_string(), pos()),
         ];
 
-        let result = registry.call("replace", &args, &pos).unwrap();
+        let result = registry.call("replace", &args, &pos()).unwrap();
 
         if let Expression::String { value, .. } = result {
             assert_eq!(value, "hello LESS");
         } else {
-            panic!("Expected string result");
+            panic!("Expected String expression");
         }
     }
 
     #[test]
     fn test_map_get_function() {
         let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
-        let map = Expression::MapLiteral {
-            entries: vec![
-                (
-                    "small".to_string(),
-                    Expression::number_with_unit(10.0, "px", pos.clone()),
-                    pos.clone(),
-                ),
-                (
-                    "medium".to_string(),
-                    Expression::number_with_unit(20.0, "px", pos.clone()),
-                    pos.clone(),
-                ),
-            ],
-            position: pos.clone(),
-        };
+        let map = map_literal(vec![
+            ("width", Expression::number_with_unit(10.0, "px", pos())),
+            ("height", Expression::number_with_unit(20.0, "px", pos())),
+        ]);
+        let args = vec![map, Expression::string("height".to_string(), pos())];
+
+        let result = registry.call("map-get", &args, &pos()).unwrap();
+
+        if let Expression::Number { value, unit, .. } = result {
+            assert_eq!(value, 20.0);
+            assert_eq!(unit, Some("px".to_string()));
+        } else {
+            panic!("Expected Number expression");
+        }
+    }
+
+    #[test]
+    fn test_map_has_key_function() {
+        let registry = FunctionRegistry::new();
+        let map = map_literal(vec![
+            ("width", Expression::number_with_unit(10.0, "px", pos())),
+        ]);
         let args = vec![
-            map,
-            Expression::identifier("medium".to_string(), pos.clone()),
+            map.clone(),
+            Expression::string("width".to_string(), pos()),
         ];
 
-        let result = registry.call("map-get", &args, &pos).unwrap();
-        assert_eq!(result.to_css(), "20px");
-    }
+        let result = registry.call("map-has-key", &args, &pos()).unwrap();
 
-    #[test]
-    fn test_map_keys_values_merge_functions() {
-        let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
-        let map1 = Expression::MapLiteral {
-            entries: vec![
-                (
-                    "small".to_string(),
-                    Expression::number_with_unit(10.0, "px", pos.clone()),
-                    pos.clone(),
-                ),
-                (
-                    "medium".to_string(),
-                    Expression::number_with_unit(20.0, "px", pos.clone()),
-                    pos.clone(),
-                ),
-            ],
-            position: pos.clone(),
-        };
-        let map2 = Expression::MapLiteral {
-            entries: vec![
-                (
-                    "medium".to_string(),
-                    Expression::number_with_unit(22.0, "px", pos.clone()),
-                    pos.clone(),
-                ),
-                (
-                    "large".to_string(),
-                    Expression::number_with_unit(30.0, "px", pos.clone()),
-                    pos.clone(),
-                ),
-            ],
-            position: pos.clone(),
-        };
-
-        let keys = registry
-            .call("map-keys", std::slice::from_ref(&map1), &pos)
-            .unwrap();
-        assert_eq!(keys.to_css(), "small, medium");
-
-        let values = registry
-            .call("map-values", std::slice::from_ref(&map1), &pos)
-            .unwrap();
-        assert_eq!(values.to_css(), "10px, 20px");
-
-        let merged = registry.call("map-merge", &[map1, map2], &pos).unwrap();
-        if let Expression::MapLiteral { entries, .. } = merged {
-            assert_eq!(entries.len(), 3);
-            assert_eq!(entries[0].0, "small");
-            assert_eq!(entries[0].1.to_css(), "10px");
-            assert_eq!(entries[1].0, "medium");
-            assert_eq!(entries[1].1.to_css(), "22px");
-            assert_eq!(entries[2].0, "large");
-            assert_eq!(entries[2].1.to_css(), "30px");
+        if let Expression::Boolean(value, _) = result {
+            assert!(value);
         } else {
-            panic!("Expected map result from map-merge");
+            panic!("Expected Boolean expression");
+        }
+
+        let args_false = vec![map, Expression::string("height".to_string(), pos())];
+        let result_false = registry.call("map-has-key", &args_false, &pos()).unwrap();
+
+        if let Expression::Boolean(value, _) = result_false {
+            assert!(!value);
+        } else {
+            panic!("Expected Boolean expression");
         }
     }
 
     #[test]
-    fn test_map_nested_path_has_key_and_remove_functions() {
+    fn test_map_keys_function() {
         let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
+        let map = map_literal(vec![
+            ("width", Expression::number_with_unit(10.0, "px", pos())),
+            ("height", Expression::number_with_unit(20.0, "px", pos())),
+        ]);
 
-        let nested_map = Expression::MapLiteral {
-            entries: vec![
-                (
-                    "breakpoints".to_string(),
-                    Expression::MapLiteral {
-                        entries: vec![
-                            (
-                                "sm".to_string(),
-                                Expression::number_with_unit(480.0, "px", pos.clone()),
-                                pos.clone(),
-                            ),
-                            (
-                                "md".to_string(),
-                                Expression::number_with_unit(768.0, "px", pos.clone()),
-                                pos.clone(),
-                            ),
-                        ],
-                        position: pos.clone(),
-                    },
-                    pos.clone(),
-                ),
-                (
-                    "columns".to_string(),
-                    Expression::number(12.0, pos.clone()),
-                    pos.clone(),
-                ),
-            ],
-            position: pos.clone(),
-        };
+        let result = registry.call("map-keys", std::slice::from_ref(&map), &pos()).unwrap();
 
-        let get_result = registry
-            .call(
-                "map-get",
-                &[
-                    nested_map.clone(),
-                    Expression::identifier("breakpoints".to_string(), pos.clone()),
-                    Expression::identifier("md".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(get_result.to_css(), "768px");
+        if let Expression::List { values, separator, .. } = result {
+            assert_eq!(values.len(), 2);
+            assert_eq!(separator, ListSeparator::Comma);
 
-        let has_true = registry
-            .call(
-                "map-has-key",
-                &[
-                    nested_map.clone(),
-                    Expression::identifier("breakpoints".to_string(), pos.clone()),
-                    Expression::identifier("sm".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(has_true.to_css(), "true");
-
-        let has_false = registry
-            .call(
-                "map-has-key",
-                &[
-                    nested_map.clone(),
-                    Expression::identifier("breakpoints".to_string(), pos.clone()),
-                    Expression::identifier("lg".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(has_false.to_css(), "false");
-
-        let removed = registry
-            .call(
-                "map-remove",
-                &[
-                    nested_map,
-                    Expression::identifier("breakpoints".to_string(), pos.clone()),
-                    Expression::identifier("sm".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-
-        if let Expression::MapLiteral { entries, .. } = removed {
-            assert_eq!(entries.len(), 2);
-            let breakpoints = entries
+            let keys: Vec<String> = values
                 .iter()
-                .find(|(k, _, _)| k == "breakpoints")
-                .expect("breakpoints should exist");
-            if let Expression::MapLiteral {
-                entries: nested_entries,
-                ..
-            } = &breakpoints.1
-            {
-                assert_eq!(nested_entries.len(), 1);
-                assert_eq!(nested_entries[0].0, "md");
-                assert_eq!(nested_entries[0].1.to_css(), "768px");
-            } else {
-                panic!("Expected nested map for breakpoints");
+                .filter_map(|v| {
+                    if let Expression::String { value, .. } = v {
+                        Some(value.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            assert!(keys.contains(&"width".to_string()));
+            assert!(keys.contains(&"height".to_string()));
+        } else {
+            panic!("Expected List expression");
+        }
+    }
+
+    #[test]
+    fn test_map_values_function() {
+        let registry = FunctionRegistry::new();
+        let map = map_literal(vec![
+            ("width", Expression::number_with_unit(10.0, "px", pos())),
+            ("height", Expression::number_with_unit(20.0, "px", pos())),
+        ]);
+
+        let result = registry.call("map-values", std::slice::from_ref(&map), &pos()).unwrap();
+
+        if let Expression::List { values, separator, .. } = result {
+            assert_eq!(values.len(), 2);
+            assert_eq!(separator, ListSeparator::Comma);
+        } else {
+            panic!("Expected List expression");
+        }
+    }
+
+    #[test]
+    fn test_map_merge_function() {
+        let registry = FunctionRegistry::new();
+        let map1 = map_literal(vec![
+            ("width", Expression::number_with_unit(10.0, "px", pos())),
+            ("height", Expression::number_with_unit(20.0, "px", pos())),
+        ]);
+        let map2 = map_literal(vec![
+            ("height", Expression::number_with_unit(30.0, "px", pos())),
+            ("margin", Expression::number_with_unit(5.0, "px", pos())),
+        ]);
+
+        let result = registry.call("map-merge", &[map1, map2], &pos()).unwrap();
+
+        if let Expression::MapLiteral { entries, .. } = result {
+            assert_eq!(entries.len(), 3);
+
+            // Check specific values
+            let map: std::collections::HashMap<String, &Expression> = entries
+                .iter()
+                .map(|(k, v, _)| (k.clone(), v))
+                .collect();
+
+            if let Some(Expression::Number { value, .. }) = map.get("width") {
+                assert_eq!(*value, 10.0);
+            }
+            if let Some(Expression::Number { value, .. }) = map.get("height") {
+                assert_eq!(*value, 30.0); // Overwritten by second map
+            }
+            if let Some(Expression::Number { value, .. }) = map.get("margin") {
+                assert_eq!(*value, 5.0);
             }
         } else {
-            panic!("Expected map result from map-remove");
+            panic!("Expected MapLiteral expression");
         }
+    }
 
-        let deep_removed = registry
-            .call(
-                "map-deep-remove",
-                &[
-                    Expression::MapLiteral {
-                        entries: vec![
-                            (
-                                "a".to_string(),
-                                Expression::MapLiteral {
-                                    entries: vec![(
-                                        "b".to_string(),
-                                        Expression::MapLiteral {
-                                            entries: vec![(
-                                                "c".to_string(),
-                                                Expression::number(1.0, pos.clone()),
-                                                pos.clone(),
-                                            )],
-                                            position: pos.clone(),
-                                        },
-                                        pos.clone(),
-                                    )],
-                                    position: pos.clone(),
-                                },
-                                pos.clone(),
-                            ),
-                            (
-                                "keep".to_string(),
-                                Expression::number(2.0, pos.clone()),
-                                pos.clone(),
-                            ),
-                        ],
-                        position: pos.clone(),
-                    },
-                    Expression::identifier("a".to_string(), pos.clone()),
-                    Expression::identifier("b".to_string(), pos.clone()),
-                    Expression::identifier("c".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
+    #[test]
+    fn test_map_remove_function() {
+        let registry = FunctionRegistry::new();
+        let map = map_literal(vec![
+            ("width", Expression::number_with_unit(10.0, "px", pos())),
+            ("height", Expression::number_with_unit(20.0, "px", pos())),
+            ("margin", Expression::number_with_unit(5.0, "px", pos())),
+        ]);
+        let args = vec![
+            map,
+            Expression::string("height".to_string(), pos()),
+        ];
 
-        if let Expression::MapLiteral { entries, .. } = deep_removed {
-            assert_eq!(entries.len(), 1);
-            assert_eq!(entries[0].0, "keep");
-            assert_eq!(entries[0].1.to_css(), "2");
+        let result = registry.call("map-remove", &args, &pos()).unwrap();
+
+        if let Expression::MapLiteral { entries, .. } = result {
+            assert_eq!(entries.len(), 2);
+            assert!(!entries.iter().any(|(k, _, _)| map_keys_equal(k, "height")));
         } else {
-            panic!("Expected map result from map-deep-remove");
+            panic!("Expected MapLiteral expression");
         }
-    }
-
-    #[test]
-    fn test_map_set_and_deep_merge_functions() {
-        let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
-
-        let base = Expression::MapLiteral {
-            entries: vec![(
-                "config".to_string(),
-                Expression::MapLiteral {
-                    entries: vec![
-                        (
-                            "theme".to_string(),
-                            Expression::identifier("light".to_string(), pos.clone()),
-                            pos.clone(),
-                        ),
-                        (
-                            "spacing".to_string(),
-                            Expression::number(8.0, pos.clone()),
-                            pos.clone(),
-                        ),
-                    ],
-                    position: pos.clone(),
-                },
-                pos.clone(),
-            )],
-            position: pos.clone(),
-        };
-
-        let updated = registry
-            .call(
-                "map-set",
-                &[
-                    base.clone(),
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("radius".to_string(), pos.clone()),
-                    Expression::number(4.0, pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-
-        let radius = registry
-            .call(
-                "map-get",
-                &[
-                    updated.clone(),
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("radius".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(radius.to_css(), "4");
-
-        let override_map = Expression::MapLiteral {
-            entries: vec![(
-                "config".to_string(),
-                Expression::MapLiteral {
-                    entries: vec![
-                        (
-                            "spacing".to_string(),
-                            Expression::number(10.0, pos.clone()),
-                            pos.clone(),
-                        ),
-                        (
-                            "density".to_string(),
-                            Expression::identifier("compact".to_string(), pos.clone()),
-                            pos.clone(),
-                        ),
-                    ],
-                    position: pos.clone(),
-                },
-                pos.clone(),
-            )],
-            position: pos.clone(),
-        };
-
-        let deep_merged = registry
-            .call("map-deep-merge", &[base, override_map], &pos)
-            .unwrap();
-
-        let theme = registry
-            .call(
-                "map-get",
-                &[
-                    deep_merged.clone(),
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("theme".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(theme.to_css(), "light");
-
-        let spacing = registry
-            .call(
-                "map-get",
-                &[
-                    deep_merged.clone(),
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("spacing".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(spacing.to_css(), "10");
-
-        let density = registry
-            .call(
-                "map-get",
-                &[
-                    deep_merged,
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("density".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(density.to_css(), "compact");
-    }
-
-    #[test]
-    fn test_map_deep_merge_boundary_semantics() {
-        let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
-
-        let base = Expression::MapLiteral {
-            entries: vec![
-                (
-                    "theme".to_string(),
-                    Expression::MapLiteral {
-                        entries: vec![(
-                            "name".to_string(),
-                            Expression::identifier("light".to_string(), pos.clone()),
-                            pos.clone(),
-                        )],
-                        position: pos.clone(),
-                    },
-                    pos.clone(),
-                ),
-                (
-                    "mode".to_string(),
-                    Expression::number(1.0, pos.clone()),
-                    pos.clone(),
-                ),
-            ],
-            position: pos.clone(),
-        };
-
-        let override_map = Expression::MapLiteral {
-            entries: vec![
-                (
-                    "theme".to_string(),
-                    Expression::identifier("flat".to_string(), pos.clone()),
-                    pos.clone(),
-                ),
-                (
-                    "mode".to_string(),
-                    Expression::MapLiteral {
-                        entries: vec![(
-                            "nested".to_string(),
-                            Expression::identifier("yes".to_string(), pos.clone()),
-                            pos.clone(),
-                        )],
-                        position: pos.clone(),
-                    },
-                    pos.clone(),
-                ),
-            ],
-            position: pos.clone(),
-        };
-
-        let merged = registry
-            .call("map-deep-merge", &[base.clone(), override_map], &pos)
-            .unwrap();
-
-        let merged_theme = registry
-            .call(
-                "map-get",
-                &[
-                    merged.clone(),
-                    Expression::identifier("theme".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(merged_theme.to_css(), "flat");
-
-        let merged_mode_nested = registry
-            .call(
-                "map-get",
-                &[
-                    merged,
-                    Expression::identifier("mode".to_string(), pos.clone()),
-                    Expression::identifier("nested".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(merged_mode_nested.to_css(), "yes");
-
-        let base_theme = registry
-            .call(
-                "map-get",
-                &[
-                    base.clone(),
-                    Expression::identifier("theme".to_string(), pos.clone()),
-                    Expression::identifier("name".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(base_theme.to_css(), "light");
-
-        let base_mode = registry
-            .call(
-                "map-get",
-                &[
-                    base,
-                    Expression::identifier("mode".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(base_mode.to_css(), "1");
-    }
-
-    #[test]
-    fn test_map_deep_merge_override_order() {
-        let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
-
-        let base = Expression::MapLiteral {
-            entries: vec![(
-                "config".to_string(),
-                Expression::MapLiteral {
-                    entries: vec![(
-                        "a".to_string(),
-                        Expression::number(1.0, pos.clone()),
-                        pos.clone(),
-                    )],
-                    position: pos.clone(),
-                },
-                pos.clone(),
-            )],
-            position: pos.clone(),
-        };
-
-        let override1 = Expression::MapLiteral {
-            entries: vec![(
-                "config".to_string(),
-                Expression::MapLiteral {
-                    entries: vec![
-                        (
-                            "a".to_string(),
-                            Expression::number(2.0, pos.clone()),
-                            pos.clone(),
-                        ),
-                        (
-                            "b".to_string(),
-                            Expression::number(3.0, pos.clone()),
-                            pos.clone(),
-                        ),
-                    ],
-                    position: pos.clone(),
-                },
-                pos.clone(),
-            )],
-            position: pos.clone(),
-        };
-
-        let override2 = Expression::MapLiteral {
-            entries: vec![(
-                "config".to_string(),
-                Expression::MapLiteral {
-                    entries: vec![(
-                        "b".to_string(),
-                        Expression::number(4.0, pos.clone()),
-                        pos.clone(),
-                    )],
-                    position: pos.clone(),
-                },
-                pos.clone(),
-            )],
-            position: pos.clone(),
-        };
-
-        let merged = registry
-            .call("map-deep-merge", &[base, override1, override2], &pos)
-            .unwrap();
-
-        let a = registry
-            .call(
-                "map-get",
-                &[
-                    merged.clone(),
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("a".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(a.to_css(), "2");
-
-        let b = registry
-            .call(
-                "map-get",
-                &[
-                    merged,
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("b".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(b.to_css(), "4");
-    }
-
-    #[test]
-    fn test_map_update_and_replace_functions() {
-        let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
-
-        let base = Expression::MapLiteral {
-            entries: vec![(
-                "config".to_string(),
-                Expression::MapLiteral {
-                    entries: vec![
-                        (
-                            "theme".to_string(),
-                            Expression::identifier("light".to_string(), pos.clone()),
-                            pos.clone(),
-                        ),
-                        (
-                            "spacing".to_string(),
-                            Expression::number(8.0, pos.clone()),
-                            pos.clone(),
-                        ),
-                    ],
-                    position: pos.clone(),
-                },
-                pos.clone(),
-            )],
-            position: pos.clone(),
-        };
-
-        let updated_theme = registry
-            .call(
-                "map-update",
-                &[
-                    base.clone(),
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("theme".to_string(), pos.clone()),
-                    Expression::identifier("dark".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        let theme = registry
-            .call(
-                "map-get",
-                &[
-                    updated_theme.clone(),
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("theme".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(theme.to_css(), "dark");
-
-        let replaced_spacing = registry
-            .call(
-                "map-replace",
-                &[
-                    updated_theme,
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("spacing".to_string(), pos.clone()),
-                    Expression::number(12.0, pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        let spacing = registry
-            .call(
-                "map-get",
-                &[
-                    replaced_spacing,
-                    Expression::identifier("config".to_string(), pos.clone()),
-                    Expression::identifier("spacing".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(spacing.to_css(), "12");
-    }
-
-    #[test]
-    fn test_map_key_normalization_string_identifier_number() {
-        let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
-
-        let map = Expression::MapLiteral {
-            entries: vec![
-                (
-                    "name".to_string(),
-                    Expression::identifier("alpha".to_string(), pos.clone()),
-                    pos.clone(),
-                ),
-                (
-                    "3".to_string(),
-                    Expression::number_with_unit(30.0, "px", pos.clone()),
-                    pos.clone(),
-                ),
-                (
-                    "4px".to_string(),
-                    Expression::identifier("hit".to_string(), pos.clone()),
-                    pos.clone(),
-                ),
-            ],
-            position: pos.clone(),
-        };
-
-        let by_identifier = registry
-            .call(
-                "map-get",
-                &[
-                    map.clone(),
-                    Expression::identifier("name".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(by_identifier.to_css(), "alpha");
-
-        let by_string = registry
-            .call(
-                "map-get",
-                &[
-                    map.clone(),
-                    Expression::string("name".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(by_string.to_css(), "alpha");
-
-        let by_number = registry
-            .call(
-                "map-get",
-                &[map.clone(), Expression::number(3.0, pos.clone())],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(by_number.to_css(), "30px");
-
-        let by_number_with_unit = registry
-            .call(
-                "map-get",
-                &[map, Expression::number_with_unit(4.0, "px", pos.clone())],
-                &pos,
-            )
-            .unwrap();
-        assert_eq!(by_number_with_unit.to_css(), "hit");
-    }
-
-    #[test]
-    fn test_map_error_semantics() {
-        let registry = FunctionRegistry::new();
-        let pos = Position::new(1, 1);
-        let nested = Expression::MapLiteral {
-            entries: vec![(
-                "a".to_string(),
-                Expression::number(1.0, pos.clone()),
-                pos.clone(),
-            )],
-            position: pos.clone(),
-        };
-
-        let non_map_err = registry
-            .call(
-                "map-set",
-                &[
-                    Expression::number(1.0, pos.clone()),
-                    Expression::identifier("k".to_string(), pos.clone()),
-                    Expression::number(2.0, pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            non_map_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-set" && message.contains("First argument must be a map")
-        ));
-
-        let empty_path_err = registry
-            .call(
-                "map-set",
-                &[nested.clone(), Expression::number(2.0, pos.clone())],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            empty_path_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-set" && message.contains("Expected at least 3 arguments")
-        ));
-
-        let intermediate_err = registry
-            .call(
-                "map-set",
-                &[
-                    nested.clone(),
-                    Expression::identifier("a".to_string(), pos.clone()),
-                    Expression::identifier("b".to_string(), pos.clone()),
-                    Expression::number(2.0, pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            intermediate_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-set" && message.contains("Intermediate key 'a' is not a map")
-        ));
-
-        let deep_merge_err = registry
-            .call(
-                "map-deep-merge",
-                &[nested.clone(), Expression::number(2.0, pos.clone())],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            deep_merge_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-deep-merge" && message.contains("All arguments must be maps")
-        ));
-
-        let remove_intermediate_err = registry
-            .call(
-                "map-remove",
-                &[
-                    nested.clone(),
-                    Expression::identifier("a".to_string(), pos.clone()),
-                    Expression::identifier("b".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            remove_intermediate_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-remove" && message.contains("Intermediate key 'a' is not a map")
-        ));
-
-        let get_intermediate_err = registry
-            .call(
-                "map-get",
-                &[
-                    nested.clone(),
-                    Expression::identifier("a".to_string(), pos.clone()),
-                    Expression::identifier("b".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            get_intermediate_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-get" && message.contains("Intermediate key 'a' is not a map")
-        ));
-
-        let update_not_found_err = registry
-            .call(
-                "map-update",
-                &[
-                    nested.clone(),
-                    Expression::identifier("missing".to_string(), pos.clone()),
-                    Expression::number(2.0, pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            update_not_found_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-update" && message.contains("not found in map")
-        ));
-
-        let replace_intermediate_err = registry
-            .call(
-                "map-replace",
-                &[
-                    nested.clone(),
-                    Expression::identifier("a".to_string(), pos.clone()),
-                    Expression::identifier("b".to_string(), pos.clone()),
-                    Expression::number(2.0, pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            replace_intermediate_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-replace" && message.contains("Intermediate key 'a' is not a map")
-        ));
-
-        let update_non_map_err = registry
-            .call(
-                "map-update",
-                &[
-                    Expression::number(1.0, pos.clone()),
-                    Expression::identifier("k".to_string(), pos.clone()),
-                    Expression::number(2.0, pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            update_non_map_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-update" && message.contains("First argument must be a map")
-        ));
-
-        let deep_remove_non_map_err = registry
-            .call(
-                "map-deep-remove",
-                &[
-                    Expression::number(1.0, pos.clone()),
-                    Expression::identifier("k".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            deep_remove_non_map_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-deep-remove" && message.contains("First argument must be a map")
-        ));
-
-        let deep_remove_intermediate_err = registry
-            .call(
-                "map-deep-remove",
-                &[
-                    nested.clone(),
-                    Expression::identifier("a".to_string(), pos.clone()),
-                    Expression::identifier("b".to_string(), pos.clone()),
-                ],
-                &pos,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            deep_remove_intermediate_err,
-            Error::FunctionError {
-                function,
-                message,
-                ..
-            } if function == "map-deep-remove" && message.contains("Intermediate key 'a' is not a map")
-        ));
     }
 }

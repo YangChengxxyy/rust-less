@@ -588,7 +588,94 @@ impl Expression {
             Expression::Escaped(value, _) => value.clone(),
             Expression::Anonymous(value, _) => value.clone(),
             Expression::DetachedRuleset { .. } => "[detached ruleset]".to_string(),
-            _ => format!("{:?}", self), // Fallback for complex expressions
+            Expression::BinaryOp {
+                left,
+                operator,
+                right,
+                ..
+            } => {
+                let op = match operator {
+                    BinaryOperator::Add => "+",
+                    BinaryOperator::Subtract => "-",
+                    BinaryOperator::Multiply => "*",
+                    BinaryOperator::Divide => "/",
+                    BinaryOperator::Modulo => "%",
+                    BinaryOperator::Equal => "=",
+                    BinaryOperator::NotEqual => "!=",
+                    BinaryOperator::LessThan => "<",
+                    BinaryOperator::LessThanOrEqual => "<=",
+                    BinaryOperator::GreaterThan => ">",
+                    BinaryOperator::GreaterThanOrEqual => ">=",
+                    BinaryOperator::And => "and",
+                    BinaryOperator::Or => "or",
+                    BinaryOperator::Concatenate => "",
+                };
+                format!("{} {} {}", left.to_css(), op, right.to_css())
+            }
+            Expression::UnaryOp {
+                operator,
+                operand,
+                ..
+            } => {
+                match operator {
+                    UnaryOperator::Minus => format!("-{}", operand.to_css()),
+                    UnaryOperator::Plus => format!("+{}", operand.to_css()),
+                    UnaryOperator::Not => format!("not {}", operand.to_css()),
+                }
+            }
+            Expression::FunctionCall { name, arguments, .. } => {
+                let args = arguments
+                    .iter()
+                    .map(|arg| arg.to_css())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}({})", name, args)
+            }
+            Expression::TemplateString { parts, .. } => {
+                let mut result = String::from("\"");
+                for part in parts {
+                    match part {
+                        TemplateStringPart::Text(text) => result.push_str(text),
+                        TemplateStringPart::Interpolation(name) => {
+                            result.push_str(&format!("@{{{}}}", name))
+                        }
+                    }
+                }
+                result.push('"');
+                result
+            }
+            Expression::Interpolation(name, _)
+            | Expression::PropertyInterpolation(name, _)
+            | Expression::SelectorInterpolation(name, _) => format!("@{{{}}}", name),
+            Expression::Dimension {
+                value, from_unit, ..
+            } => format!("{}{}", value, from_unit),
+            Expression::MapAccess { map, key, .. } => {
+                format!("{}[{}]", map.to_css(), key.to_css())
+            }
+            Expression::Conditional {
+                condition,
+                true_value,
+                false_value,
+                ..
+            } => format!(
+                "if({}, {}, {})",
+                condition.to_css(),
+                true_value.to_css(),
+                false_value.to_css()
+            ),
+            Expression::PropertyAccess { object, property, .. } => {
+                format!("{}.{}", object.to_css(), property)
+            }
+            Expression::JavaScript(code, _) => format!("`{}`", code),
+            Expression::MapLiteral { entries, .. } => {
+                let rendered = entries
+                    .iter()
+                    .map(|(key, value, _)| format!("{}: {}", key, value.to_css()))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                format!("{{{}}}", rendered)
+            }
         }
     }
 }

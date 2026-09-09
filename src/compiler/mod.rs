@@ -131,35 +131,15 @@ impl Compiler {
 
     /// 创建压缩模式的编译器
     pub fn compressed() -> Self {
-        Self {
-            scope_stack: vec![Scope::new()],
-            output: String::new(),
-            indent_level: 0,
-            compressed: true,
-            function_registry: FunctionRegistry::new(),
-            extend_registry: ExtendRegistry::new(),
-            current_selectors: Vec::new(),
-            pending_media_queries: Vec::new(),
-            media_query_stack: Vec::new(),
-            base_path: None,
-            include_paths: Vec::new(),
-            imported_files: HashSet::new(),
-            recursion_depth: 0,
-            max_recursion_depth: 100,
-            source_map_generator: SourceMapGenerator::default(),
-            source_map_lessjs_compat: false,
-            current_line: 0,
-            current_col: 0,
-            current_file: "input.less".to_string(),
-            suppress_output: false,
-            force_important: false,
-            pending_merges: std::collections::HashMap::new(),
-            original_at_rule_prelude: None,
-            parse_hooks: Vec::new(),
-            visitors: Vec::new(),
-            import_resolvers: Vec::new(),
-            variable_eval_stack: Vec::new(),
-        }
+        let mut compiler = Self::new();
+        compiler.compressed = true;
+        compiler
+    }
+
+    /// 启用源码映射生成（保留现有压缩模式、include 路径、插件等状态）
+    pub fn enable_source_map(&mut self) -> &mut Self {
+        self.source_map_generator = sourcemap::SourceMapGenerator::new(true);
+        self
     }
 
     /// 启用源码映射生成
@@ -516,13 +496,19 @@ impl Compiler {
             .expect("scope stack should never be empty")
     }
 
-    /// Push a new scope
+    /// Push a new scope. The current top is snapshotted into a shared `Rc`
+    /// parent — only the top's own maps are cloned while the ancestor chain
+    /// is shared, so the push cost is independent of nesting depth. The
+    /// snapshot is frozen exactly like the previous clone-per-push behavior:
+    /// mutations of ancestors from within the child happen copy-on-write
+    /// (`Rc::make_mut`) and never leak into sibling scopes.
     fn push_scope(&mut self) {
-        let parent = self
-            .scope_stack
-            .last()
-            .expect("scope stack should never be empty")
-            .clone();
+        let parent = std::rc::Rc::new(
+            self.scope_stack
+                .last()
+                .expect("scope stack never empty")
+                .clone(),
+        );
         self.scope_stack.push(Scope::with_parent(parent));
     }
 
@@ -646,7 +632,7 @@ impl Compiler {
     }
 
     /// Compile a statement
-    fn compile_statement(&mut self, statement: &Statement) -> Result<()> {
+    pub(crate) fn compile_statement(&mut self, statement: &Statement) -> Result<()> {
         match statement {
             Statement::Variable(var) => self.compile_variable_declaration(var),
             Statement::Rule(rule) => {
@@ -767,8 +753,7 @@ impl Compiler {
             // Attribute expanded declarations to the definition file
             let definition_file = self
                 .current_scope()
-                .lookup_variable_file(&call.name)
-                .cloned();
+                .lookup_variable_file(&call.name);
             let previous_file = self.current_file.clone();
             if let Some(file) = definition_file {
                 self.current_file = file;

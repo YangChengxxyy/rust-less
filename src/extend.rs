@@ -182,8 +182,11 @@ impl ExtendCollector {
                                         .add_extend(&target, vec![resolved.clone()], all);
                                 }
                             }
-                            Err(_) => {
-                                // Failed to parse extend arg
+                            Err(err) => {
+                                eprintln!(
+                                    "rust-less: ignoring unparseable :extend argument {:?}: {}",
+                                    extend_arg, err
+                                );
                             }
                         }
                     }
@@ -231,9 +234,10 @@ impl ExtendCollector {
                 // If the selector has a parent reference (&), we need to replace it
                 if selector.has_parent_reference() {
                     for parent in parent_selectors {
-                        // Simple string replacement for &
-                        // This handles both prefix (e.g. &:hover) and inline (e.g. .a & .b)
-                        result.push(selector_str.replace('&', parent));
+                        // String-aware replacement for & (skips quoted strings
+                        // and attribute selectors); handles both prefix
+                        // (e.g. &:hover) and inline (e.g. .a & .b)
+                        result.push(replace_parent_refs(&selector_str, parent));
                     }
                 } else {
                     // Standard nesting (descendant combinator)
@@ -245,6 +249,66 @@ impl ExtendCollector {
         }
         result
     }
+}
+
+/// Replace `&` (parent reference) in a selector string with `parent`,
+/// skipping occurrences inside double-quoted strings, single-quoted strings,
+/// and CSS attribute selectors `[...]`.
+///
+/// Escape policy: `\\&` outside a string is treated as a literal `&` — the
+/// backslash is preserved and no substitution happens (matches how an escaped
+/// ampersand avoids being a parent reference). Inside quoted strings a
+/// trailing backslash escapes the next character (including the closing
+/// quote) per CSS string rules.
+fn replace_parent_refs(selector: &str, parent: &str) -> String {
+    let mut out = String::with_capacity(selector.len());
+    let mut chars = selector.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' | '\'' => {
+                out.push(c);
+                // Consume the quoted string; backslash escapes the next char.
+                while let Some(&next) = chars.peek() {
+                    chars.next();
+                    out.push(next);
+                    if next == '\\' {
+                        if let Some(&escaped) = chars.peek() {
+                            chars.next();
+                            out.push(escaped);
+                        }
+                    } else if next == c {
+                        break;
+                    }
+                }
+            }
+            '[' => {
+                out.push(c);
+                // Attribute selector: copy verbatim until the matching ']'.
+                // Quotes inside are consumed as part of the literal.
+                let mut quote: Option<char> = None;
+                for next in chars.by_ref() {
+                    out.push(next);
+                    match (quote, next) {
+                        (None, '"' | '\'') => quote = Some(next),
+                        (Some(q @ ('"' | '\'')), _) if q == next => quote = None,
+                        (None, ']') => break,
+                        _ => {}
+                    }
+                }
+            }
+            '\\' => {
+                // Escaped character (e.g. \&): keep both chars verbatim.
+                out.push(c);
+                if let Some(&next) = chars.peek() {
+                    chars.next();
+                    out.push(next);
+                }
+            }
+            '&' => out.push_str(parent),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// Check if a selector string structurally contains a target selector.
@@ -376,4 +440,56 @@ fn replace_selector_target(selector: &str, target: &str, replacement: &str) -> S
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replace_parent_refs;
+
+    #[test]
+    fn replaces_plain_parent_refs() {
+        assert_eq!(replace_parent_refs("&:hover", ".a"), ".a:hover");
+        assert_eq!(replace_parent_refs(".a & .b", ".p"), ".a .p .b");
+        assert_eq!(replace_parent_refs("a&", ".p"), "a.p");
+        assert_eq!(replace_parent_refs("&#id", ".p"), ".p#id");
+    }
+
+    #[test]
+    fn skips_ampersand_in_double_quoted_string() {
+        assert_eq!(replace_parent_refs("[data-x=\"a&b\"]", ".p"), "[data-x=\"a&b\"]");
+        assert_eq!(replace_parent_refs("\"a&b\" &", ".p"), "\"a&b\" .p");
+    }
+
+    #[test]
+    fn skips_ampersand_in_single_quoted_string() {
+        assert_eq!(replace_parent_refs("'a&b'&:hover", ".p"), "'a&b'.p:hover");
+    }
+
+    #[test]
+    fn skips_ampersand_in_attribute_selector() {
+        assert_eq!(
+            replace_parent_refs("&[data-x=\"a&b\"]", ".p"),
+            ".p[data-x=\"a&b\"]"
+        );
+        assert_eq!(
+            replace_parent_refs("&[title='c&d']", ".p"),
+            ".p[title='c&d']"
+        );
+    }
+
+    #[test]
+    fn escaped_ampersand_is_literal() {
+        // Policy: \& keeps its backslash and is not a parent reference.
+        assert_eq!(replace_parent_refs("\\& &", ".p"), "\\& .p");
+    }
+
+    #[test]
+    fn string_escape_handling() {
+        // Escaped quote inside string must not end the string; the & after
+        // the real closing quote is replaced.
+        assert_eq!(
+            replace_parent_refs("\"a\\\"&b\" &", ".p"),
+            "\"a\\\"&b\" .p"
+        );
+    }
 }

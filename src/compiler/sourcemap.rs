@@ -152,18 +152,31 @@ impl SourceMapGenerator {
         let mut sm = self.generate()?;
 
         if *self.lessjs_compat.borrow() {
-            sm = sm
-                .rewrite(&RewriteOptions {
-                    with_names: false,
-                    ..Default::default()
-                })
-                .ok()?;
+            match sm.rewrite(&RewriteOptions {
+                with_names: false,
+                ..Default::default()
+            }) {
+                Ok(rewritten) => sm = rewritten,
+                Err(err) => {
+                    eprintln!("rust-less: source map rewrite failed: {}", err);
+                    return None;
+                }
+            }
             self.rewrite_sources_for_lessjs_compat(&mut sm);
         }
 
         let mut out = Vec::new();
-        sm.to_writer(&mut out).ok()?;
-        String::from_utf8(out).ok()
+        if let Err(err) = sm.to_writer(&mut out) {
+            eprintln!("rust-less: source map serialization failed: {}", err);
+            return None;
+        }
+        match String::from_utf8(out) {
+            Ok(json) => Some(json),
+            Err(err) => {
+                eprintln!("rust-less: source map JSON is not valid UTF-8: {}", err);
+                None
+            }
+        }
     }
 
     fn rewrite_sources_for_lessjs_compat(&self, sm: &mut SourceMap) {

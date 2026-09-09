@@ -106,6 +106,18 @@ fn media_feature_mappings_resolved(emitted: &str, source: &str) -> Vec<(usize, u
     }
     let generated = media_feature_mappings(emitted);
     let original = media_feature_mappings(source);
+    if generated.len() != original.len() {
+        // Variable resolution restructured the prelude (feature count
+        // changed); positional zip would silently misalign mappings.
+        // Safer to drop the column deltas than emit wrong ones.
+        eprintln!(
+            "rust-less: media feature mapping mismatch ({} generated vs {} source features) for prelude {:?}; dropping mappings",
+            generated.len(),
+            original.len(),
+            source
+        );
+        return Vec::new();
+    }
     generated
         .into_iter()
         .zip(original)
@@ -339,7 +351,7 @@ impl Compiler {
         self.recursion_depth += 1;
 
         let result = (|| -> Result<Vec<Statement>> {
-            let parent = self.current_scope().clone();
+            let parent = std::rc::Rc::new(self.current_scope().clone());
             let mut mixin_scope = Scope::with_parent(parent);
             self.bind_mixin_arguments(&mixin_def, call, &mut mixin_scope)?;
             self.scope_stack.push(mixin_scope);
@@ -412,8 +424,7 @@ impl Compiler {
         self.push_scope();
         let source_file = self
             .current_scope()
-            .lookup_variable_file(&call.name)
-            .cloned();
+            .lookup_variable_file(&call.name);
         let mut out = Vec::new();
         let result = (|| -> Result<()> {
             for stmt in &body {
@@ -925,7 +936,16 @@ impl AtRuleCompiler for Compiler {
                             );
                         }
                     }
-                    _ => unreachable!("non-media statements handled above"),
+                    _ => {
+                        return Err(Error::parse_error(
+                            format!(
+                                "Expected media statement, found {:?}",
+                                statement
+                            ),
+                            at_rule.position.line,
+                            at_rule.position.column,
+                        ));
+                    }
                 }
             }
 

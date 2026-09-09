@@ -160,18 +160,19 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// 获取当前标记
-    fn current_token(&self) -> Token {
-        self.tokens.get(self.current).cloned().unwrap_or(Token {
+    /// 获取当前标记 (zero-copy: borrows from self.tokens)
+    fn current_token(&self) -> &Token {
+        static EOF_TOKEN: std::sync::LazyLock<Token> = std::sync::LazyLock::new(|| Token {
             token_type: TokenType::Eof,
             position: Position::default(),
             lexeme: String::new(),
-        })
+        });
+        self.tokens.get(self.current).unwrap_or(&EOF_TOKEN)
     }
 
     /// Get current position
     fn current_position(&self) -> Position {
-        self.current_token().position
+        self.current_token().position.clone()
     }
 
     /// Check if we're at the end
@@ -180,15 +181,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Advance to next token
-    fn advance(&mut self) -> Token {
+    fn advance(&mut self) {
         if !self.is_at_end() {
             self.current += 1;
         }
-        self.tokens.get(self.current - 1).cloned().unwrap_or(Token {
-            token_type: TokenType::Eof,
-            position: Position::default(),
-            lexeme: String::new(),
-        })
     }
 
     /// Check if current token matches the given type
@@ -210,7 +206,9 @@ impl<'a> Parser<'a> {
     /// Consume a token or return an error
     fn consume(&mut self, token_type: TokenType, message: &str) -> Result<Token> {
         if self.check(&token_type) {
-            Ok(self.advance())
+            let token = self.current_token().clone();
+            self.advance();
+            Ok(token)
         } else {
             let pos = self.current_position();
             Err(Error::parse_error(message, pos.line, pos.column))
@@ -2237,7 +2235,16 @@ impl<'a> Parser<'a> {
                     self.advance();
                     BinaryOperator::NotEqual
                 }
-                _ => unreachable!(),
+                _ => {
+                    return Err(Error::parse_error(
+                        format!(
+                            "Expected equality operator (== or !=), found {:?}",
+                            self.current_token().token_type
+                        ),
+                        self.current_token().position.line,
+                        self.current_token().position.column,
+                    ));
+                }
             };
 
             let right = self.parse_comparison_expression_no_comma_list()?;
@@ -2276,7 +2283,16 @@ impl<'a> Parser<'a> {
                     self.advance();
                     BinaryOperator::LessThanOrEqual
                 }
-                _ => unreachable!(),
+                _ => {
+                    return Err(Error::parse_error(
+                        format!(
+                            "Expected comparison operator (>=, <=, >, <), found {:?}",
+                            self.current_token().token_type
+                        ),
+                        self.current_token().position.line,
+                        self.current_token().position.column,
+                    ));
+                }
             };
 
             let right = self.parse_additive_expression_no_comma_list()?;
@@ -2304,7 +2320,16 @@ impl<'a> Parser<'a> {
                     self.advance();
                     BinaryOperator::Subtract
                 }
-                _ => unreachable!(),
+                _ => {
+                    return Err(Error::parse_error(
+                        format!(
+                            "Expected additive operator (+ or -), found {:?}",
+                            self.current_token().token_type
+                        ),
+                        self.current_token().position.line,
+                        self.current_token().position.column,
+                    ));
+                }
             };
 
             let right = self.parse_multiplicative_expression_no_comma_list()?;
@@ -2332,7 +2357,16 @@ impl<'a> Parser<'a> {
                     self.advance();
                     BinaryOperator::Divide
                 }
-                _ => unreachable!(),
+                _ => {
+                    return Err(Error::parse_error(
+                        format!(
+                            "Expected multiplicative operator (* or /), found {:?}",
+                            self.current_token().token_type
+                        ),
+                        self.current_token().position.line,
+                        self.current_token().position.column,
+                    ));
+                }
             };
 
             let right = self.parse_unary_expression_no_comma_list()?;
@@ -2364,7 +2398,16 @@ impl<'a> Parser<'a> {
                     self.advance();
                     UnaryOperator::Not
                 }
-                _ => unreachable!(),
+                _ => {
+                    return Err(Error::parse_error(
+                        format!(
+                            "Expected unary operator (+, -, not), found {:?}",
+                            self.current_token().token_type
+                        ),
+                        self.current_token().position.line,
+                        self.current_token().position.column,
+                    ));
+                }
             };
 
             let operand = self.parse_unary_expression_no_comma_list()?;

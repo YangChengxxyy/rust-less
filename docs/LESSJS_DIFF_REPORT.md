@@ -1,6 +1,6 @@
 # less.js 实编译对照差异报告
 
-- 生成时间: 2026-09-09T03:40:19.045Z
+- 生成时间: 2026-09-09T06:27:08.451Z
 - Node.js: v24.14.1
 - less.js: 4.5.1
 - rust-less CLI: /Users/cc/projects/rust-less/target/debug/rust-less

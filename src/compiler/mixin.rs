@@ -91,7 +91,7 @@ impl MixinCompiler for Compiler {
                 self.recursion_depth += 1;
 
                 // Create a new scope for the mixin expansion
-                let parent = self.current_scope().clone();
+                let parent = std::rc::Rc::new(self.current_scope().clone());
                 let mut mixin_scope = Scope::with_parent(parent);
 
                 // Bind arguments to parameters
@@ -292,7 +292,7 @@ impl MixinCompiler for Compiler {
                 }
 
                 // Create a temporary scope with the arguments bound
-                let parent = self.current_scope().clone();
+                let parent = std::rc::Rc::new(self.current_scope().clone());
                 let mut temp_scope = Scope::with_parent(parent);
 
                 // Bind arguments to parameters for guard evaluation
@@ -320,7 +320,7 @@ impl MixinCompiler for Compiler {
         // Pass 2: try default() guarded mixins
         for mixin_def in default_candidates {
             if let Some(guard) = &mixin_def.guard {
-                let parent = self.current_scope().clone();
+                let parent = std::rc::Rc::new(self.current_scope().clone());
                 let mut temp_scope = Scope::with_parent(parent);
                 self.bind_mixin_arguments_to_scope(mixin_def, call, &mut temp_scope)?;
                 self.scope_stack.push(temp_scope);

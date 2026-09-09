@@ -201,12 +201,25 @@ impl Lexer {
         ))
     }
 
-    /// Read a number (returns the number and whether it's a percentage)
-    fn read_number(&mut self) -> (f64, bool) {
+    /// Read a number (returns the value, whether it's a percentage, and the raw lexeme)
+    fn read_number(&mut self) -> Result<(f64, bool, String)> {
         let mut value = String::new();
+        let mut dot_count = 0;
+        let (start_line, start_column) = (self.line, self.column);
 
         while let Some(ch) = self.current_char {
-            if ch.is_ascii_digit() || ch == '.' {
+            if ch.is_ascii_digit() {
+                value.push(ch);
+                self.advance();
+            } else if ch == '.' {
+                dot_count += 1;
+                if dot_count > 1 {
+                    return Err(Error::lex_error(
+                        "Invalid number literal",
+                        start_line,
+                        start_column,
+                    ));
+                }
                 value.push(ch);
                 self.advance();
             } else {
@@ -214,7 +227,9 @@ impl Lexer {
             }
         }
 
-        let number = value.parse().unwrap_or(0.0);
+        let number = value.parse::<f64>().map_err(|_| {
+            Error::lex_error("Invalid number literal", start_line, start_column)
+        })?;
 
         // Check if this is followed by a percentage sign
         let is_percentage = if self.current_char == Some('%') {
@@ -224,7 +239,7 @@ impl Lexer {
             false
         };
 
-        (number, is_percentage)
+        Ok((number, is_percentage, value))
     }
 
     /// Check if a character is valid for the start of an identifier
@@ -411,18 +426,18 @@ impl Lexer {
                 }
 
                 Some(ch) if ch.is_ascii_digit() => {
-                    let (value, is_percentage) = self.read_number();
+                    let (value, is_percentage, raw) = self.read_number()?;
                     if is_percentage {
                         return Ok(Token {
                             token_type: TokenType::Percentage(value),
                             position,
-                            lexeme: format!("{}%", value),
+                            lexeme: format!("{}%", raw),
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Number(value),
                             position,
-                            lexeme: value.to_string(),
+                            lexeme: raw,
                         });
                     }
                 }

@@ -57,7 +57,7 @@ mod variables {
 }
 "#;
         let expected = r#".header {
-  background: url("images/bg.png");
+  background: url(images/bg.png);
 }"#;
         let result = compile(less).unwrap();
         assert_eq!(result.trim(), expected.trim());

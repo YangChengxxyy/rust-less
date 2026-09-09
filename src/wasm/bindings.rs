@@ -209,7 +209,7 @@ impl WasmCompiler {
     /// 启用源码映射生成
     #[wasm_bindgen(js_name = "enableSourceMap")]
     pub fn enable_source_map(&mut self) {
-        self.inner = Compiler::new().with_source_map(true);
+        self.inner.enable_source_map();
     }
 
     /// 编译 LESS 代码

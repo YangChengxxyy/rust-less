@@ -31,3 +31,15 @@ node tools/perf-check/check-perf-regression.js --update-baseline
 ```bash
 node tools/perf-check/check-perf-regression.js --update-baseline --default-threshold 15
 ```
+
+## 3. 基线溯源（provenance）
+
+`--update-baseline` 写入的基线包含以下溯源字段：
+
+- `generated_at`：生成时刻的完整 ISO 8601 时间戳
+- `host`：宿主架构信息 `{ arch, platform }`（来自 `process.arch` / `process.platform`）
+- `commit`：生成时对应的 commit SHA——优先取环境变量 `CI_COMMIT`，
+  否则执行 `git rev-parse HEAD`；两者都失败时记为 `null`（尽力而为，不阻断）
+
+对比（回归检查）不使用这些字段，它们仅用于追溯基线是在哪台机器、哪个提交上产生的。
+仓库中已检入的基线，其溯源字段为事后补录（backfill），时间戳精确到生成日期当天。

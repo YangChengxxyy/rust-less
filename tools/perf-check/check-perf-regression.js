@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const fs = require("fs");
+const { execSync } = require("child_process");
 const path = require("path");
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -160,6 +161,31 @@ function buildMarkdown(report) {
   return lines.join("\n");
 }
 
+// 基线溯源元数据：生成时间、宿主架构与 commit（尽力而为，失败记 null）。
+function collectProvenance() {
+  let commit = null;
+  if (process.env.CI_COMMIT) {
+    commit = process.env.CI_COMMIT;
+  } else {
+    try {
+      commit =
+        execSync("git rev-parse HEAD", {
+          cwd: REPO_ROOT,
+          stdio: ["ignore", "pipe", "ignore"],
+        })
+          .toString()
+          .trim() || null;
+    } catch (_err) {
+      commit = null;
+    }
+  }
+  return {
+    generated_at: new Date().toISOString(),
+    host: { arch: process.arch, platform: process.platform },
+    commit,
+  };
+}
+
 function updateBaseline(args) {
   const current = readCurrentBenchmarks(args.criterionDir);
   const existing = fs.existsSync(args.baseline) ? readJson(args.baseline) : null;
@@ -178,9 +204,10 @@ function updateBaseline(args) {
     }
   }
 
+  const provenance = collectProvenance();
   const baseline = {
     version: 1,
-    generated_at: new Date().toISOString().slice(0, 10),
+    ...provenance,
     unit: "ns",
     default_max_regression_pct: defaultThreshold,
     benchmarks: {},

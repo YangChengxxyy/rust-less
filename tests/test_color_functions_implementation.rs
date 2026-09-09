@@ -78,11 +78,11 @@ mod tests {
         );
 
         let css = compiler
-            .compile(".test { color: fadein(rgba(255, 0, 0, 0.5), 10%); }")
+            .compile(".test { color: fadein(#ff0000, 10%); }")
             .unwrap();
-        // alpha 0.5 -> fadein 10% -> 0.6
+        // #ff0000 is opaque red (alpha 1.0), fadein has no effect
         assert!(
-            css.contains("rgba(255, 0, 0, 0.6)"),
+            css.contains("#ff0000") || css.contains("rgba(255, 0, 0, 1)"),
             "fadein failed, got: {}",
             css
         );

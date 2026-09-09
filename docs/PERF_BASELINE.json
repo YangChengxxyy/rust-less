@@ -1,6 +1,8 @@
 {
   "version": 1,
-  "generated_at": "2026-09-09",
+  "generated_at": "2026-09-09T00:00:00.000Z",
+  "host": { "arch": "arm64", "platform": "darwin" },
+  "commit": "e76a638f644399500a6d784c4ae94332a001c2c9",
   "unit": "ns",
   "default_max_regression_pct": 20,
   "benchmarks": {

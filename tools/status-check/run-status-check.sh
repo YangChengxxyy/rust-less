@@ -3,7 +3,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REPORT_JSON="${ROOT_DIR}/docs/LESSJS_DIFF_REPORT.json"
+
+# 兼容性报告门槛建议值。
+# 阈值来源与收紧计划见 docs/LESSJS_COMPAT_STATUS.md（compat 状态文档）：
+# pass 下限与 unsupported 上限锚定当前兼容状态，随迁移进度逐级收紧。
+MIN_PASS=85
+MAX_UNSUPPORTED=16
 WITH_PERF=0
 STRICT_MAPPINGS=1
 OBSERVE_MAPPINGS=0
@@ -57,12 +62,12 @@ fi
 if [[ "${OBSERVE_MAPPINGS}" -eq 1 ]]; then
   LESSJS_ARGS+=(--observe-mappings)
 fi
-
 echo "[status-check] 4/5 node ${LESSJS_ARGS[*]}"
 node "${LESSJS_ARGS[@]}"
 
+REPORT_JSON="docs/LESSJS_DIFF_REPORT.json"
 echo "[status-check] 5/5 validate docs/LESSJS_DIFF_REPORT.json summary"
-node - "${REPORT_JSON}" <<'NODE'
+node - "${REPORT_JSON}" "${MIN_PASS}" "${MAX_UNSUPPORTED}" <<'NODE'
 const fs = require("fs");
 
 const reportPath = process.argv[2];
@@ -82,17 +87,33 @@ try {
 const summary = report && report.summary ? report.summary : {};
 const fail = Number(summary.fail || 0);
 const blocked = Number(summary.blocked || 0);
+const pass = Number(summary.pass || 0);
+const unsupported = Number(summary.unsupported || 0);
+const minPass = Number(process.argv[3]);
+const maxUnsupported = Number(process.argv[4]);
 
-if (fail !== 0 || blocked !== 0) {
+const violations = [];
+if (fail !== 0) violations.push(`fail=${fail} (expected 0)`);
+if (blocked !== 0) violations.push(`blocked=${blocked} (expected 0)`);
+if (Number.isFinite(minPass) && pass < minPass) {
+  violations.push(`pass=${pass} < MIN_PASS=${minPass}`);
+}
+if (Number.isFinite(maxUnsupported) && unsupported > maxUnsupported) {
+  violations.push(`unsupported=${unsupported} > MAX_UNSUPPORTED=${maxUnsupported}`);
+}
+
+if (violations.length > 0) {
   console.error(
-    `[status-check] less.js report gate failed: fail=${fail}, blocked=${blocked}`
+    `[status-check] less.js report gate failed: ${violations.join("; ")}`
   );
   process.exit(1);
 }
 
 console.log(
-  `[status-check] less.js report gate passed: fail=${fail}, blocked=${blocked}`
+  `[status-check] less.js report gate passed: fail=${fail}, blocked=${blocked}, pass=${pass} (>=${minPass}), unsupported=${unsupported} (<=${maxUnsupported})`
 );
+
+
 NODE
 
 echo "[status-check] core checks passed"

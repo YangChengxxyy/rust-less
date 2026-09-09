@@ -1,5 +1,6 @@
 use super::at_rule::AtRuleCompiler;
 use super::expression::ExpressionCompiler;
+use super::import::ImportCompiler;
 use super::mixin::MixinCompiler;
 use super::Compiler;
 use crate::ast::*;
@@ -131,75 +132,60 @@ impl RuleCompiler for Compiler {
 
             self.indent_level += 1;
 
-            // Create a enum to represent items to process
-            #[derive(Clone)]
-            enum RuleItem {
-                Declaration(Declaration),
-                MixinCall(MixinCall),
-                Comment(Comment),
-                DetachedRulesetCall(DetachedRulesetCall),
-                EachCall(EachCall),
+            // Collect borrowed references to the items that emit inside this
+            // block (declarations live in `rule.declarations`; mixin calls,
+            // comments, detached-ruleset calls and each-loops in
+            // `rule.nested_rules`). Only lightweight references are stored —
+            // the payloads are never cloned.
+            enum RuleRef<'a> {
+                Declaration(&'a Declaration),
+                MixinCall(&'a MixinCall),
+                Comment(&'a Comment),
+                DetachedRulesetCall(&'a DetachedRulesetCall),
+                EachCall(&'a EachCall),
             }
 
-            // Collect all declarations, mixin calls, and comments with their positions
-            let mut items: Vec<(usize, usize, RuleItem)> = Vec::new();
+            fn item_position(item: &RuleRef<'_>) -> (usize, usize) {
+                match item {
+                    RuleRef::Declaration(d) => (d.position.line, d.position.column),
+                    RuleRef::MixinCall(c) => (c.position.line, c.position.column),
+                    RuleRef::Comment(c) => (c.position.line, c.position.column),
+                    RuleRef::DetachedRulesetCall(c) => (c.position.line, c.position.column),
+                    RuleRef::EachCall(c) => (c.position.line, c.position.column),
+                }
+            }
 
-            // Add declarations
+            let mut items: Vec<RuleRef<'_>> = Vec::new();
+
             for declaration in &rule.declarations {
-                items.push((
-                    declaration.position.line,
-                    declaration.position.column,
-                    RuleItem::Declaration(declaration.clone()),
-                ));
+                items.push(RuleRef::Declaration(declaration));
             }
 
-            // Add mixin calls and comments
             for nested in &rule.nested_rules {
                 match nested {
-                    Statement::MixinCall(call) => {
-                        items.push((
-                            call.position.line,
-                            call.position.column,
-                            RuleItem::MixinCall(call.clone()),
-                        ));
-                    }
-                    Statement::Comment(comment) => {
-                        items.push((
-                            comment.position.line,
-                            comment.position.column,
-                            RuleItem::Comment(comment.clone()),
-                        ));
-                    }
+                    Statement::MixinCall(call) => items.push(RuleRef::MixinCall(call)),
+                    Statement::Comment(comment) => items.push(RuleRef::Comment(comment)),
                     Statement::DetachedRulesetCall(call) => {
-                        items.push((
-                            call.position.line,
-                            call.position.column,
-                            RuleItem::DetachedRulesetCall(call.clone()),
-                        ));
+                        items.push(RuleRef::DetachedRulesetCall(call))
                     }
-                    Statement::EachCall(each_call) => {
-                        items.push((
-                            each_call.position.line,
-                            each_call.position.column,
-                            RuleItem::EachCall(each_call.clone()),
-                        ));
-                    }
+                    Statement::EachCall(each_call) => items.push(RuleRef::EachCall(each_call)),
                     _ => {}
                 }
             }
 
-            // Sort by line number and column
-            items.sort_by_key(|(line, column, _)| (*line, *column));
+            // Sort by source position so output preserves authored order across
+            // the two collection streams.
+            items.sort_by_key(item_position);
 
-            for (_, _, item) in items {
+            for item in &items {
                 match item {
-                    RuleItem::Declaration(decl) => self.compile_declaration(&decl)?,
-                    RuleItem::MixinCall(call) => self.compile_mixin_call(&call)?,
-                    RuleItem::Comment(comment) => self.compile_comment(&comment)?,
-                    RuleItem::DetachedRulesetCall(call) => {
-                        self.compile_detached_ruleset_call(&call)?
+                    RuleRef::Declaration(decl) => self.compile_declaration(decl)?,
+                    RuleRef::MixinCall(call) => self.compile_mixin_call(call)?,
+                    RuleRef::Comment(comment) => self.compile_comment(comment)?,
+                    RuleRef::DetachedRulesetCall(call) => {
+                        self.compile_detached_ruleset_call(call)?
                     }
-                    RuleItem::EachCall(each_call) => self.compile_each_call(&each_call)?,
+                    RuleRef::EachCall(each_call) => self.compile_each_call(each_call)?,
                 }
             }
 
@@ -235,6 +221,9 @@ impl RuleCompiler for Compiler {
                     // Already processed above inside the block
                     continue;
                 }
+                // Statements not matched below (e.g. Declaration) are valid
+                // nested-items at compile time; only these three explicit arms
+                // bubble outward:
                 Statement::EachCall(_) => {
                     // Already processed above inside the block
                     continue;
@@ -242,28 +231,13 @@ impl RuleCompiler for Compiler {
                 Statement::AtRule(at_rule) => {
                     self.compile_at_rule(at_rule, true)?;
                 }
-                _ => {
-                    // Fallback for other statements
-                    // We can't easily call compile_statement here without defining it in a trait.
-                    // But usually nested items are limited.
-                    // Import? MixinDefinition?
-                    match nested {
-                        Statement::MixinDefinition(mixin) => {
-                            self.compile_mixin_definition(mixin)?
-                        }
-                        Statement::Import(_) => {
-                            // Imports inside rules are allowed in LESS but often bubble up.
-                            // For now, ignore or implement if needed.
-                            // Compiler::compile_statement handles it.
-                            // We need to call back to something that handles all statements.
-                            // But we can't see compile_statement.
-                            // Let's assume we implement a `StatementCompiler` trait later or expose it.
-                            // For now, if we encounter unknown, we might fail or just warn.
-                            // But wait, compile_statement IS needed.
-                        }
-                        _ => {}
-                    }
+                Statement::MixinDefinition(mixin) => {
+                    self.compile_mixin_definition(mixin)?
                 }
+                Statement::Import(import) => {
+                    self.compile_import(import)?;
+                }
+                _ => {}
             }
         }
 
@@ -490,15 +464,23 @@ impl Compiler {
 
         // less.js: rulesets (and therefore maps, which are rulesets) cannot be
         // evaluated on a property. Reject instead of leaking a Debug fallback.
+        // Allow function results that return MapLiteral since they are evaluated values.
         if matches!(
             &value,
             Expression::MapLiteral { .. } | Expression::DetachedRuleset { .. }
         ) {
-            return Err(Error::semantic_error(
-                "Rulesets and maps cannot be used as a property value",
-                declaration.position.line,
-                declaration.position.column,
-            ));
+            // Check if this came from a function call that returns a map
+            let is_from_map_function = matches!(&declaration.value,
+                Expression::FunctionCall { name, .. } if name.starts_with("map-")
+            );
+
+            if !is_from_map_function {
+                return Err(Error::semantic_error(
+                    "Rulesets and maps cannot be used as a property value",
+                    declaration.position.line,
+                    declaration.position.column,
+                ));
+            }
         }
 
         let value_str = value.to_css();
