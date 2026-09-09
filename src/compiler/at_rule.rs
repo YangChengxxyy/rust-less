@@ -375,10 +375,10 @@ impl Compiler {
         call: &DetachedRulesetCall,
         important: bool,
     ) -> Result<Vec<Statement>> {
+        // Follow alias chains to the terminal deferred value (@dr() works
+        // through variable aliases in less.js).
         let value = self
-            .current_scope()
-            .lookup_variable(&call.name)
-            .cloned()
+            .resolve_deferred_value(&call.name)
             .ok_or_else(|| {
                 Error::undefined_variable(&call.name, call.position.line, call.position.column)
             })?;

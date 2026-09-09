@@ -46,27 +46,33 @@ impl ExpressionCompiler for Compiler {
     fn evaluate_expression(&mut self, expr: &Expression) -> Result<Expression> {
         match expr {
             Expression::Variable(name, pos) => {
-                if let Some(value) = self.current_scope().lookup_variable(name) {
-                    let value = value.clone();
-                    // Map literals are stored unevaluated (less.js lazy semantics):
-                    // entry values and interpolated keys are resolved at each use
-                    // site, in the current scope.
-                    if matches!(&value, Expression::MapLiteral { .. }) {
-                        self.evaluate_expression(&value)
-                    } else {
-                        Ok(value)
-                    }
-                } else {
-                    Err(Error::undefined_variable(name, pos.line, pos.column))
+                // less.js lazy variable semantics: values are stored raw and
+                // evaluated in the scope chain that defines them (the result is
+                // written back so repeat lookups are cheap). Map literals are
+                // the exception: as rulesets they resolve at the use site.
+                let Some(depth) = self.current_scope().lookup_variable_depth(name) else {
+                    return Err(Error::undefined_variable(name, pos.line, pos.column));
+                };
+                let stored = self
+                    .variable_value_at_depth(name, depth)
+                    .expect("lookup_variable_depth guarantees the owner scope");
+                if matches!(&stored, Expression::MapLiteral { .. }) {
+                    return self.evaluate_map_variable(name, stored, pos);
                 }
+                // Fast path: already-materialized plain values need no guard,
+                // scope swap, or write-back — evaluating them is identity.
+                if Self::is_materialized_value(&stored) {
+                    return Ok(stored);
+                }
+                // Aliases to deferred values (maps / detached rulesets) keep
+                // use-site resolution: evaluate the reference in the current
+                // scope chain instead of the (older) defining chain.
+                let use_current_chain = depth > 0 && self.raw_ref_chain_defers(&stored);
+                self.evaluate_scoped_variable(name, stored, depth, pos, use_current_chain)
             }
             Expression::Interpolation(name, pos) => {
-                // Variable interpolation - resolve variable and return its value
-                if let Some(value) = self.current_scope().lookup_variable(name) {
-                    Ok(value.clone())
-                } else {
-                    Err(Error::undefined_variable(name, pos.line, pos.column))
-                }
+                // Interpolation resolves like a plain variable reference.
+                self.evaluate_expression(&Expression::Variable(name.clone(), pos.clone()))
             }
             Expression::BinaryOp {
                 left,
@@ -200,11 +206,12 @@ impl ExpressionCompiler for Compiler {
     }
 
     fn resolve_variable(&mut self, name: &str) -> Result<Expression> {
-        if let Some(value) = self.current_scope().lookup_variable(name) {
-            Ok(value.clone())
-        } else {
-            Err(Error::undefined_variable(name, 0, 0))
-        }
+        // Delegate to the full variable evaluation so lazily-stored values
+        // resolve in their defining scope (less.js semantics).
+        self.evaluate_expression(&Expression::Variable(
+            name.to_string(),
+            Position::default(),
+        ))
     }
 
     fn evaluate_binary_op(
@@ -593,6 +600,192 @@ impl Compiler {
         }
         out.push_str(rest);
         Ok(out)
+    }
+
+    /// Clone of the scope chain starting `depth` levels above the current
+    /// scope (i.e. the defining scope chain of a variable found at that
+    /// depth). Parent scopes are frozen snapshots taken at push time, so the
+    /// chain stripped of the nearest `depth` levels equals the definition
+    /// context.
+    fn scope_chain_at_depth(&self, depth: usize) -> Scope {
+        let mut scope = self.scope_stack.last().expect("scope stack never empty");
+        for _ in 0..depth {
+            scope = scope
+                .parent
+                .as_ref()
+                .expect("lookup depth guarantees parent scope");
+        }
+        scope.clone()
+    }
+
+    /// Resolve a variable to its terminal deferred value (map literal or
+    /// detached ruleset), following `Variable` alias links without evaluating
+    /// them. Returns the resolved value even if it is not deferred, so callers
+    /// can produce their usual "not a detached ruleset" errors.
+    pub(crate) fn resolve_deferred_value(&self, name: &str) -> Option<Expression> {
+        let mut seen = std::collections::HashSet::new();
+        let mut current_name = name.to_string();
+        loop {
+            if !seen.insert(current_name.clone()) {
+                return None;
+            }
+            let depth = self
+                .scope_stack
+                .last()
+                .and_then(|scope| scope.lookup_variable_depth(&current_name))?;
+            let value = self.variable_value_at_depth(&current_name, depth)?;
+            match value {
+                Expression::Variable(inner, _) => {
+                    current_name = inner;
+                }
+                other => return Some(other),
+            }
+        }
+    }
+
+    /// Whether an expression is a fully evaluated plain value (contains no
+    /// resolvable parts). Evaluating such a value is identity, so it can skip
+    /// the lazy-resolution machinery.
+    fn is_materialized_value(expr: &Expression) -> bool {
+        match expr {
+            Expression::Number { .. }
+            | Expression::Color { .. }
+            | Expression::String { .. }
+            | Expression::Percentage(..)
+            | Expression::Anonymous(..) => true,
+            Expression::List { values, .. } => values.iter().all(Self::is_materialized_value),
+            Expression::Parenthesized(inner, _) => Self::is_materialized_value(inner),
+            _ => false,
+        }
+    }
+
+    /// Follow `Variable` reference links (without evaluating them) to check
+    /// whether the chain ends at a deferred value (map / detached ruleset).
+    fn raw_ref_chain_defers(&self, raw: &Expression) -> bool {
+        let mut seen = std::collections::HashSet::new();
+        let mut current = raw.clone();
+        loop {
+            match current {
+                Expression::MapLiteral { .. } | Expression::DetachedRuleset { .. } => {
+                    return true;
+                }
+                Expression::Variable(inner, _) => {
+                    if !seen.insert(inner.clone()) {
+                        return false;
+                    }
+                    let Some(depth) = self
+                        .scope_stack
+                        .last()
+                        .and_then(|scope| scope.lookup_variable_depth(&inner))
+                    else {
+                        return false;
+                    };
+                    match self.variable_value_at_depth(&inner, depth) {
+                        Some(value) => current = value,
+                        None => return false,
+                    }
+                }
+                _ => return false,
+            }
+        }
+    }
+
+    pub(crate) fn variable_value_at_depth(
+        &self,
+        name: &str,
+        depth: usize,
+    ) -> Option<Expression> {
+        let mut scope = self.scope_stack.last()?;
+        for _ in 0..depth {
+            scope = scope.parent.as_ref()?;
+        }
+        scope.variables.get(name).cloned()
+    }
+
+    pub(crate) fn variable_value_at_depth_mut(
+        &mut self,
+        depth: usize,
+        name: &str,
+    ) -> Option<&mut Expression> {
+        let mut scope = self.scope_stack.last_mut()?;
+        for _ in 0..depth {
+            scope = scope.parent.as_deref_mut()?;
+        }
+        scope.variables.get_mut(name)
+    }
+
+    /// Evaluate a map variable at the use site, guarded against recursion
+    /// (less.js "Recursive variable definition").
+    fn evaluate_map_variable(
+        &mut self,
+        name: &str,
+        map: Expression,
+        pos: &Position,
+    ) -> Result<Expression> {
+        if self.variable_eval_stack.iter().any(|n| n == name) {
+            return Err(Error::semantic_error(
+                format!("Recursive variable definition for @{}", name),
+                pos.line,
+                pos.column,
+            ));
+        }
+        self.variable_eval_stack.push(name.to_string());
+        let result = self.evaluate_expression(&map);
+        self.variable_eval_stack.pop();
+        result
+    }
+
+    /// Evaluate a raw stored variable value in the scope chain that defines it
+    /// (less.js lazy semantics), guarded against recursion, then write the
+    /// evaluated value back into the defining scope so repeat lookups skip
+    /// re-evaluation.
+    pub(crate) fn evaluate_scoped_variable(
+        &mut self,
+        name: &str,
+        raw: Expression,
+        depth: usize,
+        pos: &Position,
+        use_current_chain: bool,
+    ) -> Result<Expression> {
+        if self.variable_eval_stack.iter().any(|n| n == name) {
+            return Err(Error::semantic_error(
+                format!("Recursive variable definition for @{}", name),
+                pos.line,
+                pos.column,
+            ));
+        }
+        self.variable_eval_stack.push(name.to_string());
+        let result = if depth == 0 || use_current_chain {
+            self.evaluate_expression(&raw)
+        } else {
+            let owner_chain = self.scope_chain_at_depth(depth);
+            let saved = std::mem::replace(&mut self.scope_stack, vec![owner_chain]);
+            let result = self.evaluate_expression(&raw);
+            self.scope_stack = saved;
+            result
+        };
+        self.variable_eval_stack.pop();
+        match result {
+            Ok(value) => {
+                // Aliases to deferred values (maps / detached rulesets) are
+                // written back as the original reference, so the target keeps
+                // use-site (lazy) resolution instead of freezing at the first
+                // access context.
+                let write_back = if matches!(
+                    &value,
+                    Expression::MapLiteral { .. } | Expression::DetachedRuleset { .. }
+                ) {
+                    raw
+                } else {
+                    value.clone()
+                };
+                if let Some(slot) = self.variable_value_at_depth_mut(depth, name) {
+                    *slot = write_back;
+                }
+                Ok(value)
+            }
+            Err(err) => Err(err),
+        }
     }
 }
 

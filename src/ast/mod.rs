@@ -699,6 +699,20 @@ impl Scope {
         })
     }
 
+    /// Depth (0 = this scope, 1 = parent, ...) of the scope that defines
+    /// `name`. Used to evaluate lazily-stored values in the defining scope
+    /// chain (less.js variable semantics).
+    pub fn lookup_variable_depth(&self, name: &str) -> Option<usize> {
+        if self.variables.contains_key(name) {
+            Some(0)
+        } else {
+            self.parent
+                .as_ref()
+                .and_then(|parent| parent.lookup_variable_depth(name))
+                .map(|depth| depth + 1)
+        }
+    }
+
     /// Look up a mixin by name, searching parent scopes if needed
     pub fn lookup_mixin(&self, name: &str) -> Option<&Vec<MixinDefinition>> {
         self.mixins.get(name).or_else(|| {

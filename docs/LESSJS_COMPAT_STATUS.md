@@ -97,6 +97,14 @@ node tools/lessjs-compat/run-lessjs-compat.js --case sourcemap --strict-mappings
 
 ## 3. 最近更新
 
+- 已完成变量系统 LESS 4.x 惰性语义对齐（2026-09-09）：
+  - 变量值统一存储原始 AST，使用点在定义域作用域链请求求值，求值结果写回定义域（声明后引用、链式前向引用全部对齐；`@a: @b; @b: @c; @c: red` 可用）。
+  - 循环引用（自引用/互引用/同域遮蔽自引用）报 "Recursive variable definition"（对齐 less.js NameError）。
+  - 块收尾求值：样式表/规则体/mixin 与 detached ruleset 展开体结束时统一求值块内变量，悬空引用即使未使用也报错（对齐 less.js 块级语义）；mixin/DR 未调用则不求值，map 条目保持访问点惰性。
+  - 变量别名链支持不解引用搜索：`@alias: @dr; @alias()` DR/map 经别名调用对齐 less.js；别名写回保持引用形态，不冻结延迟值。
+  - 性能：物化纯值命中走快速路径；新增 `compile_maps` 基准。惰性语义综合成本为各基准 +3%～+14%（阈值 20%，已通过门禁并刷新基线）。
+  - 已知残留边界（既有行为，本次未改）：mixin 体内的调用处变量覆盖与 less.js 不一致（less.js 取定义域，rust-less 取调用域），标记为后续候选。
+  - 回归契约：`tests/test_lazy_variables.rs`（12 例）。
 - 已完成 Maps 高级语义 LESS 4.x 边界对齐（2026-09-09）：
   - 重复键 last-wins：括号访问与 `map-get`/`map-has-key`/`map-set`/`map-update`/`map-replace`/`map-remove` 族及 `map-merge` 合并目标一律取最后一个生效项。
   - 字面值解析：支持单位键（`1px:`）、负数键（`-1:`）；百分数键作为有意放宽的扩展语法保留。

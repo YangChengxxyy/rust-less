@@ -286,6 +286,10 @@ impl RuleCompiler for Compiler {
         // Restore previous selectors
         self.current_selectors = previous_selectors;
 
+        // less.js: dangling variable references in a finished block error even
+        // when unused; resolves happen lazily in the defining scope chain.
+        self.finalize_scope_variables()?;
+
         // Pop the scope when done with this rule
         self.pop_scope();
 

@@ -90,6 +90,9 @@ pub struct Compiler {
     pub(crate) visitors: Vec<Box<dyn crate::plugin::CompileVisitor>>,
     /// 插件导入解析器链（按注册顺序，见 `plugin::ImportResolver`）
     pub(crate) import_resolvers: Vec<Box<dyn crate::plugin::ImportResolver>>,
+    /// 正在向惰性求值中展开的变量名栈（循环引用检测，less.js
+    /// "Recursive variable definition" 对齐）
+    pub(crate) variable_eval_stack: Vec<String>,
 }
 
 impl Compiler {
@@ -122,6 +125,7 @@ impl Compiler {
             parse_hooks: Vec::new(),
             visitors: Vec::new(),
             import_resolvers: Vec::new(),
+            variable_eval_stack: Vec::new(),
         }
     }
 
@@ -154,6 +158,7 @@ impl Compiler {
             parse_hooks: Vec::new(),
             visitors: Vec::new(),
             import_resolvers: Vec::new(),
+            variable_eval_stack: Vec::new(),
         }
     }
 
@@ -555,21 +560,70 @@ impl Compiler {
         }
     }
 
-    /// Pre-scan variable declarations in a list of statements (lazy evaluation / hoisting).
-    /// Variables whose expressions fail to evaluate are silently skipped
-    /// and will be picked up during normal compilation.
+    /// Pre-scan variable declarations in a list of statements (lazy evaluation /
+    /// hoisting). Values are stored unevaluated; the last declaration wins, and
+    /// resolution happens at use sites (less.js lazy semantics).
     pub(crate) fn pre_scan_variables(&mut self, statements: &[Statement]) {
         for stmt in statements {
             if let Statement::Variable(var) = stmt {
-                // Map literals are stored raw for lazy use-site evaluation
-                // (matching compile_variable_declaration / less.js semantics).
-                if matches!(&var.value, Expression::MapLiteral { .. }) {
-                    self.current_scope()
-                        .define_variable(var.name.clone(), var.value.clone());
-                } else if let Ok(value) = self.evaluate_expression(&var.value) {
-                    self.current_scope()
-                        .define_variable(var.name.clone(), value);
+                self.current_scope()
+                    .define_variable(var.name.clone(), var.value.clone());
+            }
+        }
+    }
+
+    /// Evaluate every variable registered in the current scope once the block
+    /// closes. less.js semantics: undefined references inside a finished block
+    /// error even when the variable is never used; forward references resolve
+    /// because the block registry (pre-scan) is complete before values are
+    /// evaluated. Map literals and detached rulesets are deferred values and
+    /// are not dereferenced here.
+    pub(crate) fn finalize_scope_variables(&mut self) -> Result<()> {
+        let names: Vec<String> = self.current_scope().variables.keys().cloned().collect();
+        for name in names {
+            if self.stored_value_defers(&name) {
+                continue;
+            }
+            let Some(stored) = self.variable_value_at_depth(&name, 0) else {
+                continue;
+            };
+            let raw_position = stored.position().clone();
+            self.evaluate_scoped_variable(&name, stored, 0, &raw_position, false)?;
+        }
+        Ok(())
+    }
+
+    /// Whether the stored (raw) value of `name` in the current scope defers
+    /// evaluation like a map literal or detached ruleset — following variable
+    /// alias chains without evaluating them.
+    fn stored_value_defers(&self, name: &str) -> bool {
+        let mut seen = std::collections::HashSet::from([name.to_string()]);
+        let mut current = match self.variable_value_at_depth(name, 0) {
+            Some(value) => value,
+            None => return false,
+        };
+        loop {
+            match current {
+                Expression::MapLiteral { .. } | Expression::DetachedRuleset { .. } => {
+                    return true;
                 }
+                Expression::Variable(inner, _) => {
+                    if !seen.insert(inner.clone()) {
+                        return false;
+                    }
+                    let Some(depth) = self
+                        .scope_stack
+                        .last()
+                        .and_then(|scope| scope.lookup_variable_depth(&inner))
+                    else {
+                        return false;
+                    };
+                    match self.variable_value_at_depth(&inner, depth) {
+                        Some(value) => current = value,
+                        None => return false,
+                    }
+                }
+                _ => return false,
             }
         }
     }
@@ -587,6 +641,7 @@ impl Compiler {
         for statement in &stylesheet.statements {
             self.compile_statement(statement)?;
         }
+        self.finalize_scope_variables()?;
         Ok(())
     }
 
@@ -697,9 +752,10 @@ impl Compiler {
         self.recursion_depth += 1;
 
         let result = (|| -> Result<()> {
-            // Resolve the variable
-            let value = if let Some(v) = self.current_scope().lookup_variable(&call.name) {
-                v.clone()
+            // Resolve the variable, following alias chains to the terminal
+            // deferred value (@dr() works through variable aliases in less.js).
+            let value = if let Some(v) = self.resolve_deferred_value(&call.name) {
+                v
             } else {
                 return Err(Error::undefined_variable(
                     &call.name,
@@ -726,6 +782,9 @@ impl Compiler {
                     for statement in &body {
                         self.compile_statement(statement)?;
                     }
+                    // less.js: variables in an expanded detached ruleset resolve
+                    // at expansion; dangling references error.
+                    self.finalize_scope_variables()?;
                     self.pop_scope();
                     Ok(())
                 } else if let Expression::MapLiteral { entries, .. } = value {
@@ -791,14 +850,10 @@ impl Compiler {
 
     /// Compile a variable declaration
     pub(crate) fn compile_variable_declaration(&mut self, var: &VariableDeclaration) -> Result<()> {
-        // Map literals are stored unevaluated so entry values and interpolated
-        // keys resolve lazily at each use site (less.js semantics); evaluation
-        // happens in Expression::Variable handling.
-        let value = if matches!(&var.value, Expression::MapLiteral { .. }) {
-            var.value.clone()
-        } else {
-            self.evaluate_expression(&var.value)?
-        };
+        // Values are stored unevaluated (less.js lazy semantics) and resolved
+        // at each use site in the defining scope chain; see Expression::Variable
+        // evaluation. Map literals additionally resolve entry values per use.
+        let value = var.value.clone();
         let current_file = self.current_file.clone();
         let scope = self.current_scope();
         scope.define_variable(var.name.clone(), value);

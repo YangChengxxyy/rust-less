@@ -120,6 +120,9 @@ impl MixinCompiler for Compiler {
                     for statement in &mixin_def.body {
                         self.compile_statement(statement)?;
                     }
+                    // less.js: variables in an expanded mixin body resolve at
+                    // expansion; dangling references error.
+                    self.finalize_scope_variables()?;
                     Ok(())
                 })();
 
