@@ -11,7 +11,7 @@
 
 这是一个用 Rust 完全重写的 LESS 编译器，重点强调：
 - **高性能** - 利用 Rust 的零成本抽象和内存安全
-- **测试驱动开发** - 106个单元测试 + 273个集成测试确保代码质量
+- **测试驱动开发** - 106个单元测试 + 280个集成测试确保代码质量
 - **全面的 LESS 语法支持** - 97% 功能完成度，核心功能已完备
 - **模块化架构** - 清晰的代码结构，完整的API文档
 - **优秀的错误处理** - 提供清晰、有用的错误信息
@@ -19,13 +19,13 @@
 ## 📊 当前实现状态
 
 **版本**: 1.0.0  
-**测试通过率**: 100% (`cargo test --quiet` 共 381 passed, 0 ignored；`--all-features` 共 395 passed)  
+**测试通过率**: 100% (`cargo test --quiet` 共 388 passed, 0 ignored；`--all-features` 共 403 passed)  
 **功能完成度**: 97%（核心 LESS 功能已完备，Maps 可写能力已落地，源码映射持续完善）
 **生产就绪度**: 适合生产项目；v1.0.0 生态就绪（LSP / 构建工具插件 / WASM 发布 / 版本化插件 API）
 
 **统计口径说明（2026-09-09）**:
-- 测试基线来自本地执行：`cargo test --quiet`（381 passed）与 `cargo test --all-features --quiet`（395 passed）。
-- 兼容性基线来自 `docs/LESSJS_DIFF_REPORT.json`（2026-09-08 生成）：`pass=80`、`fail=0`、`unsupported=16`（total=96，strict + strict-mappings）。
+- 测试基线来自本地执行：`cargo test --quiet`（388 passed）与 `cargo test --all-features --quiet`（403 passed）。
+- 兼容性基线来自 `docs/LESSJS_DIFF_REPORT.json`（2026-09-09 生成）：`pass=85`、`fail=0`、`unsupported=16`（total=101，strict + strict-mappings）。
 
 ### ✅ 已完成的核心功能
 
@@ -297,9 +297,9 @@ bash tools/status-check/run-status-check.sh --with-perf
 | 测试类型 | 通过 | 失败 | 忽略 | 通过率 |
 |----------|------|------|------|--------|
 | 单元测试 | 106 | 0 | 0 | 100% |
-| 集成测试 | 273 | 0 | 0 | 100% |
+| 集成测试 | 280 | 0 | 0 | 100% |
 | Doc测试 | 2 | 0 | 0 | 100% |
-| **总计** | **381** | **0** | **0** | **100%** |
+| **总计** | **388** | **0** | **0** | **100%** |
 
 ## 🎯 功能演示
 
@@ -465,7 +465,7 @@ bash tools/status-check/run-status-check.sh --with-perf
 - [x] 循环和递归混合器
 - [x] 命名空间支持
 - [x] Maps 基础函数接口（`map-get`、`map-has-key`、`map-keys`、`map-values`、`map-merge`、`map-deep-merge`、`map-set`、`map-update`、`map-replace`、`map-remove`、`map-deep-remove`）
-- [x] Maps 高级能力（`each(map, ...)`、`map-deep-merge` 边界策略，与 less.js 原生语义完全对齐：strict 门禁 80 pass / 0 fail）
+- [x] Maps 高级能力（`each(map, ...)`、`map-deep-merge` 边界策略，与 less.js 原生语义完全对齐：strict 门禁 85 pass / 0 fail）
 - [x] Maps 兼容性扩展（已建立并接入实编译对照，见 `docs/LESSJS_COMPAT_STATUS.md`）
 - [x] 源码映射支持（已支持外部 `.map` 输出与 `--source-map-lessjs-compat`）
 - [x] 源码映射深度对齐（复杂导入链/嵌套 at-rule/跨文件 mixin 与 detached ruleset/prelude 变量求值场景全部纳入 strict-mappings 门禁）
