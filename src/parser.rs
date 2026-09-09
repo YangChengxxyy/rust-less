@@ -3230,8 +3230,25 @@ impl<'a> Parser<'a> {
             // At-rules inside: `@media`, `@keyframes`, etc. → detached ruleset
             TokenType::AtKeyword(_) => true,
 
-            // Identifier or String followed by `:` → likely map literal
-            TokenType::Identifier(_) | TokenType::String(_) => {
+            // Identifier key, optionally composite (`default-@{state}: v`),
+            // followed by `:` → likely map literal
+            TokenType::Identifier(_) => {
+                let mut la2 = lookahead + 1;
+                loop {
+                    skip_ws(&mut la2);
+                    match self.tokens.get(la2).map(|t| &t.token_type) {
+                        Some(TokenType::Identifier(_))
+                        | Some(TokenType::VariableInterpolation(_)) => {
+                            la2 += 1;
+                        }
+                        Some(TokenType::Colon) => return false,
+                        _ => return true,
+                    }
+                }
+            }
+
+            // Quoted key: `"name": v` → map literal
+            TokenType::String(_) => {
                 let mut la2 = lookahead + 1;
                 skip_ws(&mut la2);
                 // If followed by `:`, assume map literal

@@ -401,6 +401,22 @@ fn test_lessjs_native_interpolated_map_keys() {
     let css = compile(less).unwrap();
     assert!(css.contains("a: blue"), "Got: {}", css);
     assert!(css.contains("b: gray"), "Got: {}", css);
+
+    // Composite identifier key as the FIRST entry also routes to a map.
+    let less_first = r#"
+@key-name: hover;
+@states: {
+    default-@{key-name}: 0.9;
+    active-@{key-name}: 0.8;
+};
+.test {
+    a: @states[default-hover];
+    b: @states[active-hover];
+}
+"#;
+    let css = compile(less_first).unwrap();
+    assert!(css.contains("a: 0.9"), "Got: {}", css);
+    assert!(css.contains("b: 0.8"), "Got: {}", css);
 }
 
 #[test]
