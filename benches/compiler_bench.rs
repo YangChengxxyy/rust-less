@@ -126,6 +126,52 @@ body {
 }
 "#;
 
+const MAPS_LESS: &str = r#"
+@base-tokens: {
+    color-primary: #2244aa;
+    color-accent: #cc3355;
+    spacing-sm: 4px;
+    spacing-md: 8px;
+    spacing-lg: 16px;
+    bp-tablet: 768px;
+    bp-desktop: 1024px;
+};
+@bg: #ffffff;
+@fg: #222222;
+@semantic-tokens: {
+    surface: @bg;
+    text: @fg;
+    link: #2244aa;
+    accent: #cc3355;
+    accent: #dd5577;
+};
+@merged: map-deep-merge(@base-tokens, @semantic-tokens);
+@extended: map-set(@merged, color-accent, #dd4466);
+@key-suffix: hover;
+@states: {
+    default-@{key-suffix}: 0.9;
+    active-@{key-suffix}: 0.8;
+};
+
+.card {
+    background: @merged[surface];
+    color: map-get(@extended, text);
+    border-color: @extended[accent];
+    padding: @merged[spacing-md];
+}
+.list {
+    each(@base-tokens, {
+        token-@{key}: @value;
+    });
+}
+.banner {
+    @media (min-width: @merged[bp-tablet]) {
+        padding: @merged[spacing-lg] @merged[spacing-lg];
+    }
+    color: @states[default-hover];
+}
+"#;
+
 fn bench_simple(c: &mut Criterion) {
     c.bench_function("compile_simple", |b| {
         b.iter(|| {
@@ -171,6 +217,15 @@ fn bench_compressed(c: &mut Criterion) {
     });
 }
 
+fn bench_maps(c: &mut Criterion) {
+    c.bench_function("compile_maps", |b| {
+        b.iter(|| {
+            let mut compiler = Compiler::new();
+            compiler.compile(black_box(MAPS_LESS)).unwrap()
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_simple,
@@ -178,5 +233,6 @@ criterion_group!(
     bench_mixins,
     bench_complex,
     bench_compressed,
+    bench_maps,
 );
 criterion_main!(benches);

@@ -5,19 +5,22 @@
   "default_max_regression_pct": 20,
   "benchmarks": {
     "compile_complex": {
-      "mean_ns": 225335.2540959087
+      "mean_ns": 225238.90720180952
     },
     "compile_compressed": {
-      "mean_ns": 223139.61977542922
+      "mean_ns": 226512.73162959388
+    },
+    "compile_maps": {
+      "mean_ns": 147777.9575267553
     },
     "compile_mixins": {
-      "mean_ns": 80801.90120002795
+      "mean_ns": 79623.83840305266
     },
     "compile_nesting": {
-      "mean_ns": 46501.46521369085
+      "mean_ns": 47286.96948220826
     },
     "compile_simple": {
-      "mean_ns": 16458.803758858132
+      "mean_ns": 16041.979544643673
     }
   }
 }
