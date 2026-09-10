@@ -45,8 +45,33 @@ jobs:
       - name: Status check (tests + less.js compat report gate)
         run: bash tools/status-check/run-status-check.sh
 
+  # rust-less-wasm-node 尚未发布到 npm（仅 tag 触发的 wasm-release 才发布），
+  # 因此 Node 包 CI 必须先用 ./build-wasm.sh 构建出 pkg-nodejs 产物。
+  wasm:
+    name: Build WASM (pkg-nodejs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.13.1,wasm-bindgen-cli@0.2.100
+
+      - name: Build WASM packages
+        run: ./build-wasm.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-nodejs
+          path: pkg-nodejs/
+
   node:
     name: Node (${{ matrix.package }})
+    needs: wasm
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -61,6 +86,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Download pkg-nodejs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pkg-nodejs
+          path: pkg-nodejs
+
+      - name: Point rust-less-wasm-node at local build
+        # npm overrides 不允许与直接依赖的 semver 范围冲突，故直接改写依赖为 file: 路径
+        run: npm pkg set 'dependencies.rust-less-wasm-node=file:../../pkg-nodejs'
 
       - name: npm install
         run: npm install
