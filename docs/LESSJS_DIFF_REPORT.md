@@ -1,6 +1,6 @@
 # less.js 实编译对照差异报告
 
-- 生成时间: 2026-09-09T06:27:08.451Z
+- 生成时间: 2026-09-10T11:30:45.321Z
 - Node.js: v24.14.1
 - less.js: 4.5.1
 - rust-less CLI: /Users/cc/projects/rust-less/target/debug/rust-less
@@ -145,14 +145,14 @@
 - 状态: unsupported
 - 原因: less.js does not natively support rust-less map extension functions
 - rust 命令: `/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-update-missing.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-map-update-missing-error/rust/map-update-missing.css --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat`
-- rust 错误: Error: FunctionError { function: "map-update", message: "Key path 'missing' not found in map", line: 5, column: 8 }
+- rust 错误: Error: FunctionError { function: "map-update", message: "key 'missing' not found in map", line: 5, column: 8 }
 
 ### maps-map-replace-missing-error
 
 - 状态: unsupported
 - 原因: less.js does not natively support rust-less map extension functions
 - rust 命令: `/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-replace-missing.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-map-replace-missing-error/rust/map-replace-missing.css --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat`
-- rust 错误: Error: FunctionError { function: "map-replace", message: "Key path 'missing' not found in map", line: 5, column: 8 }
+- rust 错误: Error: FunctionError { function: "map-update", message: "key 'missing' not found in map", line: 5, column: 8 }
 
 ### maps-map-intermediate-not-map-error
 
@@ -198,7 +198,7 @@
 - 状态: unsupported
 - 原因: less.js does not natively support rust-less map extension functions
 - rust 命令: `/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-set-empty-path.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-map-set-empty-path-error/rust/map-set-empty-path.css --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat`
-- rust 错误: Error: FunctionError { function: "map-set", message: "Expected at least 3 arguments (map, key..., value)", line: 5, column: 8 }
+- rust 错误: Error: FunctionError { function: "map-set", message: "Expected at least 3 arguments, got 2", line: 5, column: 8 }
 
 ### maps-map-update-non-map-argument-error
 
@@ -212,7 +212,7 @@
 - 状态: unsupported
 - 原因: less.js does not natively support rust-less map extension functions
 - rust 命令: `/Users/cc/projects/rust-less/target/debug/rust-less /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat/map-replace-intermediate-not-map.less -o /Users/cc/projects/rust-less/target/lessjs-compat/maps-map-replace-intermediate-not-map-error/rust/map-replace-intermediate-not-map.css --include-path /Users/cc/projects/rust-less/tests/fixtures/lessjs-compat`
-- rust 错误: Error: FunctionError { function: "map-replace", message: "Intermediate key 'a' is not a map", line: 5, column: 8 }
+- rust 错误: Error: FunctionError { function: "map-update", message: "Intermediate key 'a' is not a map", line: 5, column: 8 }
 
 ### maps-map-variable-key-access
 

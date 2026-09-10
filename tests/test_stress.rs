@@ -5,7 +5,6 @@
 //! - 输出规模与输入线性相关（无平方级输出爆炸）
 
 use rust_less::Compiler;
-use std::time::Instant;
 
 fn generate_large_input(rules: usize) -> String {
     let mut input = String::with_capacity(rules * 128);
@@ -21,14 +20,12 @@ fn generate_large_input(rules: usize) -> String {
 #[test]
 fn test_large_file_compiles() {
     let input = generate_large_input(2_000);
-    let start = Instant::now();
     let mut compiler = Compiler::new();
     let css = compiler.compile(&input).expect("large file should compile");
-    let elapsed = start.elapsed();
     assert_eq!(css.matches(".component-").count(), 6_000);
     assert!(css.contains(".component-0 .inner:hover"));
-    // 基本性能护栏：2000 条嵌套规则应在数秒内完成（CI 机器差异留足余量）
-    assert!(elapsed.as_secs() < 30, "compilation took too long: {elapsed:?}");
+    // 注：不做墙钟断言——共享 CI runner 上编译耗时可差 10 倍以上，
+    // 性能回归由 tools/perf-check/run-perf-check.sh 基线负责。
 }
 
 #[test]

@@ -762,22 +762,21 @@ impl Compiler {
     pub(crate) fn variable_value_at_depth(
         &self,
         name: &str,
-        depth: usize,
+        // 与可变版本签名保持对称；当前实现沿父链返回首个绑定，无需用到 depth
+        _depth: usize,
     ) -> Option<Expression> {
         let mut current_scope = self.scope_stack.last()?;
-        let mut found_depth = 0;
-        
+
         // Navigate through parent scopes to find the variable definition
         loop {
             // Check if variable exists in current scope
             if let Some(value) = current_scope.variables.get(name) {
                 return Some(value.clone());
             }
-            
+
             // Move to parent scope if available
             if let Some(parent) = current_scope.parent.as_ref() {
                 current_scope = parent;
-                found_depth += 1;
             } else {
                 // No more parent scopes
                 break;

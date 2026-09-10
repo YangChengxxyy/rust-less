@@ -134,6 +134,8 @@ impl FunctionRegistry {
     fn register_transform_functions(&mut self) {
         self.register("scale", Box::new(scale_function));
         self.register("translateX", Box::new(translate_x_function));
+        self.register("translateY", Box::new(translate_y_function));
+        self.register("rotate", Box::new(rotate_function));
         // Guard-only function: default() evaluates true in the second
         // matching pass (mixin.rs skips default()-guarded mixins in pass 1).
         self.register("default", Box::new(default_function));
