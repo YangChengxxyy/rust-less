@@ -701,3 +701,108 @@ fn test_map_extension_chained_map_access() {
     // in spirit (also errors, though for a different reason).
     assert!(compile(less).is_err());
 }
+
+#[test]
+fn test_lessjs_compat_mixin_lookup_in_arithmetic() {
+    // `.m()[n] * 3` — the lookup result feeds the normal precedence chain.
+    let less = r#"
+.m() {
+    n: 2;
+}
+.test {
+    x: .m()[n] * 3;
+    y: .m()[n] + 4;
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("x: 6"), "Got: {}", css);
+    assert!(css.contains("y: 6"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_mixin_lookup_nested_rule_not_a_key() {
+    // Declarations inside nested rules belong to their own ruleset;
+    // `.m()[color]` must not see `.child`'s `color`.
+    let less = r#"
+.m() {
+    .child {
+        color: red;
+    }
+    x: 2;
+}
+.test {
+    a: .m()[x];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("a: 2"), "Got: {}", css);
+
+    let less_err = r#"
+.m() {
+    .child {
+        color: red;
+    }
+}
+.test {
+    a: .m()[color];
+}
+"#;
+    assert!(compile(less_err).is_err());
+}
+
+#[test]
+fn test_lessjs_compat_mixin_lookup_at_rule_not_a_key() {
+    let less = r#"
+.m() {
+    @media screen {
+        .child {
+            color: red;
+        }
+    }
+    x: 2;
+}
+.test {
+    a: .m()[color];
+}
+"#;
+    assert!(compile(less).is_err());
+}
+
+#[test]
+fn test_lessjs_compat_dollar_prop_in_media_prelude() {
+    // `@media (min-width: @theme[$width])` resolves the `$prop` accessor
+    // inside at-rule preludes too.
+    let less = r#"
+@theme: {
+    width: 600px;
+};
+@media (min-width: @theme[$width]) {
+    .x {
+        color: red;
+    }
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("min-width: 600px") || css.contains("min-width:600px"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_mixin_lookup_preserves_pending_merges() {
+    // A nested rule inside the looked-up mixin must not flush (and drop)
+    // the caller's pending `+:` merge declarations.
+    let less = r#"
+.m() {
+    .child {
+        color: red;
+    }
+    x: 2;
+}
+.test {
+    a+: 1;
+    b: .m()[x];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("a: 1"), "Got: {}", css);
+    assert!(css.contains("b: 2"), "Got: {}", css);
+}

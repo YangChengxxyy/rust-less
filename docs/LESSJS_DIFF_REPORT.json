@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T07:51:22.721Z",
+  "generatedAt": "2026-09-28T08:28:33.243Z",
   "environment": {
     "nodeVersion": "v22.23.3",
     "lessVersion": "4.5.1",
@@ -10,8 +10,8 @@
     "observeMappings": false
   },
   "summary": {
-    "total": 110,
-    "pass": 94,
+    "total": 112,
+    "pass": 96,
     "observed": 0,
     "observedStructural": 0,
     "observedEncoding": 0,
@@ -922,6 +922,56 @@
       "less": {
         "ok": true,
         "css": ".test{x:6;y:10}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-mixin-lookup-arith",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": ".test{x:6;y:6;}",
+        "map": null,
+        "command": "/home/ubuntu/repos/rust-less/target/debug/rust-less /home/ubuntu/repos/rust-less/tests/fixtures/lessjs-compat/map-native-mixin-lookup-arith.less -o /home/ubuntu/repos/rust-less/target/lessjs-compat/maps-native-mixin-lookup-arith/rust/map-native-mixin-lookup-arith.css --compress --include-path /home/ubuntu/repos/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": ".test{x:6;y:6}",
+        "map": null
+      },
+      "compare": {
+        "status": "pass",
+        "reason": "output matched",
+        "rustOk": true,
+        "lessOk": true,
+        "details": null
+      }
+    },
+    {
+      "id": "maps-native-media-prelude-dollar",
+      "category": "maps",
+      "baseline": "lessjs-native",
+      "status": "pass",
+      "reason": "output matched",
+      "rust": {
+        "ok": true,
+        "css": "@media (min-width: 600px){.x{color:red;}}",
+        "map": null,
+        "command": "/home/ubuntu/repos/rust-less/target/debug/rust-less /home/ubuntu/repos/rust-less/tests/fixtures/lessjs-compat/map-native-media-prelude-dollar.less -o /home/ubuntu/repos/rust-less/target/lessjs-compat/maps-native-media-prelude-dollar/rust/map-native-media-prelude-dollar.css --compress --include-path /home/ubuntu/repos/rust-less/tests/fixtures/lessjs-compat"
+      },
+      "less": {
+        "ok": true,
+        "css": "@media (min-width:600px){.x{color:red}}",
         "map": null
       },
       "compare": {

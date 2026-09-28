@@ -2099,6 +2099,9 @@ impl<'a> Parser<'a> {
                 let dot_position = self.current_position();
                 match self.try_parse_mixin_lookup(&dot_position)? {
                     Some(expr) => {
+                        // Continue any trailing `* 3` / `+ 4` / comparisons
+                        // through the normal precedence chain.
+                        let expr = self.parse_expression_tail(expr)?;
                         groups.last_mut().expect("groups is never empty").push(expr);
                         continue;
                     }
@@ -2778,10 +2781,26 @@ impl<'a> Parser<'a> {
         Ok(Expression::TemplateString { parts, position })
     }
 
+    /// Continue binary-operator parsing after a primary expression that was
+    /// parsed outside the normal entry path (a `.m()[key]` mixin lookup in a
+    /// declaration value). Runs every precedence tail so `.m()[n] * 3` parses
+    /// like any other arithmetic expression.
+    fn parse_expression_tail(&mut self, expr: Expression) -> Result<Expression> {
+        let expr = self.parse_factor_tail(expr)?;
+        let expr = self.parse_term_tail(expr)?;
+        let expr = self.parse_comparison_tail(expr)?;
+        let expr = self.parse_equality_tail(expr)?;
+        let expr = self.parse_and_tail(expr)?;
+        self.parse_or_tail(expr)
+    }
+
     /// Parse OR expression
     fn parse_or_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_and_expression()?;
+        let expr = self.parse_and_expression()?;
+        self.parse_or_tail(expr)
+    }
 
+    fn parse_or_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while self.match_token(TokenType::Or) {
             let operator = BinaryOperator::Or;
             let right = self.parse_and_expression()?;
@@ -2794,8 +2813,11 @@ impl<'a> Parser<'a> {
 
     /// Parse AND expression
     fn parse_and_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_equality_expression()?;
+        let expr = self.parse_equality_expression()?;
+        self.parse_and_tail(expr)
+    }
 
+    fn parse_and_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while self.match_token(TokenType::And) {
             let operator = BinaryOperator::And;
             let right = self.parse_equality_expression()?;
@@ -2808,8 +2830,11 @@ impl<'a> Parser<'a> {
 
     /// Parse equality expression
     fn parse_equality_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_comparison_expression()?;
+        let expr = self.parse_comparison_expression()?;
+        self.parse_equality_tail(expr)
+    }
 
+    fn parse_equality_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while matches!(
             self.current_token().token_type,
             TokenType::Equal | TokenType::NotEqual
@@ -2836,8 +2861,11 @@ impl<'a> Parser<'a> {
 
     /// Parse comparison expression
     fn parse_comparison_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_term_expression()?;
+        let expr = self.parse_term_expression()?;
+        self.parse_comparison_tail(expr)
+    }
 
+    fn parse_comparison_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while matches!(
             self.current_token().token_type,
             TokenType::LessThan
@@ -2875,8 +2903,11 @@ impl<'a> Parser<'a> {
 
     /// Parse term expression (addition and subtraction)
     fn parse_term_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_factor_expression()?;
+        let expr = self.parse_factor_expression()?;
+        self.parse_term_tail(expr)
+    }
 
+    fn parse_term_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while matches!(
             self.current_token().token_type,
             TokenType::Plus | TokenType::Minus
@@ -2903,8 +2934,11 @@ impl<'a> Parser<'a> {
 
     /// Parse factor expression (multiplication, division, modulo)
     fn parse_factor_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_unary_expression()?;
+        let expr = self.parse_unary_expression()?;
+        self.parse_factor_tail(expr)
+    }
 
+    fn parse_factor_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while matches!(
             self.current_token().token_type,
             TokenType::Multiply | TokenType::Divide | TokenType::Modulo

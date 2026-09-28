@@ -203,7 +203,16 @@ impl Compiler {
                 }
                 let raw_key: String = chars[j + 1..k].iter().collect();
                 let trimmed = raw_key.trim();
-                let key_expr = if (trimmed.starts_with('"')
+                let key_expr = if let Some(rest) = trimmed.strip_prefix('$') {
+                    // `$prop` / `$@var` property accessor, same semantics as
+                    // the parser's parse_lookup_key.
+                    match rest.strip_prefix('@') {
+                        Some(var_name) => {
+                            Expression::variable(var_name.to_string(), Position::default())
+                        }
+                        None => Expression::identifier(rest.to_string(), Position::default()),
+                    }
+                } else if (trimmed.starts_with('"')
                     && trimmed.ends_with('"')
                     && trimmed.len() >= 2)
                     || (trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() >= 2)
@@ -755,7 +764,16 @@ impl AtRuleCompiler for Compiler {
         let saved_original_prelude = self.original_at_rule_prelude.take();
         self.original_at_rule_prelude = original_prelude;
 
-        let dispatch_result = self.compile_at_rule_resolved(at_rule, is_nested);
+        // Mixin-lookup capture mode: declarations inside an at-rule belong to
+        // their own nested rulesets, never to the lookup map.
+        let dispatch_result = if self.capture_lookup_decls.is_some() {
+            self.capture_rule_depth += 1;
+            let result = self.compile_at_rule_resolved(at_rule, is_nested);
+            self.capture_rule_depth -= 1;
+            result
+        } else {
+            self.compile_at_rule_resolved(at_rule, is_nested)
+        };
 
         self.original_at_rule_prelude = saved_original_prelude;
         dispatch_result

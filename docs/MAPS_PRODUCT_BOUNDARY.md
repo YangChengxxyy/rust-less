@@ -38,6 +38,8 @@
 - `maps-native-mixin-lookup-missing`（缺失键两侧均报错）
 - `maps-native-access-fn-arg`（`unit(@m[w], px)`：函数实参内 map 访问）
 - `maps-native-access-arith`（`@m[a] * 3`：map 访问参与运算）
+- `maps-native-mixin-lookup-arith`（`.m()[n] * 3`：mixin 查询结果参与运算）
+- `maps-native-media-prelude-dollar`（`@media (@k: @map[$prop])`：at-rule 前置条件内的属性查找）
 
 门禁策略：
 - A 类场景出现差异，计入 `fail`，阻断 strict 门禁。

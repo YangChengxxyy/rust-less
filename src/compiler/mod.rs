@@ -646,15 +646,7 @@ impl Compiler {
             Statement::Variable(var) => self.compile_variable_declaration(var),
             Statement::Rule(rule) => {
                 let parent_selectors = self.current_selectors.clone();
-                let capturing = self.capture_lookup_decls.is_some();
-                if capturing {
-                    self.capture_rule_depth += 1;
-                }
-                let result = self.compile_rule(rule, &parent_selectors);
-                if capturing {
-                    self.capture_rule_depth -= 1;
-                }
-                result
+                self.compile_rule(rule, &parent_selectors)
             }
             Statement::Declaration(decl) => self.compile_declaration(decl),
             Statement::MixinDefinition(mixin) => self.compile_mixin_definition(mixin),

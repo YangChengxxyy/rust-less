@@ -38,6 +38,14 @@ pub trait RuleCompiler {
 
 impl RuleCompiler for Compiler {
     fn compile_rule(&mut self, rule: &Rule, parent_selectors: &[String]) -> Result<()> {
+        // Mixin-lookup capture mode (`.m()[key]`): declarations emitted inside
+        // a nested rule belong to that rule's own ruleset, not the lookup map.
+        // The closure makes early `?` returns restore the depth as well.
+        let capturing = self.capture_lookup_decls.is_some();
+        if capturing {
+            self.capture_rule_depth += 1;
+        }
+        let result = (|| -> Result<()> {
         // 插件钩子：规则发射前访问，可改写选择器/声明
         //（docs/PLUGIN_HOOKS_DESIGN.md §3.3）
         let mut rule_owned;
@@ -268,6 +276,11 @@ impl RuleCompiler for Compiler {
         self.pop_scope();
 
         Ok(())
+        })();
+        if capturing {
+            self.capture_rule_depth -= 1;
+        }
+        result
     }
 
     fn compile_selector(

@@ -19,13 +19,13 @@
 ## 📊 当前实现状态
 
 **版本**: 1.0.0  
-**测试通过率**: 100% (`cargo test --quiet` 共 429 passed, 0 ignored；`--all-features` 共 447 passed)  
+**测试通过率**: 100% (`cargo test --quiet` 共 434 passed, 0 ignored；`--all-features` 共 452 passed)  
 **功能完成度**: 97%（核心 LESS 功能已完备，Maps 可写能力已落地，源码映射持续完善）
 **生产就绪度**: 适合生产项目；v1.0.0 生态就绪（LSP / 构建工具插件 / WASM 发布 / 版本化插件 API）
 
 **统计口径说明（2026-09-28）**:
-- 测试基线来自本地执行：`cargo test --quiet`（429 passed）与 `cargo test --all-features --quiet`（447 passed）。
-- 兼容性基线来自 `docs/LESSJS_DIFF_REPORT.json`（2026-09-28 生成）：`pass=94`、`fail=0`、`unsupported=16`（total=110，strict + strict-mappings）。
+- 测试基线来自本地执行：`cargo test --quiet`（434 passed）与 `cargo test --all-features --quiet`（452 passed）。
+- 兼容性基线来自 `docs/LESSJS_DIFF_REPORT.json`（2026-09-28 生成）：`pass=96`、`fail=0`、`unsupported=16`（total=112，strict + strict-mappings）。
 
 ### ✅ 已完成的核心功能
 
@@ -307,7 +307,7 @@ bash tools/status-check/run-status-check.sh --strict-mappings
 | 单元测试 | 106 | 0 | 0 | 100% |
 | 集成测试 | 307 | 0 | 0 | 100% |
 | 压力测试 | 3 | 0 | 0 | 100% |
-| **总计** | **429** | **0** | **0** | **100%** |
+| **总计** | **434** | **0** | **0** | **100%** |
 
 ## 🎯 功能演示
 
@@ -473,7 +473,7 @@ bash tools/status-check/run-status-check.sh --strict-mappings
 - [x] 循环和递归混合器
 - [x] 命名空间支持
 - [x] Maps 基础函数接口（`map-get`、`map-has-key`、`map-keys`、`map-values`、`map-merge`、`map-deep-merge`、`map-set`、`map-update`、`map-replace`、`map-remove`、`map-deep-remove`）
-- [x] Maps 高级能力（`each(map, ...)`、`map-deep-merge` 边界策略，与 less.js 原生语义完全对齐：strict 门禁 94 pass / 0 fail）
+- [x] Maps 高级能力（`each(map, ...)`、`map-deep-merge` 边界策略，与 less.js 原生语义完全对齐：strict 门禁 96 pass / 0 fail）
 - [x] Maps 兼容性扩展（已建立并接入实编译对照，见 `docs/LESSJS_COMPAT_STATUS.md`）
 - [x] 源码映射支持（已支持外部 `.map` 输出与 `--source-map-lessjs-compat`）
 - [x] 源码映射深度对齐（复杂导入链/嵌套 at-rule/跨文件 mixin 与 detached ruleset/prelude 变量求值场景全部纳入 strict-mappings 门禁）

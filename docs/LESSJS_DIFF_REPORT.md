@@ -1,12 +1,12 @@
 # less.js 实编译对照差异报告
 
-- 生成时间: 2026-09-28T07:51:22.721Z
+- 生成时间: 2026-09-28T08:28:33.243Z
 - Node.js: v22.23.3
 - less.js: 4.5.1
 - rust-less CLI: /home/ubuntu/repos/rust-less/target/debug/rust-less
 - 选项: strict=on, strictMappings=on, observeMappings=off
-- 总用例: 110
-- 通过: 94
+- 总用例: 112
+- 通过: 96
 - 观测差异（非失败）: 0
 - 观测差异（结构）: 0
 - 观测差异（编码）: 0
@@ -53,6 +53,8 @@
 | maps-native-mixin-lookup-missing | maps | lessjs-native | pass | both compilers returned errors |
 | maps-native-access-fn-arg | maps | lessjs-native | pass | output matched |
 | maps-native-access-arith | maps | lessjs-native | pass | output matched |
+| maps-native-mixin-lookup-arith | maps | lessjs-native | pass | output matched |
+| maps-native-media-prelude-dollar | maps | lessjs-native | pass | output matched |
 | maps-map-variable-key-access | maps | extension | unsupported | less.js does not natively support rust-less map extension functions |
 | maps-map-nested-bracket-access | maps | extension | unsupported | less.js does not natively support rust-less map extension functions |
 | sourcemap-imported-keyframes | source-map | lessjs-native | pass | output matched |

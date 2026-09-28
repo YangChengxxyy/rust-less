@@ -35,7 +35,7 @@
 - CLI usage examples live in `README.md`; keep them in sync with behavior.
 
 ## Current Status & Roadmap
-- Current version: 1.0.0; test suite reports 429 passing tests (`--all-features` 447); less.js compat gate: 94 pass / 0 fail under strict-mappings (see `README.md`).
+- Current version: 1.0.0; test suite reports 434 passing tests (`--all-features` 452); less.js compat gate: 96 pass / 0 fail under strict-mappings (see `README.md`).
 - 2026-09-09: Maps 高级语义与 LESS 4.x 边界对齐已完成（重复键 last-wins、单位/负数键、map 值惰性求值、插值/复合键、map 作属性值报错、`@map[$prop]` 属性查找、`.m()[key]` mixin 调用查找、`unit()` 语义；A 类原生用例 +14）；变量系统完成 LESS 4.x 惰性对齐（定义域惰性求值、循环引用保护、块收尾悬空报错、DR/map 别名调用解引用）；性能基线经 `tools/perf-check/run-perf-check.sh` 随版本维护。
 - v1.0.0 生态组件：`rust-less-lsp` 语言服务器（feature `lsp`）、构建工具插件（`packages/`）、WASM 发布流程（`./build-wasm.sh`）、版本化插件 API（`rust_less::plugin::PluginBundle`）。
 ## Milestone Checklist (Synced With README)

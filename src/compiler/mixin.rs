@@ -183,9 +183,13 @@ impl MixinCompiler for Compiler {
                 self.pre_scan_variables(&mixin_def.body);
 
                 // Expand with output suppressed and declarations captured.
+                // Isolate the caller's pending property merges: a nested rule
+                // inside the mixin would otherwise flush (and drop, under
+                // suppress_output) merges accumulated by the enclosing rule.
                 let previous_suppress = self.suppress_output;
                 let previous_capture = self.capture_lookup_decls.replace(Vec::new());
                 let previous_depth = self.capture_rule_depth;
+                let previous_merges = std::mem::take(&mut self.pending_merges);
                 self.suppress_output = true;
                 self.capture_rule_depth = 0;
 
@@ -205,6 +209,9 @@ impl MixinCompiler for Compiler {
                 let entries = self.capture_lookup_decls.take().unwrap_or_default();
                 self.capture_lookup_decls = previous_capture;
                 self.capture_rule_depth = previous_depth;
+                // Lookup-local merges are discarded; the caller's buffer is
+                // restored untouched.
+                self.pending_merges = previous_merges;
                 self.suppress_output = previous_suppress;
                 self.current_file = previous_file;
 
