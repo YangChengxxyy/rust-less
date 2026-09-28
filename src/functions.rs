@@ -2102,7 +2102,37 @@ fn ispercentage_function(args: &[Expression], position: &Position) -> Result<Exp
 }
 
 fn unit_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    ensure_arg_count("unit", 1, args, position)?;
+    if args.is_empty() || args.len() > 2 {
+        return Err(Error::function_error(
+            "unit",
+            format!("expected 1 or 2 arguments, got {}", args.len()),
+            position.line,
+            position.column,
+        ));
+    }
+    let value = match &args[0] {
+        Expression::Number { value, .. } => *value,
+        _ => {
+            return Err(Error::function_error(
+                "unit",
+                "the first argument to unit must be a number",
+                position.line,
+                position.column,
+            ))
+        }
+    };
+    match args.len() {
+        1 => Ok(Expression::number(value, position.clone())),
+        _ => Ok(Expression::number_with_unit(
+            value,
+            args[1].to_css(),
+            position.clone(),
+        )),
+    }
+}
+
+fn get_unit_function(args: &[Expression], position: &Position) -> Result<Expression> {
+    ensure_arg_count("get-unit", 1, args, position)?;
     match &args[0] {
         Expression::Number { unit, .. } => Ok(Expression::String {
             value: unit.clone().unwrap_or_default(),
@@ -2115,10 +2145,6 @@ fn unit_function(args: &[Expression], position: &Position) -> Result<Expression>
             position: position.clone(),
         }),
     }
-}
-
-fn get_unit_function(args: &[Expression], position: &Position) -> Result<Expression> {
-    unit_function(args, position)
 }
 
 // Advanced math functions

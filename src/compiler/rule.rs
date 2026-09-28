@@ -483,6 +483,16 @@ impl Compiler {
             }
         }
 
+        // Mixin-lookup capture mode (`.m()[key]`): collect the declaration as a
+        // map entry instead of writing output. Only top-level declarations of
+        // the expanded ruleset are captured; nested rules sit at depth > 0.
+        if let Some(buffer) = &mut self.capture_lookup_decls {
+            if self.capture_rule_depth == 0 {
+                buffer.push((property, value, declaration.position.clone()));
+            }
+            return Ok(());
+        }
+
         let value_str = value.to_css();
 
         // Handle property merge (+: and +_: syntax)

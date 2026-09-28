@@ -38,13 +38,19 @@
 - 逐条沉淀“扩展语义（unsupported）”与“原生语义（pass/fail）”的边界说明。
 - 已支持 `mappings` 对齐开关（`--observe-mappings` / `--strict-mappings`）；`lessjs-compat` 脚本默认仍为观测策略，`status-check` 默认启用 strict-mappings 门禁。
 
-### 最近一次实编译结果（2026-09-09）
+### 最近一次实编译结果（2026-09-28）
 
 - 报告文件：`docs/LESSJS_DIFF_REPORT.md`
+- 汇总：`pass=94`, `observed=0`, `fail=0`, `unsupported=16`, `blocked=0`（total=110，strict + strict-mappings）
+- 较 2026-09-09 新增 9 个 A 类用例（属性查找与 mixin 调用查找语义）：`maps-native-dollar-prop`、`maps-native-dollar-var-key`、`maps-native-mixin-lookup`、`maps-native-mixin-lookup-args`、`maps-native-mixin-lookup-ns`、`maps-native-mixin-lookup-dollar`、`maps-native-mixin-lookup-missing`、`maps-native-access-fn-arg`、`maps-native-access-arith`。
+- 说明：
+  - 新对齐语义：`@map[$prop]` / `@map[$@var]` 属性查找；`.m(args)[key]` / `.m()[$prop]` / `#ns > .m()[key]` mixin 调用结果按 ruleset 值作 map 访问；map 访问可用于函数实参与算术表达式；`unit()` 对齐 less.js 语义（单参去单位、双参改单位，`get-unit()` 返回单位字符串）。
+  - `unsupported=16`：`map-*` 扩展函数场景（less.js 4.5.1 不原生支持）+ 2 个扩展访问语义场景（`map-variable-key-access`、`map-nested-bracket-access`，less.js 对变量 key 与链式括号访问均报错）。
+
+### 历史实编译结果（2026-09-09）
+
 - 汇总：`pass=85`, `observed=0`, `fail=0`, `unsupported=16`, `blocked=0`（total=101，strict + strict-mappings）
 - 较 2026-02-23 新增 5 个 A 类用例：`maps-native-dup-key-last-wins`、`maps-native-unit-negative-keys`、`maps-native-lazy-value`、`maps-native-interpolated-key`、`maps-native-map-as-value-error`。
-- 说明：
-  - `unsupported=16`：`map-*` 扩展函数场景（less.js 4.5.1 不原生支持）+ 2 个扩展访问语义场景（`map-variable-key-access`、`map-nested-bracket-access`，less.js 对变量 key 与链式括号访问均报错）。
 
 ### 历史实编译结果（2026-02-23）
 

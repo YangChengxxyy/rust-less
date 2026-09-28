@@ -475,3 +475,229 @@ fn test_map_extension_map_set_updates_effective_dup_key() {
     let css = compile(less).unwrap();
     assert!(css.contains("color: 2"), "Got: {}", css);
 }
+
+#[test]
+fn test_lessjs_compat_map_dollar_property_lookup() {
+    // less.js 4.x: `@m[$prop]` reads the declaration value named `prop`.
+    let less = r#"
+@theme: {
+    primary: #112233;
+    spacing: 8px;
+};
+.test {
+    color: @theme[$primary];
+    pad: @theme[$spacing];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("color: #112233"), "Got: {}", css);
+    assert!(css.contains("pad: 8px"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_map_dollar_variable_key() {
+    // less.js 4.x: `@m[$@var]` resolves `@var` then reads that property.
+    let less = r#"
+@theme: {
+    primary: red;
+};
+@keyname: primary;
+.test {
+    color: @theme[$@keyname];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("color: red"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_map_dollar_missing_key_errors() {
+    let less = r#"
+@theme: {
+    primary: red;
+};
+.test {
+    color: @theme[$missing];
+}
+"#;
+    assert!(compile(less).is_err());
+}
+
+#[test]
+fn test_map_extension_quoted_key_lookup() {
+    // rust-less extension: `@m["key"]` matches a quoted declared key
+    // (less.js rejects quoted lookup keys at parse time).
+    let less = r#"
+@m: {
+    "b": 2;
+};
+.test {
+    x: @m["b"];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("x: 2"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_mixin_call_lookup() {
+    // less.js 4.x: `.m()[key]` treats the mixin call as a map of its
+    // emitted declarations.
+    let less = r#"
+.mixin() {
+    color: red;
+    size: 12px;
+}
+.test {
+    c: .mixin()[color];
+    s: .mixin()[size];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("c: red"), "Got: {}", css);
+    assert!(css.contains("s: 12px"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_mixin_call_lookup_with_args() {
+    let less = r#"
+.box(@w) {
+    width: @w;
+    height: @w * 2;
+}
+.test {
+    w: .box(5px)[width];
+    h: .box(5px)[height];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("w: 5px"), "Got: {}", css);
+    assert!(css.contains("h: 10px"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_mixin_call_lookup_dollar() {
+    let less = r#"
+.m() {
+    color: blue;
+}
+.test {
+    x: .m()[$color];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("x: blue"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_mixin_call_lookup_namespaced() {
+    // `#ns > .m()[key]` drills into a namespaced mixin's declarations.
+    let less = r#"
+#ns {
+    .m() {
+        color: green;
+    }
+}
+.test {
+    c: #ns > .m()[color];
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("c: green"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_mixin_call_lookup_missing_key_errors() {
+    let less = r#"
+.m() {
+    color: red;
+}
+.test {
+    c: .m()[missing];
+}
+"#;
+    assert!(compile(less).is_err());
+}
+
+#[test]
+fn test_lessjs_compat_map_access_in_function_arg() {
+    // `unit(@m[w])` — map access inside a builtin function argument.
+    let less = r#"
+@m: {
+    w: 5;
+};
+.test {
+    w: unit(@m[w], px);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("w: 5px"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_map_access_in_arithmetic() {
+    let less = r#"
+@m: {
+    a: 2;
+};
+.test {
+    x: @m[a] * 3;
+    y: @m[a] + 8;
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("x: 6"), "Got: {}", css);
+    assert!(css.contains("y: 10"), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_unit_semantics() {
+    // less.js 4.x unit(): 1 arg strips the unit; 2 args overrides it;
+    // a quoted unit keeps its quotes (`unit(5px, "%")` -> `5"%"` quirk).
+    let less = r#"
+.test {
+    a: unit(5px);
+    b: unit(5, px);
+    c: unit(5px, "%");
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("a: 5"), "Got: {}", css);
+    assert!(css.contains("b: 5px"), "Got: {}", css);
+    assert!(css.contains("c: 5\"%\""), "Got: {}", css);
+}
+
+#[test]
+fn test_lessjs_compat_unit_non_number_errors() {
+    let less = ".test { a: unit(red); }";
+    assert!(compile(less).is_err());
+}
+
+#[test]
+fn test_lessjs_compat_get_unit() {
+    let less = r#"
+.test {
+    u: get-unit(5px);
+    v: get-unit(5);
+}
+"#;
+    let css = compile(less).unwrap();
+    assert!(css.contains("u: px"), "Got: {}", css);
+    assert!(css.contains("v:"), "Got: {}", css);
+}
+
+#[test]
+fn test_map_extension_chained_map_access() {
+    // rust-less extension: `@m[a][b]` chained lookup (less.js SyntaxError).
+    let less = r#"
+@m: {
+    color: red;
+};
+.test {
+    c: @m[color][dummy];
+}
+"#;
+    // `red` is not a map — chained access must error, matching less.js
+    // in spirit (also errors, though for a different reason).
+    assert!(compile(less).is_err());
+}

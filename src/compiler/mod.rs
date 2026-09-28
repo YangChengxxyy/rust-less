@@ -93,6 +93,13 @@ pub struct Compiler {
     /// 正在向惰性求值中展开的变量名栈（循环引用检测，less.js
     /// "Recursive variable definition" 对齐）
     pub(crate) variable_eval_stack: Vec<String>,
+    /// 值上下文 mixin 查询（`.m()[key]`）的声明捕获缓冲：
+    /// `Some` 时 compile_declaration_inner 记录 (property, value, position)
+    /// 而不写输出，用于将 mixin 展开结果收集为 MapLiteral。
+    pub(crate) capture_lookup_decls:
+        Option<Vec<(String, crate::ast::expressions::Expression, Position)>>,
+    /// 捕获期间嵌套规则的深度，>0 时声明属于嵌套规则而非 mixin 顶层。
+    pub(crate) capture_rule_depth: usize,
 }
 
 impl Compiler {
@@ -119,6 +126,8 @@ impl Compiler {
             current_col: 0,
             current_file: "input.less".to_string(),
             suppress_output: false,
+            capture_lookup_decls: None,
+            capture_rule_depth: 0,
             force_important: false,
             pending_merges: std::collections::HashMap::new(),
             original_at_rule_prelude: None,
@@ -637,7 +646,15 @@ impl Compiler {
             Statement::Variable(var) => self.compile_variable_declaration(var),
             Statement::Rule(rule) => {
                 let parent_selectors = self.current_selectors.clone();
-                self.compile_rule(rule, &parent_selectors)
+                let capturing = self.capture_lookup_decls.is_some();
+                if capturing {
+                    self.capture_rule_depth += 1;
+                }
+                let result = self.compile_rule(rule, &parent_selectors);
+                if capturing {
+                    self.capture_rule_depth -= 1;
+                }
+                result
             }
             Statement::Declaration(decl) => self.compile_declaration(decl),
             Statement::MixinDefinition(mixin) => self.compile_mixin_definition(mixin),

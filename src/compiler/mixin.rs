@@ -47,6 +47,9 @@ pub trait MixinCompiler {
         call: &MixinCall,
         scope: &mut Scope,
     ) -> Result<()>;
+
+    /// 在值上下文求值 mixin 调用（`.m()[key]` 查询），返回 MapLiteral
+    fn eval_mixin_call_as_map(&mut self, call: &MixinCall) -> Result<Expression>;
 }
 
 impl MixinCompiler for Compiler {
@@ -136,6 +139,84 @@ impl MixinCompiler for Compiler {
 
                 expansion_result?;
                 Ok(())
+            }
+            None => Err(Error::semantic_error(
+                format!("No matching guard for mixin '{}'", call.name),
+                call.position.line,
+                call.position.column,
+            )),
+        }
+    }
+
+    /// Evaluate a mixin call in value position (`.m(args)[key]` lookup, less.js
+    /// ruleset-value semantics): expand the mixin with output suppressed and
+    /// collect its top-level declarations as a `MapLiteral`.
+    fn eval_mixin_call_as_map(&mut self, call: &MixinCall) -> Result<Expression> {
+        let mixins = self.resolve_mixin_path(&call.name)?;
+
+        if mixins.is_empty() {
+            return Err(Error::undefined_mixin(
+                &call.name,
+                call.position.line,
+                call.position.column,
+            ));
+        }
+
+        let matching_mixin = self.find_matching_mixin(&mixins, call)?;
+
+        match matching_mixin {
+            Some(mixin_def) => {
+                if self.recursion_depth >= self.max_recursion_depth {
+                    return Err(Error::infinite_recursion(
+                        format!("Mixin '{}'", call.name),
+                        call.position.line,
+                        call.position.column,
+                    ));
+                }
+
+                self.recursion_depth += 1;
+
+                let parent = std::rc::Rc::new(self.current_scope().clone());
+                let mut mixin_scope = Scope::with_parent(parent);
+                self.bind_mixin_arguments(&mixin_def, call, &mut mixin_scope)?;
+                self.scope_stack.push(mixin_scope);
+                self.pre_scan_variables(&mixin_def.body);
+
+                // Expand with output suppressed and declarations captured.
+                let previous_suppress = self.suppress_output;
+                let previous_capture = self.capture_lookup_decls.replace(Vec::new());
+                let previous_depth = self.capture_rule_depth;
+                self.suppress_output = true;
+                self.capture_rule_depth = 0;
+
+                let previous_file = self.current_file.clone();
+                if let Some(source_file) = &mixin_def.source_file {
+                    self.current_file = source_file.clone();
+                }
+
+                let expansion_result = (|| -> Result<()> {
+                    for statement in &mixin_def.body {
+                        self.compile_statement(statement)?;
+                    }
+                    self.finalize_scope_variables()?;
+                    Ok(())
+                })();
+
+                let entries = self.capture_lookup_decls.take().unwrap_or_default();
+                self.capture_lookup_decls = previous_capture;
+                self.capture_rule_depth = previous_depth;
+                self.suppress_output = previous_suppress;
+                self.current_file = previous_file;
+
+                self.pop_scope();
+                self.recursion_depth -= 1;
+
+                expansion_result?;
+
+                Ok(Expression::MapLiteral {
+                    entries,
+                    position: call.position.clone(),
+                })
             }
             None => Err(Error::semantic_error(
                 format!("No matching guard for mixin '{}'", call.name),

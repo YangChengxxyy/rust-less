@@ -54,6 +54,7 @@ pub enum TokenType {
     Ampersand, // &
     Tilde,     // ~
     Pipe,      // |
+    Dollar,    // $ (property accessor, e.g. @map[$prop])
 
     // Whitespace and comments
     Whitespace,
@@ -759,6 +760,15 @@ impl Lexer {
                     });
                 }
 
+                Some('$') => {
+                    self.advance();
+                    return Ok(Token {
+                        token_type: TokenType::Dollar,
+                        position,
+                        lexeme: "$".to_string(),
+                    });
+                }
+
                 Some('~') => {
                     self.advance();
                     return Ok(Token {
@@ -841,6 +851,7 @@ impl fmt::Display for TokenType {
             TokenType::Comma => write!(f, "Comma"),
             TokenType::Dot => write!(f, "Dot"),
             TokenType::Ampersand => write!(f, "Ampersand"),
+            TokenType::Dollar => write!(f, "Dollar"),
             TokenType::Tilde => write!(f, "Tilde"),
             TokenType::Pipe => write!(f, "Pipe"),
             TokenType::Whitespace => write!(f, "Whitespace"),

@@ -191,6 +191,18 @@ pub enum Expression {
         /// Source position
         position: Position,
     },
+
+    /// Mixin call in expression position: `.mixin(args)` — only usable as the
+    /// target of a `[key]` / `[$prop]` lookup (less.js ruleset-value semantics).
+    /// Evaluates to a MapLiteral of the mixin's emitted declarations.
+    MixinCallExpr {
+        /// Mixin path (e.g. `.mixin` or `#ns > .mixin`)
+        name: String,
+        /// Arguments passed to the mixin
+        arguments: Vec<Expression>,
+        /// Source position
+        position: Position,
+    },
 }
 
 /// Parts of a template string
@@ -488,7 +500,8 @@ impl Expression {
             | Expression::Anonymous(_, pos)
             | Expression::JavaScript(_, pos)
             | Expression::MapLiteral { position: pos, .. }
-            | Expression::DetachedRuleset { position: pos, .. } => pos,
+            | Expression::DetachedRuleset { position: pos, .. }
+            | Expression::MixinCallExpr { position: pos, .. } => pos,
         }
     }
 
@@ -520,6 +533,7 @@ impl Expression {
             | Expression::Interpolation(_, _)
             | Expression::MapAccess { .. }
             | Expression::Conditional { .. }
+            | Expression::MixinCallExpr { .. }
             | Expression::PropertyAccess { .. } => true,
             Expression::Parenthesized(expr, _) => expr.needs_evaluation(),
             Expression::List { values, .. } => values.iter().any(|v| v.needs_evaluation()),
@@ -676,6 +690,16 @@ impl Expression {
                     .join("; ");
                 format!("{{{}}}", rendered)
             }
+            Expression::MixinCallExpr {
+                name, arguments, ..
+            } => {
+                let args = arguments
+                    .iter()
+                    .map(|arg| arg.to_css())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}({})", name, args)
+            }
         }
     }
 }
@@ -797,6 +821,11 @@ impl super::Visitable for Expression {
             Expression::DetachedRuleset { body, .. } => {
                 for statement in body {
                     statement.accept(visitor);
+                }
+            }
+            Expression::MixinCallExpr { arguments, .. } => {
+                for argument in arguments {
+                    argument.accept(visitor);
                 }
             }
             _ => {} // Leaf expressions don't need to visit children
