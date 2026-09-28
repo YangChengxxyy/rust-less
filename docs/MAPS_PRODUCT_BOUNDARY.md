@@ -29,9 +29,25 @@
 - `maps-native-lazy-value`（map 值惰性求值：声明后方可解析，按使用点作用域求值）
 - `maps-native-interpolated-key`（`@{key}:` 插值键与 `pre-@{key}`/`@{key}-suffix` 复合键）
 - `maps-native-map-as-value-error`（map/ruleset 直接作属性值时报错，对齐 less.js SyntaxError）
+- `maps-native-dollar-prop`（`@map[$prop]` 属性查找，取同名声明值）
+- `maps-native-dollar-var-key`（`@map[$@var]`：先求值 `@var` 再作属性名）
+- `maps-native-mixin-lookup`（`.m()[key]`：mixin 调用结果按 ruleset 值语义作 map 访问）
+- `maps-native-mixin-lookup-args`（`.m(args)[key]`：带参 mixin 查找）
+- `maps-native-mixin-lookup-ns`（`#ns > .m()[key]`：命名空间路径查找）
+- `maps-native-mixin-lookup-dollar`（`.m()[$prop]`：属性名查找）
+- `maps-native-mixin-lookup-missing`（缺失键两侧均报错）
+- `maps-native-access-fn-arg`（`unit(@m[w], px)`：函数实参内 map 访问）
+- `maps-native-access-arith`（`@m[a] * 3`：map 访问参与运算）
+- `maps-native-mixin-lookup-arith`（`.m()[n] * 3`：mixin 查询结果参与运算）
+- `maps-native-media-prelude-dollar`（`@media (@k: @map[$prop])`：at-rule 前置条件内的属性查找）
 
 门禁策略：
 - A 类场景出现差异，计入 `fail`，阻断 strict 门禁。
+
+已知非阻断差异（less.js 怪异行为，rust-less 有意不复刻）：
+- 引号键污染：less.js 中 `{ "a": 1; b: 2 }` 一旦存在引号键，整块查找（含 `b`）均报 NameError；rust-less 按声明语义正常查找。
+- `.mixin()` 裸值：less.js 将 `.m()` 作为属性值时输出字面量 `[object Object]`；rust-less 报解析错误。
+- `.cls:` 形式的选择器出现在 map 字面量内时，less.js 将其静默吞掉（整块输出为空）；rust-less 报解析错误。
 
 ### B 类：rust-less 扩展语义
 

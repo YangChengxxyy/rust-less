@@ -1,3 +1,4 @@
+use super::mixin::MixinCompiler;
 use super::Compiler;
 use crate::ast::*;
 use crate::error::{Error, Result};
@@ -216,6 +217,19 @@ impl ExpressionCompiler for Compiler {
                         position.column,
                     ))
                 }
+            }
+            // Mixin call in value position (`.m(args)[key]` lookup, less.js
+            // ruleset-value semantics): expand the mixin and expose its
+            // top-level declarations as a MapLiteral for the enclosing
+            // MapAccess to index into.
+            Expression::MixinCallExpr {
+                name,
+                arguments,
+                position,
+            } => {
+                let call = MixinCall::new(name.clone(), position.clone())
+                    .with_arguments(arguments.clone());
+                self.eval_mixin_call_as_map(&call)
             }
             // Detached rulesets are opaque values; pass through without evaluation.
             // They are only expanded when invoked via `@var()`.

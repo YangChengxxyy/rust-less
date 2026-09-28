@@ -38,6 +38,14 @@ pub trait RuleCompiler {
 
 impl RuleCompiler for Compiler {
     fn compile_rule(&mut self, rule: &Rule, parent_selectors: &[String]) -> Result<()> {
+        // Mixin-lookup capture mode (`.m()[key]`): declarations emitted inside
+        // a nested rule belong to that rule's own ruleset, not the lookup map.
+        // The closure makes early `?` returns restore the depth as well.
+        let capturing = self.capture_lookup_decls.is_some();
+        if capturing {
+            self.capture_rule_depth += 1;
+        }
+        let result = (|| -> Result<()> {
         // 插件钩子：规则发射前访问，可改写选择器/声明
         //（docs/PLUGIN_HOOKS_DESIGN.md §3.3）
         let mut rule_owned;
@@ -268,6 +276,11 @@ impl RuleCompiler for Compiler {
         self.pop_scope();
 
         Ok(())
+        })();
+        if capturing {
+            self.capture_rule_depth -= 1;
+        }
+        result
     }
 
     fn compile_selector(
@@ -481,6 +494,16 @@ impl Compiler {
                     declaration.position.column,
                 ));
             }
+        }
+
+        // Mixin-lookup capture mode (`.m()[key]`): collect the declaration as a
+        // map entry instead of writing output. Only top-level declarations of
+        // the expanded ruleset are captured; nested rules sit at depth > 0.
+        if let Some(buffer) = &mut self.capture_lookup_decls {
+            if self.capture_rule_depth == 0 {
+                buffer.push((property, value, declaration.position.clone()));
+            }
+            return Ok(());
         }
 
         let value_str = value.to_css();

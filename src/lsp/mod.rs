@@ -337,6 +337,12 @@ fn expr_to_string(expr: &Expression) -> String {
             format!("{{ {} }}", items.join("; "))
         }
         E::DetachedRuleset { .. } => "{ ... }".to_string(),
+        E::MixinCallExpr {
+            name, arguments, ..
+        } => {
+            let args: Vec<String> = arguments.iter().map(expr_to_string).collect();
+            format!("{}({})", name, args.join(", "))
+        }
     }
 }
 

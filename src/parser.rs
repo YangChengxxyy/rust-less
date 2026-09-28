@@ -2092,6 +2092,23 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            // `.m()[key]` mixin-call lookup: a leading `.` only continues a
+            // declaration value when the full `name(args)[key]` shape follows;
+            // otherwise it starts a new rule/mixin statement.
+            if matches!(self.current_token().token_type, TokenType::Dot) {
+                let dot_position = self.current_position();
+                match self.try_parse_mixin_lookup(&dot_position)? {
+                    Some(expr) => {
+                        // Continue any trailing `* 3` / `+ 4` / comparisons
+                        // through the normal precedence chain.
+                        let expr = self.parse_expression_tail(expr)?;
+                        groups.last_mut().expect("groups is never empty").push(expr);
+                        continue;
+                    }
+                    None => break,
+                }
+            }
+
             // Stop when the next token cannot start a value expression
             // (e.g. a new statement after a semicolon-less map/detached ruleset)
             if !self.is_expression_start() {
@@ -2188,6 +2205,173 @@ impl<'a> Parser<'a> {
     /// since commas are used as argument separators in function calls
     fn parse_function_argument(&mut self) -> Result<Expression> {
         self.parse_or_expression_no_comma_list()
+    }
+
+    /// Parse the key inside a `[...]` lookup: a regular expression key, or a
+    /// `$prop` / `$@var` property accessor (less.js property-accessor syntax).
+    /// `$prop` yields a literal key; `$@var` yields the variable as key (matching
+    /// the existing `@map[@var]` extension semantics).
+    fn parse_lookup_key(&mut self, no_comma_list: bool) -> Result<Expression> {
+        if self.match_token(TokenType::Dollar) {
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+            let position = self.current_position();
+            return match &self.current_token().token_type {
+                TokenType::Identifier(name) => {
+                    let key = Expression::identifier(name.clone(), position);
+                    self.advance();
+                    Ok(key)
+                }
+                TokenType::AtKeyword(name) => {
+                    let key = Expression::variable(name.clone(), position);
+                    self.advance();
+                    Ok(key)
+                }
+                _ => Err(Error::parse_error(
+                    "Expected property name after '$'",
+                    position.line,
+                    position.column,
+                )),
+            };
+        }
+        if no_comma_list {
+            self.parse_or_expression_no_comma_list()
+        } else {
+            self.parse_expression()
+        }
+    }
+
+    /// Parse a `[key]` lookup chain over `base` (`@map[key][nested]`).
+    fn parse_lookup_chain(
+        &mut self,
+        mut expr: Expression,
+        position: Position,
+        no_comma_list: bool,
+    ) -> Result<Expression> {
+        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+            self.advance();
+        }
+        while self.check(&TokenType::LeftBracket) {
+            self.advance(); // consume '['
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+
+            let key = self.parse_lookup_key(no_comma_list)?;
+
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+            self.consume(TokenType::RightBracket, "Expected ']' after map key")?;
+
+            expr = Expression::MapAccess {
+                map: Box::new(expr),
+                key: Box::new(key),
+                position: position.clone(),
+            };
+
+            while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                self.advance();
+            }
+        }
+        Ok(expr)
+    }
+
+    /// Try to parse a mixin call used as a lookup target in expression
+    /// position: `.m(args)[key]` or `#ns > .m(args)[$prop]` (less.js
+    /// ruleset-value lookup). Returns `None` with the cursor restored when the
+    /// tokens do not have this shape (e.g. a `#abc` color literal).
+    fn try_parse_mixin_lookup(&mut self, position: &Position) -> Result<Option<Expression>> {
+        let save = self.current;
+
+        // Mixin name path: `.a`, `#ns`, `.a > .b`, `#ns .m` (same shape as
+        // parse_mixin_call).
+        let mut name = String::new();
+        loop {
+            if self.match_token(TokenType::Dot) {
+                name.push('.');
+                while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                    self.advance();
+                }
+                match &self.current_token().token_type {
+                    TokenType::Identifier(id) => {
+                        name.push_str(id);
+                        self.advance();
+                    }
+                    _ => {
+                        self.current = save;
+                        return Ok(None);
+                    }
+                }
+            } else if let TokenType::Hash(val) = &self.current_token().token_type {
+                let val = val.clone();
+                name.push('#');
+                name.push_str(&val);
+                self.advance();
+            } else {
+                break;
+            }
+
+            // Path continues on `>` or whitespace followed by `.` / `#`
+            let mut lookahead = self.current;
+            let mut has_whitespace = false;
+            while lookahead < self.tokens.len()
+                && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+            {
+                has_whitespace = true;
+                lookahead += 1;
+            }
+            if lookahead < self.tokens.len() {
+                match &self.tokens[lookahead].token_type {
+                    TokenType::GreaterThan => {
+                        self.current = lookahead + 1;
+                        name.push_str(" > ");
+                        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+                            self.advance();
+                        }
+                        continue;
+                    }
+                    TokenType::Dot | TokenType::Hash(_) if has_whitespace => {
+                        self.current = lookahead;
+                        name.push(' ');
+                        continue;
+                    }
+                    _ => {}
+                }
+            }
+            break;
+        }
+
+        // Require `(` ... `)` followed by `[` — otherwise not a lookup expr.
+        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+            self.advance();
+        }
+        if !self.check(&TokenType::LeftParen) {
+            self.current = save;
+            return Ok(None);
+        }
+        self.advance(); // consume '('
+        let arguments = self.parse_mixin_arguments()?;
+        self.consume(TokenType::RightParen, "Expected ')' after mixin arguments")?;
+
+        while matches!(self.current_token().token_type, TokenType::Whitespace) {
+            self.advance();
+        }
+        if !self.check(&TokenType::LeftBracket) {
+            // Bare `.m()` has no value semantics — restore so the caller emits
+            // its usual expression-position error.
+            self.current = save;
+            return Ok(None);
+        }
+
+        let call_expr = Expression::MixinCallExpr {
+            name,
+            arguments,
+            position: position.clone(),
+        };
+        let expr = self.parse_lookup_chain(call_expr, position.clone(), false)?;
+        Ok(Some(expr))
     }
 
     /// Parse OR expression without comma list expansion
@@ -2456,6 +2640,19 @@ impl<'a> Parser<'a> {
             TokenType::AtKeyword(name) => {
                 let var_name = name.clone();
                 self.advance();
+                // Map/lookup access chain in argument context: `@m[key]`
+                let mut lookahead = self.current;
+                while lookahead < self.tokens.len()
+                    && matches!(self.tokens[lookahead].token_type, TokenType::Whitespace)
+                {
+                    lookahead += 1;
+                }
+                if lookahead < self.tokens.len()
+                    && matches!(self.tokens[lookahead].token_type, TokenType::LeftBracket)
+                {
+                    let base = Expression::variable(var_name, position.clone());
+                    return self.parse_lookup_chain(base, position, true);
+                }
                 // In function argument context, just return the variable without comma list expansion
                 Ok(Expression::variable(var_name, position))
             }
@@ -2466,6 +2663,11 @@ impl<'a> Parser<'a> {
             }
             TokenType::Hash(color) => {
                 let hex = format!("#{}", color);
+                // `#ns > .m()[key]` — a namespaced mixin lookup may start
+                // with a Hash token; fall back to color literal otherwise.
+                if let Some(expr) = self.try_parse_mixin_lookup(&position)? {
+                    return Ok(expr);
+                }
                 self.advance();
                 match Expression::color_hex(&hex, position.clone()) {
                     Ok(color_expr) => Ok(color_expr),
@@ -2505,6 +2707,14 @@ impl<'a> Parser<'a> {
                 self.consume(TokenType::RightParen, "Expected ')' after expression")?;
                 Ok(Expression::parenthesized(expr, position))
             }
+            TokenType::Dot => match self.try_parse_mixin_lookup(&position)? {
+                Some(expr) => Ok(expr),
+                None => Err(Error::parse_error(
+                    "Unexpected token in function argument: Dot",
+                    position.line,
+                    position.column,
+                )),
+            },
             _ => Err(Error::parse_error(
                 format!(
                     "Unexpected token in function argument: {:?}",
@@ -2571,10 +2781,26 @@ impl<'a> Parser<'a> {
         Ok(Expression::TemplateString { parts, position })
     }
 
+    /// Continue binary-operator parsing after a primary expression that was
+    /// parsed outside the normal entry path (a `.m()[key]` mixin lookup in a
+    /// declaration value). Runs every precedence tail so `.m()[n] * 3` parses
+    /// like any other arithmetic expression.
+    fn parse_expression_tail(&mut self, expr: Expression) -> Result<Expression> {
+        let expr = self.parse_factor_tail(expr)?;
+        let expr = self.parse_term_tail(expr)?;
+        let expr = self.parse_comparison_tail(expr)?;
+        let expr = self.parse_equality_tail(expr)?;
+        let expr = self.parse_and_tail(expr)?;
+        self.parse_or_tail(expr)
+    }
+
     /// Parse OR expression
     fn parse_or_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_and_expression()?;
+        let expr = self.parse_and_expression()?;
+        self.parse_or_tail(expr)
+    }
 
+    fn parse_or_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while self.match_token(TokenType::Or) {
             let operator = BinaryOperator::Or;
             let right = self.parse_and_expression()?;
@@ -2587,8 +2813,11 @@ impl<'a> Parser<'a> {
 
     /// Parse AND expression
     fn parse_and_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_equality_expression()?;
+        let expr = self.parse_equality_expression()?;
+        self.parse_and_tail(expr)
+    }
 
+    fn parse_and_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while self.match_token(TokenType::And) {
             let operator = BinaryOperator::And;
             let right = self.parse_equality_expression()?;
@@ -2601,8 +2830,11 @@ impl<'a> Parser<'a> {
 
     /// Parse equality expression
     fn parse_equality_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_comparison_expression()?;
+        let expr = self.parse_comparison_expression()?;
+        self.parse_equality_tail(expr)
+    }
 
+    fn parse_equality_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while matches!(
             self.current_token().token_type,
             TokenType::Equal | TokenType::NotEqual
@@ -2629,8 +2861,11 @@ impl<'a> Parser<'a> {
 
     /// Parse comparison expression
     fn parse_comparison_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_term_expression()?;
+        let expr = self.parse_term_expression()?;
+        self.parse_comparison_tail(expr)
+    }
 
+    fn parse_comparison_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while matches!(
             self.current_token().token_type,
             TokenType::LessThan
@@ -2668,8 +2903,11 @@ impl<'a> Parser<'a> {
 
     /// Parse term expression (addition and subtraction)
     fn parse_term_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_factor_expression()?;
+        let expr = self.parse_factor_expression()?;
+        self.parse_term_tail(expr)
+    }
 
+    fn parse_term_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while matches!(
             self.current_token().token_type,
             TokenType::Plus | TokenType::Minus
@@ -2696,8 +2934,11 @@ impl<'a> Parser<'a> {
 
     /// Parse factor expression (multiplication, division, modulo)
     fn parse_factor_expression(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_unary_expression()?;
+        let expr = self.parse_unary_expression()?;
+        self.parse_factor_tail(expr)
+    }
 
+    fn parse_factor_tail(&mut self, mut expr: Expression) -> Result<Expression> {
         while matches!(
             self.current_token().token_type,
             TokenType::Multiply | TokenType::Divide | TokenType::Modulo
@@ -2890,7 +3131,7 @@ impl<'a> Parser<'a> {
                         self.advance();
                     }
 
-                    let key = self.parse_expression()?;
+                    let key = self.parse_lookup_key(false)?;
 
                     while matches!(self.current_token().token_type, TokenType::Whitespace) {
                         self.advance();
@@ -2995,6 +3236,11 @@ impl<'a> Parser<'a> {
             }
             TokenType::Hash(color) => {
                 let hex = format!("#{}", color);
+                // `#ns > .m()[key]` — a namespaced mixin lookup may start
+                // with a Hash token; fall back to color literal otherwise.
+                if let Some(expr) = self.try_parse_mixin_lookup(&position)? {
+                    return Ok(expr);
+                }
                 self.advance();
                 match Expression::color_hex(&hex, position.clone()) {
                     Ok(color_expr) => Ok(color_expr),
@@ -3110,6 +3356,14 @@ impl<'a> Parser<'a> {
                     Ok(Expression::MapLiteral { entries, position })
                 }
             }
+            TokenType::Dot => match self.try_parse_mixin_lookup(&position)? {
+                Some(expr) => Ok(expr),
+                None => Err(Error::parse_error(
+                    "Expected expression",
+                    position.line,
+                    position.column,
+                )),
+            },
             _ => Err(Error::parse_error(
                 "Expected expression",
                 position.line,
